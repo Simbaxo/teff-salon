@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react"; 
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function Home() {
-  const [language, setLanguage] = useState("es");
+  const { language, setLanguage } = useLanguage();
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-neutral-100 px-6">
