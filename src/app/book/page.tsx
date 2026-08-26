@@ -96,12 +96,38 @@ const employeeServices = [
     { employeeId: 3, serviceId: 2 },
 ];
 
+const timeSlots = [
+  "10:00",
+  "11:00",
+  "12:00",
+  "13:00",
+  "14:00",
+  "15:00",
+  "16:00",
+  "17:00",
+];
+
+const bookedAppointments = [
+    {
+        employeeId: 1,
+        date: "2026-08-30",
+        startTime: "14:00",
+        duration: 60,
+    },
+];
+
 export default function BookPage() {
     // State
     const { language } = useLanguage();
     const [selectedServices, setSelectedServices] = useState<number[]>([]);
     const [selectedAddons, setSelectedAddons] = useState<number[]>([]);
     const [selectedEmployee, setSelectedEmployee] = useState<number | null>(null);
+    const [selectedDate, setSelectedDate] = useState("");
+    const [selectedTime, setSelectedTime] = useState("");
+    const [customerName, setCustomerName] = useState("");
+    const [customerPhone, setCustomerPhone] = useState("");
+    const [customerEmail, setCustomerEmail] = useState("");
+    const [customerNotes, setCustomerNotes] = useState("");
     
     // Functions
     const availableAddonIds = serviceAddons
@@ -171,7 +197,7 @@ export default function BookPage() {
                 (employee) => employee.id == selectedEmployee
             )
         ) {
-            setSetlectedEmployee(null);
+            setSelectedEmployee(null);
         }
     }, [selectedServices, selectedEmployee, qualifiedEmployees])
 
@@ -194,12 +220,46 @@ export default function BookPage() {
         0
     );
 
-    const addonDuration = selectedServiceDetails.reduce(
+    const addonDuration = selectedAddonDetails.reduce(
         (total, addon) => total + addon.duration,
         0
     );
 
     const totalDuration = serviceDuration + addonDuration;
+
+    // Make Time Slots respect Appointment Duration
+    function timeToMinutes(time: string) {
+        const [hours, minutes] = time.split(":").map(Number);
+
+        return hours * 60 + minutes;
+    }
+
+    const closingTime = 19 * 60;
+
+    const availableTimeSlots = timeSlots.filter((time) => {
+        const startTime = timeToMinutes(time);
+        const endTime = startTime + totalDuration;
+
+        if (endTime > closingTime) {
+            return false;
+        }
+
+        const hasConflict = bookedAppointments.some((appointment) => {
+            if (
+                appointment.employeeId !== selectedEmployee ||
+                appointment.date !== selectedDate
+            ) {
+                return false;
+            }
+
+            const bookedStart = timeToMinutes(appointment.startTime);
+            const bookedEnd = bookedStart + appointment.duration;
+
+            return startTime < bookedEnd && endTime > bookedStart;
+        });
+
+        return !hasConflict;
+    })
 
     return (
         <main className="min-h-screen bg-neutral-100 px-6 py-12">
@@ -308,7 +368,103 @@ export default function BookPage() {
                     </div>
                 )}
 
+                {/* Date Selector */}
+                {selectedEmployee !== null && (
+                    <div className="mt-8">
+                        <h2 className="text-xl font-semibold text-black">
+                            {language === "es" ? "Elige una fecha" : "Choose a date"}
+                        </h2>
 
+                        <input 
+                            type="date" 
+                            value={selectedDate}
+                            onChange={(event) => setSelectedDate(event.target.value)}
+                            className="mt-4 w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
+                        />
+                    </div>
+                )}
+
+                {/* Temporary Available Time Slots */}
+
+                {selectedDate && (
+                    <div className="mt-8">
+                        <h2 className="text-xl font-semibold text-black">
+                            {language === "es" ? "Elige una hora" : "Choose a time"}
+                        </h2>
+
+                        <div className="mt-4 gird grid-cols2 gap-3 sm:grid-cols-4">
+                            {availableTimeSlots.map((time) => (
+                                <button
+                                    key={time}
+                                    onClick={() => setSelectedTime(time)}
+                                    className={`rounded-xl border p-3 ${
+                                        selectedTime === time
+                                            ? "border-black bg-neutral-200 text-black"
+                                            : "border-neutral-300 bg-white text-black"
+                                    }`}
+                                >
+                                    {time}
+                                </button>
+                                ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Customer Information */}
+
+                {selectedTime && (
+                    <div className="mt-8">
+                        <h2 className="text-xl font-semibold text-black">
+                            {language === "es" ? "Tus datos" : "Your information"}
+                        </h2>
+
+                        <div className="mt-4 space-y-4">
+                            <input 
+                                type="text"
+                                value={customerName}
+                                onChange={(event) => setCustomerName(event.target.value)}
+                                placeholder={language === "es" ? "Nomber" : "Name"}
+                                className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black" 
+                            />
+
+                            <input 
+                                type="tel"
+                                value={customerPhone}
+                                onChange={(event) => setCustomerPhone(event.target.value)}
+                                placeholder={
+                                    language === "es" 
+                                        ? "Telefono / WhatsApp"
+                                        : "Phone / WhatsApp"
+                                }
+                                className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
+                            />
+
+                            <input 
+                                type="email"
+                                value={customerEmail}
+                                onChange={(event) => setCustomerEmail(event.target.value)}
+                                placeholder={
+                                    language === "es"
+                                        ? "Correo electronico (opcional)"
+                                        : "Email (optional)"
+                                }
+                                className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"     
+                            />
+
+                            <textarea 
+                                value={customerNotes}
+                                onChange={(event) => setCustomerNotes(event.target.value)}
+                                placeholder={
+                                    language === "es"
+                                        ? "Notas para el salon (opcional)"
+                                        : "Notes for the salon (optional)"
+                                }
+                                className="min-h-28 w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
+                                id=""
+                            />
+                        </div>
+                    </div>
+                )}
 
                 {/* Summary */}
                 {selectedServices.length > 0 && ( // Only show this section if at least one service is selected
