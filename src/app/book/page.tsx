@@ -67,11 +67,43 @@ const serviceAddons = [
     { serviceId: 3, addonId: 3 },
 ];
 
+// Add Temporary Employee Data
+const employees = [
+    {
+        id: 1,
+        name: "Diana",
+    },
+    {
+        id: 2,
+        name: "Rocelys",
+    },
+    {
+        id: 3,
+        name: "Yenifer",
+    },
+];
+
+const employeeServices = [
+    { employeeId: 1, serviceId: 1 },
+    { employeeId: 1, serviceId: 2 },
+    { employeeId: 1, serviceId: 3 },
+
+    { employeeId: 2, serviceId: 1 },
+    { employeeId: 2, serviceId: 2 },
+    { employeeId: 2, serviceId: 3 },
+
+    { employeeId: 3, serviceId: 1 },
+    { employeeId: 3, serviceId: 2 },
+];
+
 export default function BookPage() {
+    // State
     const { language } = useLanguage();
     const [selectedServices, setSelectedServices] = useState<number[]>([]);
     const [selectedAddons, setSelectedAddons] = useState<number[]>([]);
+    const [selectedEmployee, setSelectedEmployee] = useState<number | null>(null);
     
+    // Functions
     const availableAddonIds = serviceAddons
         .filter((relation) => 
             selectedServices.includes(relation.serviceId)
@@ -116,10 +148,32 @@ export default function BookPage() {
         );
     }
 
-    // Find Selected Services
+    // Find Selected Services Data
     const selectedServiceDetails = services.filter((service) =>
         selectedServices.includes(service.id)
     );
+
+    // Calculate Qualified Employees
+    const qualifiedEmployees = employees.filter((employee) =>
+        selectedServices.every((serviceId) =>
+            employeeServices.some(
+                (relation) =>
+                    relation.employeeId === employee.id &&
+                    relation.serviceId === serviceId
+            )
+        )
+    );
+
+    useEffect(() => {
+        if (
+            selectedEmployee !== null &&
+            !qualifiedEmployees.some(
+                (employee) => employee.id == selectedEmployee
+            )
+        ) {
+            setSetlectedEmployee(null);
+        }
+    }, [selectedServices, selectedEmployee, qualifiedEmployees])
 
     // Calculate Price
     const serviceTotal = selectedServiceDetails.reduce(
@@ -189,7 +243,7 @@ export default function BookPage() {
                 {selectedServices.length > 0 && availableAddons.length > 0 && (
                     <div className="mt-8">
                         <h2 className="text-xl font-semibold text-black">
-                            {language === "es" ? "Complemntos" : "Add-ons"}
+                            {language === "es" ? "Complementos" : "Add-ons"}
                         </h2>
 
                         <p className="mt-1 text-sm text-neutral-600">
@@ -227,13 +281,40 @@ export default function BookPage() {
                     </div>
                 )}
 
+                {/* Render Technician Options */}
+                {selectedServices.length > 0 && qualifiedEmployees.length > 0 && (
+                    <div className="mt-8">
+                        <h2 className="text-xl font-semibold text-black">
+                            {language === "es" ? "Elige tu técnica" : "Choose your technician"}
+                        </h2>
+
+                        <div className="mt-4 space-y-3">
+                            {qualifiedEmployees.map((employee) => (
+                                <button
+                                    key={employee.id}
+                                    onClick={() => setSelectedEmployee(employee.id)}
+                                    className={`w-full rounded-xl border p-4 text-left ${
+                                        selectedEmployee === employee.id
+                                            ? "border-black bg-neutral-200"
+                                            : "border-neutral-200 bg-white"
+                                    }`}
+                                >
+                                    <span className="font-semibold text-black">
+                                        {employee.name}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
 
 
                 {/* Summary */}
                 {selectedServices.length > 0 && ( // Only show this section if at least one service is selected
                     <div className="mt-8 rounded-xl bg-white p-5">
                         <h2 className="font-semibold text-black">
-                            {language === "es" ? "Tu seleccion" : "Your Selection"}
+                            {language === "es" ? "Tu selección" : "Your Selection"}
                         </h2>
 
                         <div className="mt-4 flex justify-between">
@@ -248,7 +329,7 @@ export default function BookPage() {
 
                         <div className="mt-2 flex justify-between">
                             <span className="text-neutral-600">
-                                {language === "es" ? "Duracion estimada" : "Estimated Time"}
+                                {language === "es" ? "Duración estimada" : "Estimated Time"}
                             </span>
 
                             <span className="font-semibold text-black">

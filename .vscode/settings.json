@@ -1,0 +1,35 @@
+{
+    "js/ts.tsdk.path": "node_modules/typescript/lib",
+    "cSpell.language": "en,es-ES",
+    "cSpell.words": [
+      "Rocelys",
+      "semipermanente",
+      "Yenifer"
+    ],
+    "files.associations": {
+        "*.tsx": "typescriptreact",
+        "*.ts": "typescript"
+    },
+    "emmet.includeLanguages": {
+        "typescriptreact": "javascriptreact"
+    },
+
+    // --- KEEP EMMET WORKING ---
+    "emmet.showExpandedAbbreviation": "always",
+    "emmet.triggerExpansionOnTab": true,
+
+    // --- STOP AUTOMATIC POPUPS (Only show when you ask via Ctrl+Space) ---
+    "editor.quickSuggestions": {
+        "other": false,
+        "comments": false,
+        "strings": false
+    },
+    "editor.suggestOnTriggerCharacters": false,
+    "editor.acceptSuggestionOnEnter": "off",
+
+    // --- KEEP NORMAL SNIPPETS / TYPESCRIPT HELPERS QUIET ---
+    "editor.snippetSuggestions": "none",
+    "editor.wordBasedSuggestions": "off",
+    "editor.tabCompletion": "onlySnippets"
+}
+
