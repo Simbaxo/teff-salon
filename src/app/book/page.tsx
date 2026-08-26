@@ -128,6 +128,7 @@ export default function BookPage() {
     const [customerPhone, setCustomerPhone] = useState("");
     const [customerEmail, setCustomerEmail] = useState("");
     const [customerNotes, setCustomerNotes] = useState("");
+    const [isReviewing, setIsReviewing] = useState(false);
     
     // Functions
     const availableAddonIds = serviceAddons
@@ -260,6 +261,11 @@ export default function BookPage() {
 
         return !hasConflict;
     })
+
+    // Find The Selected Technician Details
+    const selectedEmployeeDetails = employees.find(
+        (employee) => employee.id === selectedEmployee
+    );
 
     return (
         <main className="min-h-screen bg-neutral-100 px-6 py-12">
@@ -423,7 +429,7 @@ export default function BookPage() {
                                 type="text"
                                 value={customerName}
                                 onChange={(event) => setCustomerName(event.target.value)}
-                                placeholder={language === "es" ? "Nomber" : "Name"}
+                                placeholder={language === "es" ? "Nombre" : "Name"}
                                 className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black" 
                             />
 
@@ -433,7 +439,7 @@ export default function BookPage() {
                                 onChange={(event) => setCustomerPhone(event.target.value)}
                                 placeholder={
                                     language === "es" 
-                                        ? "Telefono / WhatsApp"
+                                        ? "Teléfono / WhatsApp"
                                         : "Phone / WhatsApp"
                                 }
                                 className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
@@ -445,7 +451,7 @@ export default function BookPage() {
                                 onChange={(event) => setCustomerEmail(event.target.value)}
                                 placeholder={
                                     language === "es"
-                                        ? "Correo electronico (opcional)"
+                                        ? "Correo electrónico (opcional)"
                                         : "Email (optional)"
                                 }
                                 className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"     
@@ -460,8 +466,109 @@ export default function BookPage() {
                                         : "Notes for the salon (optional)"
                                 }
                                 className="min-h-28 w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
-                                id=""
                             />
+                        </div>
+                    </div>
+                )}
+
+                {/* Continue Button */}
+
+                {selectedTime && !isReviewing && (
+                    <button
+                        onClick={() => setIsReviewing(true)}
+                        disabled={!customerName || !customerPhone}
+                        className={`mt-8 w-full rounded-xl px-6 py-3 font-semibold ${
+                            customerName && customerPhone
+                                ? "bg-black text-white"
+                                : "cursor-not-allowed bg-neutral-300 text-neutral-500"
+                        }`}
+                    >
+                        {language === "es" ? "Revisar cita" : "Review Appointment"}
+                    </button>
+                )}
+
+                {/* Review Appointment */}
+                {isReviewing && (
+                    <div className="mt-8 rounded-xl bg-white p-6">
+                        <h2 className="text-2xl font-semibold text-black">
+                            {language === "es" ? "Revisa tu cita" : "Review Your Appointment"}
+                        </h2>
+
+                        <div className="mt-6 space-y-5">
+
+                            <div>
+                                <p className="text-sm text-neutral-500">
+                                    {language === "es" ? "Cliente" : "Customer"}
+                                </p>
+                                <p className="font-semibold text-black">{customerName}</p>
+                                <p className="text-neutral-600">{customerPhone}</p>
+                            </div>
+
+                            <div>
+                                <p className="text-sm text-neutral-500">
+                                    {language === "es" ? "Servicios" : "Services"}
+                                </p>
+
+                                {selectedServiceDetails.map((service) => (
+                                    <p key={service.id} className="text-black">
+                                        {language === "es" ? service.nameEs : service.nameEn}
+                                    </p>
+                                ))}
+                            </div>
+
+                            {selectedAddonDetails.length > 0 && (
+                                <div>
+                                    <p className="text-sm text-neutral-500">
+                                        {language === "es" ? "Complementos" : "Add-ons"}
+                                    </p>
+
+                                    {selectedAddonDetails.map((addon) => (
+                                        <p key={addon.id} className="text-black">
+                                            {language === "es" ? addon.nameEs : addon.nameEn}
+                                        </p>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div>
+                                <p className="text-sm text-neutral-500">
+                                    {language === "es" ? "Tecnica" : "Technician"}
+                                </p>
+
+                                <p className="text-sm text-neutral-500">
+                                    {selectedEmployeeDetails?.name}
+                                </p>
+                            </div>
+
+                            <div>
+                                <p className="text-sm text-neutral-500">
+                                    {language === "es" ? "Fecha y Hora" : "Date and Time"}
+                                </p>
+
+                                <p className="font-semibold text-black">
+                                    {selectedDate} · {selectedTime}
+                                </p>
+                            </div>
+
+                            <div>
+                                <p className="text-sm text-neutral-500">
+                                    {language === "es" ? "Precio estimado" : "Estimated Price"}
+                                </p>
+
+                                <p className="font-semibold text-black">
+                                    ${totalPrice.toLocaleString("es-CO")} COP
+                                </p>
+                            </div>
+
+                            <div>
+                                <p className="text-sm text-neutral-500">
+                                    {language === "es" ? "Duración estimada" : "Estimated Duration"}
+                                </p>
+
+                                <p className="font-semibold text-black">
+                                    {totalDuration} min
+                                </p>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -494,6 +601,23 @@ export default function BookPage() {
                         </div>
                     </div>
                 )}
+
+                {/* Add Edit and Confirm Buttons */}
+
+                <div className="mt-8 flex gap-3">
+                    <button
+                        onClick={() => setisReviewing(false)}
+                        className="flex-1 rounded-xl border border-black px-4 py-3 font-semibold text-black"
+                    >
+                        {language === "es" ? "Editar" : "Edit"}
+                    </button>
+
+                    <button
+                        className="flex-1 rounded-xl bg-black px-4 py-3 font-semibold text-white"
+                    >
+                        {language === "es" ? "Confirmar cita" : "Confirm Appointment"}
+                    </button>
+                </div>
             </div>
         </main>
     )
