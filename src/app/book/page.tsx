@@ -3,33 +3,6 @@
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 
-const services = [
-    {
-        id: 1,
-        nameEs: "Manicure semipermanente",
-        nameEn: "Gel manicure",
-        category: "manicure",
-        price: 60000,
-        duration: 60,
-    },
-    {
-        id: 2,
-        nameEs: "Pedicure semipermanente",
-        nameEn: "Gel pedicure",
-        category: "pedicure",
-        price: 60000,
-        duration: 60,
-    },
-    {
-        id: 3,
-        nameEs: "Base Rubber",
-        nameEn: "Rubber Base",
-        category: "manicure",
-        price: 100000,
-        duration: 90,
-    },
-];
-
 const addons = [
     {
         id: 1,
@@ -67,35 +40,6 @@ const serviceAddons = [
     { serviceId: 3, addonId: 3 },
 ];
 
-// Add Temporary Employee Data
-const employees = [
-    {
-        id: 1,
-        name: "Diana",
-    },
-    {
-        id: 2,
-        name: "Rocelys",
-    },
-    {
-        id: 3,
-        name: "Yenifer",
-    },
-];
-
-const employeeServices = [
-    { employeeId: 1, serviceId: 1 },
-    { employeeId: 1, serviceId: 2 },
-    { employeeId: 1, serviceId: 3 },
-
-    { employeeId: 2, serviceId: 1 },
-    { employeeId: 2, serviceId: 2 },
-    { employeeId: 2, serviceId: 3 },
-
-    { employeeId: 3, serviceId: 1 },
-    { employeeId: 3, serviceId: 2 },
-];
-
 const timeSlots = [
   "10:00",
   "11:00",
@@ -116,6 +60,31 @@ const bookedAppointments = [
     },
 ];
 
+// Create a Service Type
+type Service = {
+    id: number;
+    nameEs: string;
+    nameEn: string;
+    category: string;
+    price: number;
+    estimatedDuration: number;
+    requiresApproval: boolean;
+    active: boolean;
+};
+
+// Create Employee Type
+type Employee = {
+    id: number;
+    name: string;
+    active: boolean;
+};
+
+// Create Employee Services
+type EmployeeService = {
+    employeeId: number;
+    serviceId: number;
+}
+
 export default function BookPage() {
     // State
     const { language } = useLanguage();
@@ -129,6 +98,45 @@ export default function BookPage() {
     const [customerEmail, setCustomerEmail] = useState("");
     const [customerNotes, setCustomerNotes] = useState("");
     const [isReviewing, setIsReviewing] = useState(false);
+    const [services, setServices] = useState<Service[]>([]);
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [employeeServices, setEmployeeServices] = useState<EmployeeService[]>([]);
+
+    // Fetch the services from API
+    useEffect(() => {
+        async function loadServices() {
+            const response = await fetch("/api/services");
+            const data = await response.json();
+
+            setServices(data);
+        }
+
+        loadServices();
+    }, []);
+
+    // Fetch employees from APi
+    useEffect(() => {
+        async function loadEmployees() {
+            const response = await fetch("/api/employees");
+            const data = await response.json();
+
+            setEmployees(data);
+        }
+
+        loadEmployees()
+    }, []);
+
+    // Fetch employee services from API
+    useEffect(() => {
+        async function loadEmployeeServices() {
+            const response = await fetch("/api/employee-services")
+            const data = await response.json()
+
+            setEmployeeServices(data);
+        }
+
+        loadEmployeeServices()
+    }, []);
     
     // Functions
     const availableAddonIds = serviceAddons
@@ -217,7 +225,7 @@ export default function BookPage() {
 
     // Calculate Duration
     const serviceDuration = selectedServiceDetails.reduce(
-        (total, service) => total + service.duration,
+        (total, service) => total + service.estimatedDuration,
         0
     );
 
