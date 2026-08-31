@@ -3,43 +3,6 @@
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 
-const addons = [
-    {
-        id: 1,
-        nameEs: "French",
-        nameEN: "French",
-        price: 20000,
-        duration: 15,
-    },
-    {
-        id: 2,
-        nameEs: "Retiro",
-        nameEn: "Removal",
-        price: 10000,
-        duration: 15,
-    },
-    {
-        id: 3,
-        nameEs: "Nail Art",
-        nameEn: "Nail Art",
-        price: 25000,
-        duration: 20,
-    },
-];
-
-const serviceAddons = [
-    { serviceId: 1, addonId: 1 },
-    { serviceId: 1, addonId: 2 },
-    { serviceId: 1, addonId: 3 },
-
-    { serviceId: 2, addonId: 1 },
-    { serviceId: 2, addonId: 2 },
-
-    { serviceId: 3, addonId: 1 },
-    { serviceId: 3, addonId: 2 },
-    { serviceId: 3, addonId: 3 },
-];
-
 const timeSlots = [
   "10:00",
   "11:00",
@@ -85,6 +48,16 @@ type EmployeeService = {
     serviceId: number;
 }
 
+// Create Addon type
+type Addon = {
+    id: number;
+    nameEs: string;
+    nameEn: string;
+    price: number;
+    estimatedDuration: number;
+    active: boolean;
+};
+
 export default function BookPage() {
     // State
     const { language } = useLanguage();
@@ -101,6 +74,8 @@ export default function BookPage() {
     const [services, setServices] = useState<Service[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [employeeServices, setEmployeeServices] = useState<EmployeeService[]>([]);
+    const [addons, setAddons] = useState<Addon[]>([]);
+    const [serviceAddons, setServiceAddons] = useState<ServiceAddon[]>([]);
 
     // Fetch the services from API
     useEffect(() => {
@@ -136,6 +111,29 @@ export default function BookPage() {
         }
 
         loadEmployeeServices()
+    }, []);
+
+    // Fetch addon services from API
+    useEffect(() => {
+        async function loadAddons() {
+            const response = await fetch("/api/addons");
+            const data = await response.json();
+
+            setAddons(data);
+        }
+
+        loadAddons();
+    }, []);
+
+    useEffect(() => {
+        async function loadServiceAddons() {
+            const response = await fetch("/api/service-addons");
+            const data = await response.json();
+
+            setServiceAddons(data);
+        }
+
+        loadServiceAddons();
     }, []);
     
     // Functions
@@ -230,7 +228,7 @@ export default function BookPage() {
     );
 
     const addonDuration = selectedAddonDetails.reduce(
-        (total, addon) => total + addon.duration,
+        (total, addon) => total + addon.estimatedDuration,
         0
     );
 
@@ -347,7 +345,7 @@ export default function BookPage() {
                                     </p>
 
                                     <p className="text-sm text-neutral-500">
-                                        +{addon.duration} min
+                                        +{addon.estimatedDuration} min
                                     </p>
                                 </button>
                             ))}

@@ -23,6 +23,7 @@ model Service {
   active            Boolean           @default(true)
 
   employeeServices  EmployeeService[]
+  serviceAddons       ServiceAddon[]
 }
 
 model Employee {
@@ -41,4 +42,25 @@ model EmployeeService {
   service    Service  @relation(fields: [serviceId], references: [id])
 
   @@id([employeeId, serviceId])
+}
+
+model Addon {
+  id                Int            @id @default(autoincrement())
+  nameEs            String
+  nameEn            String
+  price             Int
+  estimatedDuration Int
+  active            Boolean        @default(true)
+
+  serviceAddons     ServiceAddon[]
+}
+
+model ServiceAddon {
+  serviceId Int
+  addonId   Int
+
+  service   Service @relation(fields: [serviceId], references: [id])
+  addon     Addon   @relation(fields: [addonId], references: [id])
+
+  @@id([serviceId, addonId])
 }
