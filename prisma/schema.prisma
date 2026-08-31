@@ -24,6 +24,7 @@ model Service {
 
   employeeServices  EmployeeService[]
   serviceAddons       ServiceAddon[]
+  appointmentServices   AppointmentService[]
 }
 
 model Employee {
@@ -32,6 +33,7 @@ model Employee {
   active            Boolean           @default(true)
 
   employeeServices  EmployeeService[]
+  appointments      Appointment[]
 }
 
 model EmployeeService {
@@ -53,6 +55,7 @@ model Addon {
   active            Boolean        @default(true)
 
   serviceAddons     ServiceAddon[]
+  appointmentAddons   AppointmentAddon[]
 }
 
 model ServiceAddon {
@@ -63,4 +66,58 @@ model ServiceAddon {
   addon     Addon   @relation(fields: [addonId], references: [id])
 
   @@id([serviceId, addonId])
+}
+
+model Customer {
+  id           Int           @id @default(autoincrement())
+  name         String
+  phone        String
+  email        String?
+  createdAt    DateTime      @default(now())
+
+  appointments Appointment[]
+}
+
+model Appointment {
+  id          Int      @id @default(autoincrement())
+  customerId  Int
+  employeeId  Int
+
+  date        DateTime
+  startTime   String
+  duration    Int
+  status      String
+  notes       String?
+
+  createdAt   DateTime @default(now())
+
+  customer    Customer @relation(fields: [customerId], references: [id])
+  employee    Employee @relation(fields: [employeeId], references: [id])
+
+  appointmentServices     AppointmentService[]
+  appointmentAddons       AppointmentAddon[]
+}
+
+model AppointmentService {
+  appointmentId Int
+  serviceId     Int
+  bookedPrice   Int
+  bookedDuration Int
+
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  service       Service     @relation(fields: [serviceId], references: [id])
+
+  @@id([appointmentId, serviceId])
+}
+
+model AppointmentAddon {
+  appointmentId Int
+  addonId       Int
+  bookedPrice   Int
+  bookedDuration Int
+
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  addon         Addon       @relation(fields: [addonId], references: [id])
+
+  @@id([appointmentId, addonId])
 }

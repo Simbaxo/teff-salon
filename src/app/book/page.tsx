@@ -76,6 +76,9 @@ export default function BookPage() {
     const [employeeServices, setEmployeeServices] = useState<EmployeeService[]>([]);
     const [addons, setAddons] = useState<Addon[]>([]);
     const [serviceAddons, setServiceAddons] = useState<ServiceAddon[]>([]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [bookingError, setBookingError] = useState("");
+    const [bookingSuccess, setBookingSuccess] = useState(false);
 
     // Fetch the services from API
     useEffect(() => {
@@ -273,353 +276,430 @@ export default function BookPage() {
         (employee) => employee.id === selectedEmployee
     );
 
+    // Confirm Booking Details
+    async function handleConfirmBooking() {
+        try {
+            setIsSubmitting(true);
+            setBookingError("");
+
+            const response = await fetch("/api/bookings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    customerName,
+                    customerPhone,
+                    customerEmail,
+                    customerNotes,
+                    employeeId: selectedEmployee,
+                    date: selectedDate,
+                    startTime: selectedTime,
+                    serviceIds: selectedServices,
+                    addonIds: selectedAddons,
+                }),
+            });
+
+            const data = await response.json();
+
+            if(!response.ok) {
+                throw new Error(data.error || "Booking failed");
+            }
+
+            setBookingSuccess(true);
+            setIsReviewing(false);
+        } catch(error) {
+            console.error(error);
+
+            setBookingError(
+                language === "es"
+                ? "No se pudo crear la cita."
+                : "The appointment could not be created."
+            );
+        } finally {
+            setIsSubmitting(false);
+        }
+    }
+
     return (
         <main className="min-h-screen bg-neutral-100 px-6 py-12">
-            <div className="mx-auto max-w-2xl">
-                {/* Heading */}
-                <h1 className="text-3xl font-bold text-black">
-                    {language === "es"
-                        ? "Reserva Tu Cita"
-                        : "Book Your Appointment"}
-                </h1>
-                <p className="mt-2 text-neutral-600">
-                    {language === "es"
-                        ? "Selecciona los servicios que deseas reservar."
-                        : "Select the services you would like to book."}
-                </p>
-                {/* Service Cards */}
-                <div className="mt-8 space-y-4">
-                    {services.map((service) => (
-                        <button
-                            key={service.id}
-                            onClick={() => toggleService(service.id)}
-                            className={`w-full rounded-xl border p-4 text-left ${
-                                selectedServices.includes(service.id)
-                                    ? "border-black bg-neutral-200"
-                                    : "border-neutral-200 bg-white"
-                                }`}
-                        >
-                            <h2 className="font-semibold text-black">
-                                {language === "es" ? service.nameEs : service.nameEn}
-                            </h2>
-                            <p className="mt-1 text-sm text-neutral-600">
-                                ${service.price.toLocaleString("es-CO")} COP
-                            </p>
-                            <p className="text-sm text-neutral-500">
-                                {service.estimatedDuration} min
-                            </p>
-                        </button>
-                    ))}
+            {bookingSuccess && (
+                <div className="mx-auto mt-12 max-w-xl rounded-2xl bg-white p-8 text-center shadow-sm">
+                    <h2 className="text-2xl font-bold text-black">
+                        {language === "es"
+                            ? "¡Cita creada exitosamente!"
+                            : "Appointment created successfully!"}
+                    </h2>
+
+                    <p className="mt-3 text-neutral-600">
+                        {language === "es"
+                            ? "Tu cita ha sido registrada."
+                            : "Your appointment has been registered."}
+                    </p>
                 </div>
+            )}
 
-                {selectedServices.length > 0 && availableAddons.length > 0 && (
-                    <div className="mt-8">
-                        <h2 className="text-xl font-semibold text-black">
-                            {language === "es" ? "Complementos" : "Add-ons"}
-                        </h2>
-
-                        <p className="mt-1 text-sm text-neutral-600">
-                            {language === "es" 
-                                ? "Selecciona cualquier complemento que desees agregar."
-                                : "Select any add-ons you would like to include."}
-                        </p>
-
-                        <div className="mt-4 space-y-3">
-                            {availableAddons.map((addon) => (
-                                <button
-                                    key={addon.id}
-                                    onClick={() => toggleAddon(addon.id)}
-                                    className={`w-full rounded-xl border p-4 text-left ${
-                                        selectedAddons.includes(addon.id)
+            {!bookingSuccess && (
+                <div className="mx-auto max-w-2xl">
+                    {/* Heading */}
+                    <h1 className="text-3xl font-bold text-black">
+                        {language === "es"
+                            ? "Reserva Tu Cita"
+                            : "Book Your Appointment"}
+                    </h1>
+                    <p className="mt-2 text-neutral-600">
+                        {language === "es"
+                            ? "Selecciona los servicios que deseas reservar."
+                            : "Select the services you would like to book."}
+                    </p>
+                    {/* Service Cards */}
+                    <div className="mt-8 space-y-4">
+                        {services.map((service) => (
+                            <button
+                                key={service.id}
+                                onClick={() => toggleService(service.id)}
+                                className={`w-full rounded-xl border p-4 text-left ${
+                                    selectedServices.includes(service.id)
                                         ? "border-black bg-neutral-200"
                                         : "border-neutral-200 bg-white"
                                     }`}
-                                >
-
-                                    <h3 className="font-semibold text-black">
-                                        {language === "es" ? addon.nameEs : addon.nameEn}
-                                    </h3>
-
-                                    <p className="mt-1 text-sm text-neutral-600">
-                                        +${addon.price.toLocaleString("es-CO")} COP
-                                    </p>
-
-                                    <p className="text-sm text-neutral-500">
-                                        +{addon.estimatedDuration} min
-                                    </p>
-                                </button>
-                            ))}
-                        </div>
+                            >
+                                <h2 className="font-semibold text-black">
+                                    {language === "es" ? service.nameEs : service.nameEn}
+                                </h2>
+                                <p className="mt-1 text-sm text-neutral-600">
+                                    ${service.price.toLocaleString("es-CO")} COP
+                                </p>
+                                <p className="text-sm text-neutral-500">
+                                    {service.estimatedDuration} min
+                                </p>
+                            </button>
+                        ))}
                     </div>
-                )}
 
-                {/* Render Technician Options */}
-                {selectedServices.length > 0 && qualifiedEmployees.length > 0 && (
-                    <div className="mt-8">
-                        <h2 className="text-xl font-semibold text-black">
-                            {language === "es" ? "Elige tu técnica" : "Choose your technician"}
-                        </h2>
+                    {selectedServices.length > 0 && availableAddons.length > 0 && (
+                        <div className="mt-8">
+                            <h2 className="text-xl font-semibold text-black">
+                                {language === "es" ? "Complementos" : "Add-ons"}
+                            </h2>
 
-                        <div className="mt-4 space-y-3">
-                            {qualifiedEmployees.map((employee) => (
-                                <button
-                                    key={employee.id}
-                                    onClick={() => setSelectedEmployee(employee.id)}
-                                    className={`w-full rounded-xl border p-4 text-left ${
-                                        selectedEmployee === employee.id
+                            <p className="mt-1 text-sm text-neutral-600">
+                                {language === "es" 
+                                    ? "Selecciona cualquier complemento que desees agregar."
+                                    : "Select any add-ons you would like to include."}
+                            </p>
+
+                            <div className="mt-4 space-y-3">
+                                {availableAddons.map((addon) => (
+                                    <button
+                                        key={addon.id}
+                                        onClick={() => toggleAddon(addon.id)}
+                                        className={`w-full rounded-xl border p-4 text-left ${
+                                            selectedAddons.includes(addon.id)
                                             ? "border-black bg-neutral-200"
                                             : "border-neutral-200 bg-white"
-                                    }`}
-                                >
-                                    <span className="font-semibold text-black">
-                                        {employee.name}
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
+                                        }`}
+                                    >
 
-                {/* Date Selector */}
-                {selectedEmployee !== null && (
-                    <div className="mt-8">
-                        <h2 className="text-xl font-semibold text-black">
-                            {language === "es" ? "Elige una fecha" : "Choose a date"}
-                        </h2>
+                                        <h3 className="font-semibold text-black">
+                                            {language === "es" ? addon.nameEs : addon.nameEn}
+                                        </h3>
 
-                        <input 
-                            type="date" 
-                            value={selectedDate}
-                            onChange={(event) => setSelectedDate(event.target.value)}
-                            className="mt-4 w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
-                        />
-                    </div>
-                )}
+                                        <p className="mt-1 text-sm text-neutral-600">
+                                            +${addon.price.toLocaleString("es-CO")} COP
+                                        </p>
 
-                {/* Temporary Available Time Slots */}
-                {selectedDate && (
-                    <div className="mt-8">
-                        <h2 className="text-xl font-semibold text-black">
-                            {language === "es" ? "Elige una hora" : "Choose a time"}
-                        </h2>
-
-                        <div className="mt-4 grid grid-cols2 gap-3 sm:grid-cols-4">
-                            {availableTimeSlots.map((time) => (
-                                <button
-                                    key={time}
-                                    onClick={() => setSelectedTime(time)}
-                                    className={`rounded-xl border p-3 ${
-                                        selectedTime === time
-                                            ? "border-black bg-neutral-200 text-black"
-                                            : "border-neutral-300 bg-white text-black"
-                                    }`}
-                                >
-                                    {time}
-                                </button>
-                                ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Customer Information */}
-                {selectedTime && (
-                    <div className="mt-8">
-                        <h2 className="text-xl font-semibold text-black">
-                            {language === "es" ? "Tus datos" : "Your information"}
-                        </h2>
-
-                        <div className="mt-4 space-y-4">
-                            <input 
-                                type="text"
-                                value={customerName}
-                                onChange={(event) => setCustomerName(event.target.value)}
-                                placeholder={language === "es" ? "Nombre" : "Name"}
-                                className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black" 
-                            />
-
-                            <input 
-                                type="tel"
-                                value={customerPhone}
-                                onChange={(event) => setCustomerPhone(event.target.value)}
-                                placeholder={
-                                    language === "es" 
-                                        ? "Teléfono / WhatsApp"
-                                        : "Phone / WhatsApp"
-                                }
-                                className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
-                            />
-
-                            <input 
-                                type="email"
-                                value={customerEmail}
-                                onChange={(event) => setCustomerEmail(event.target.value)}
-                                placeholder={
-                                    language === "es"
-                                        ? "Correo electrónico (opcional)"
-                                        : "Email (optional)"
-                                }
-                                className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"     
-                            />
-
-                            <textarea 
-                                value={customerNotes}
-                                onChange={(event) => setCustomerNotes(event.target.value)}
-                                placeholder={
-                                    language === "es"
-                                        ? "Notas para el salon (opcional)"
-                                        : "Notes for the salon (optional)"
-                                }
-                                className="min-h-28 w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {/* Continue Button */}
-                {selectedTime && !isReviewing && (
-                    <button
-                        onClick={() => setIsReviewing(true)}
-                        disabled={!customerName || !customerPhone}
-                        className={`mt-8 w-full rounded-xl px-6 py-3 font-semibold ${
-                            customerName && customerPhone
-                                ? "bg-black text-white"
-                                : "cursor-not-allowed bg-neutral-300 text-neutral-500"
-                        }`}
-                    >
-                        {language === "es" ? "Revisar cita" : "Review Appointment"}
-                    </button>
-                )}
-
-                {/* Review Appointment */}
-                {isReviewing && (
-                    <div className="mt-8 rounded-xl bg-white p-6">
-                        <h2 className="text-2xl font-semibold text-black">
-                            {language === "es" ? "Revisa tu cita" : "Review Your Appointment"}
-                        </h2>
-
-                        <div className="mt-6 space-y-5">
-
-                            <div>
-                                <p className="text-sm text-neutral-500">
-                                    {language === "es" ? "Cliente" : "Customer"}
-                                </p>
-                                <p className="font-semibold text-black">{customerName}</p>
-                                <p className="text-neutral-600">{customerPhone}</p>
-                            </div>
-
-                            <div>
-                                <p className="text-sm text-neutral-500">
-                                    {language === "es" ? "Servicios" : "Services"}
-                                </p>
-
-                                {selectedServiceDetails.map((service) => (
-                                    <p key={service.id} className="text-black">
-                                        {language === "es" ? service.nameEs : service.nameEn}
-                                    </p>
+                                        <p className="text-sm text-neutral-500">
+                                            +{addon.estimatedDuration} min
+                                        </p>
+                                    </button>
                                 ))}
                             </div>
+                        </div>
+                    )}
 
-                            {selectedAddonDetails.length > 0 && (
+                    {/* Render Technician Options */}
+                    {selectedServices.length > 0 && qualifiedEmployees.length > 0 && (
+                        <div className="mt-8">
+                            <h2 className="text-xl font-semibold text-black">
+                                {language === "es" ? "Elige tu técnica" : "Choose your technician"}
+                            </h2>
+
+                            <div className="mt-4 space-y-3">
+                                {qualifiedEmployees.map((employee) => (
+                                    <button
+                                        key={employee.id}
+                                        onClick={() => setSelectedEmployee(employee.id)}
+                                        className={`w-full rounded-xl border p-4 text-left ${
+                                            selectedEmployee === employee.id
+                                                ? "border-black bg-neutral-200"
+                                                : "border-neutral-200 bg-white"
+                                        }`}
+                                    >
+                                        <span className="font-semibold text-black">
+                                            {employee.name}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Date Selector */}
+                    {selectedEmployee !== null && (
+                        <div className="mt-8">
+                            <h2 className="text-xl font-semibold text-black">
+                                {language === "es" ? "Elige una fecha" : "Choose a date"}
+                            </h2>
+
+                            <input 
+                                type="date" 
+                                value={selectedDate}
+                                onChange={(event) => setSelectedDate(event.target.value)}
+                                className="mt-4 w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
+                            />
+                        </div>
+                    )}
+
+                    {/* Temporary Available Time Slots */}
+                    {selectedDate && (
+                        <div className="mt-8">
+                            <h2 className="text-xl font-semibold text-black">
+                                {language === "es" ? "Elige una hora" : "Choose a time"}
+                            </h2>
+
+                            <div className="mt-4 grid grid-cols2 gap-3 sm:grid-cols-4">
+                                {availableTimeSlots.map((time) => (
+                                    <button
+                                        key={time}
+                                        onClick={() => setSelectedTime(time)}
+                                        className={`rounded-xl border p-3 ${
+                                            selectedTime === time
+                                                ? "border-black bg-neutral-200 text-black"
+                                                : "border-neutral-300 bg-white text-black"
+                                        }`}
+                                    >
+                                        {time}
+                                    </button>
+                                    ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Customer Information */}
+                    {selectedTime && (
+                        <div className="mt-8">
+                            <h2 className="text-xl font-semibold text-black">
+                                {language === "es" ? "Tus datos" : "Your information"}
+                            </h2>
+
+                            <div className="mt-4 space-y-4">
+                                <input 
+                                    type="text"
+                                    value={customerName}
+                                    onChange={(event) => setCustomerName(event.target.value)}
+                                    placeholder={language === "es" ? "Nombre" : "Name"}
+                                    className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black" 
+                                />
+
+                                <input 
+                                    type="tel"
+                                    value={customerPhone}
+                                    onChange={(event) => setCustomerPhone(event.target.value)}
+                                    placeholder={
+                                        language === "es" 
+                                            ? "Teléfono / WhatsApp"
+                                            : "Phone / WhatsApp"
+                                    }
+                                    className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
+                                />
+
+                                <input 
+                                    type="email"
+                                    value={customerEmail}
+                                    onChange={(event) => setCustomerEmail(event.target.value)}
+                                    placeholder={
+                                        language === "es"
+                                            ? "Correo electrónico (opcional)"
+                                            : "Email (optional)"
+                                    }
+                                    className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"     
+                                />
+
+                                <textarea 
+                                    value={customerNotes}
+                                    onChange={(event) => setCustomerNotes(event.target.value)}
+                                    placeholder={
+                                        language === "es"
+                                            ? "Notas para el salon (opcional)"
+                                            : "Notes for the salon (optional)"
+                                    }
+                                    className="min-h-28 w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Continue Button */}
+                    {selectedTime && !isReviewing && (
+                        <button
+                            onClick={() => setIsReviewing(true)}
+                            disabled={!customerName || !customerPhone}
+                            className={`mt-8 w-full rounded-xl px-6 py-3 font-semibold ${
+                                customerName && customerPhone
+                                    ? "bg-black text-white"
+                                    : "cursor-not-allowed bg-neutral-300 text-neutral-500"
+                            }`}
+                        >
+                            {language === "es" ? "Revisar cita" : "Review Appointment"}
+                        </button>
+                    )}
+
+                    {/* Review Appointment */}
+                    {isReviewing && (
+                        <div className="mt-8 rounded-xl bg-white p-6">
+                            <h2 className="text-2xl font-semibold text-black">
+                                {language === "es" ? "Revisa tu cita" : "Review Your Appointment"}
+                            </h2>
+
+                            <div className="mt-6 space-y-5">
+
                                 <div>
                                     <p className="text-sm text-neutral-500">
-                                        {language === "es" ? "Complementos" : "Add-ons"}
+                                        {language === "es" ? "Cliente" : "Customer"}
+                                    </p>
+                                    <p className="font-semibold text-black">{customerName}</p>
+                                    <p className="text-neutral-600">{customerPhone}</p>
+                                </div>
+
+                                <div>
+                                    <p className="text-sm text-neutral-500">
+                                        {language === "es" ? "Servicios" : "Services"}
                                     </p>
 
-                                    {selectedAddonDetails.map((addon) => (
-                                        <p key={addon.id} className="text-black">
-                                            {language === "es" ? addon.nameEs : addon.nameEn}
+                                    {selectedServiceDetails.map((service) => (
+                                        <p key={service.id} className="text-black">
+                                            {language === "es" ? service.nameEs : service.nameEn}
                                         </p>
                                     ))}
                                 </div>
-                            )}
 
-                            <div>
-                                <p className="text-sm text-neutral-500">
-                                    {language === "es" ? "Técnica" : "Technician"}
-                                </p>
+                                {selectedAddonDetails.length > 0 && (
+                                    <div>
+                                        <p className="text-sm text-neutral-500">
+                                            {language === "es" ? "Complementos" : "Add-ons"}
+                                        </p>
 
-                                <p className="text-sm text-neutral-500">
-                                    {selectedEmployeeDetails?.name}
-                                </p>
+                                        {selectedAddonDetails.map((addon) => (
+                                            <p key={addon.id} className="text-black">
+                                                {language === "es" ? addon.nameEs : addon.nameEn}
+                                            </p>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div>
+                                    <p className="text-sm text-neutral-500">
+                                        {language === "es" ? "Técnica" : "Technician"}
+                                    </p>
+
+                                    <p className="text-sm text-neutral-500">
+                                        {selectedEmployeeDetails?.name}
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <p className="text-sm text-neutral-500">
+                                        {language === "es" ? "Fecha y Hora" : "Date and Time"}
+                                    </p>
+
+                                    <p className="font-semibold text-black">
+                                        {selectedDate} · {selectedTime}
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <p className="text-sm text-neutral-500">
+                                        {language === "es" ? "Precio estimado" : "Estimated Price"}
+                                    </p>
+
+                                    <p className="font-semibold text-black">
+                                        ${totalPrice.toLocaleString("es-CO")} COP
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <p className="text-sm text-neutral-500">
+                                        {language === "es" ? "Duración estimada" : "Estimated Duration"}
+                                    </p>
+
+                                    <p className="font-semibold text-black">
+                                        {totalDuration} min
+                                    </p>
+                                </div>
                             </div>
+                            {/* Add Edit and Confirm Buttons */}
+                            <div className="mt-8 flex gap-3">
+                                <button
+                                    onClick={() => setIsReviewing(false)}
+                                    className="flex-1 rounded-xl border border-black px-4 py-3 font-semibold text-black"
+                                >
+                                    {language === "es" ? "Editar" : "Edit"}
+                                </button>
 
-                            <div>
-                                <p className="text-sm text-neutral-500">
-                                    {language === "es" ? "Fecha y Hora" : "Date and Time"}
-                                </p>
+                                <button
+                                    onClick={handleConfirmBooking}
+                                    disabled={isSubmitting}
+                                    className="flex-1 rounded-xl bg-black px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {isSubmitting
+                                        ? language === "es"
+                                            ? "Confirmando..."
+                                            : "Confirming..."
+                                        : language === "es"
+                                            ? "Confirmar cita"
+                                            : "Confirm Appointment"}
+                                </button>
 
-                                <p className="font-semibold text-black">
-                                    {selectedDate} · {selectedTime}
-                                </p>
+                                {bookingError && (
+                                    <p className="mt-4 text-sm text-red-600">
+                                        {bookingError}
+                                    </p>
+                                )}
                             </div>
+                        </div>
+                    )}
 
-                            <div>
-                                <p className="text-sm text-neutral-500">
+                    {/* Summary */}
+                    {selectedServices.length > 0 && ( // Only show this section if at least one service is selected
+                        <div className="mt-8 rounded-xl bg-white p-5">
+                            <h2 className="font-semibold text-black">
+                                {language === "es" ? "Tu selección" : "Your Selection"}
+                            </h2>
+
+                            <div className="mt-4 flex justify-between">
+                                <span className="text-neutral-600">
                                     {language === "es" ? "Precio estimado" : "Estimated Price"}
-                                </p>
+                                </span>
 
-                                <p className="font-semibold text-black">
+                                <span className="font-semibold text-black">
                                     ${totalPrice.toLocaleString("es-CO")} COP
-                                </p>
+                                </span>
                             </div>
 
-                            <div>
-                                <p className="text-sm text-neutral-500">
-                                    {language === "es" ? "Duración estimada" : "Estimated Duration"}
-                                </p>
+                            <div className="mt-2 flex justify-between">
+                                <span className="text-neutral-600">
+                                    {language === "es" ? "Duración estimada" : "Estimated Time"}
+                                </span>
 
-                                <p className="font-semibold text-black">
+                                <span className="font-semibold text-black">
                                     {totalDuration} min
-                                </p>
+                                </span>
                             </div>
                         </div>
-                        {/* Add Edit and Confirm Buttons */}
-                        <div className="mt-8 flex gap-3">
-                            <button
-                                onClick={() => setIsReviewing(false)}
-                                className="flex-1 rounded-xl border border-black px-4 py-3 font-semibold text-black"
-                            >
-                                {language === "es" ? "Editar" : "Edit"}
-                            </button>
-
-                            <button
-                                className="flex-1 rounded-xl bg-black px-4 py-3 font-semibold text-white"
-                            >
-                                {language === "es" ? "Confirmar cita" : "Confirm Appointment"}
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Summary */}
-                {selectedServices.length > 0 && ( // Only show this section if at least one service is selected
-                    <div className="mt-8 rounded-xl bg-white p-5">
-                        <h2 className="font-semibold text-black">
-                            {language === "es" ? "Tu selección" : "Your Selection"}
-                        </h2>
-
-                        <div className="mt-4 flex justify-between">
-                            <span className="text-neutral-600">
-                                {language === "es" ? "Precio estimado" : "Estimated Price"}
-                            </span>
-
-                            <span className="font-semibold text-black">
-                                ${totalPrice.toLocaleString("es-CO")} COP
-                            </span>
-                        </div>
-
-                        <div className="mt-2 flex justify-between">
-                            <span className="text-neutral-600">
-                                {language === "es" ? "Duración estimada" : "Estimated Time"}
-                            </span>
-
-                            <span className="font-semibold text-black">
-                                {totalDuration} min
-                            </span>
-                        </div>
-                    </div>
-                )}
-            </div>
+                    )}
+                </div>
+            )}
         </main>
     )
 }
