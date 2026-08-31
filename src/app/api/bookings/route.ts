@@ -58,6 +58,55 @@ export async function POST(request: Request) {
         0
       );
 
+      // Prevent double bookings on server
+      const existingAppointments = await prisma.appointment.findMany({
+        where: {
+          employeeId,
+          date: new Date(`${date}T00:00:00.000Z`),
+          status: {
+            in: ["BOOKED", "REQUESTED"]
+          },
+        },
+      });
+
+      console.log("NEW BOOKING:", {
+        employeeId,
+        date,
+        startTime,
+        totalDuration,
+      });
+
+      console.log("EXISTING APPOINTMENTS:", existingAppointments)
+
+      // Convert requested time to minutes
+      function timeToMinutes(time: string) {
+        const [hours, minutes] = time.split(":").map(Number);
+        return hours * 60 + minutes;
+      }
+      
+      const requestedStart = timeToMinutes(startTime);
+      const requestedEnd = requestedStart + totalDuration;
+
+      // Check for overlap
+      const hasConflict = existingAppointments.some((appointment) => {
+        const existingStart = timeToMinutes(appointment.startTime);
+        const existingEnd = existingStart + appointment.duration;
+
+        return (
+          requestedStart < existingEnd &&
+          requestedEnd > existingStart
+        );
+      });
+
+      if (hasConflict) {
+        return Response.json(
+          {
+            error: "This appointment time is no longer available",
+          },
+          { status: 409 }
+        );
+      }
+
     const requiresApproval = services.some(
       (service) => service.requiresApproval
     );

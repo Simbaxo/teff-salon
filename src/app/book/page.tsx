@@ -14,15 +14,6 @@ const timeSlots = [
   "17:00",
 ];
 
-const bookedAppointments = [
-    {
-        employeeId: 1,
-        date: "2026-08-30",
-        startTime: "14:00",
-        duration: 60,
-    },
-];
-
 // Create a Service Type
 type Service = {
     id: number;
@@ -58,6 +49,16 @@ type Addon = {
     active: boolean;
 };
 
+// Create Appointment Type
+type Appointment = {
+    id: number;
+    employeeId: number;
+    date: string;
+    startTime: string;
+    duration: number;
+    status: string;
+};
+
 export default function BookPage() {
     // State
     const { language } = useLanguage();
@@ -79,6 +80,8 @@ export default function BookPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [bookingError, setBookingError] = useState("");
     const [bookingSuccess, setBookingSuccess] = useState(false);
+    const [bookedAppointments, setBookedAppointments] =
+        useState<Appointment[]>([]);
 
     // Fetch the services from API
     useEffect(() => {
@@ -137,6 +140,18 @@ export default function BookPage() {
         }
 
         loadServiceAddons();
+    }, []);
+
+    // Get the appointments from API
+    useEffect(() => {
+        async function loadAppointments() {
+            const response = await fetch("/api/appointments");
+            const data = await response.json();
+
+            setBookedAppointments(data);
+        }
+
+        loadAppointments();
     }, []);
     
     // Functions
@@ -257,7 +272,7 @@ export default function BookPage() {
         const hasConflict = bookedAppointments.some((appointment) => {
             if (
                 appointment.employeeId !== selectedEmployee ||
-                appointment.date !== selectedDate
+                appointment.date.slice(0, 10) !== selectedDate
             ) {
                 return false;
             }
@@ -311,11 +326,21 @@ export default function BookPage() {
         } catch(error) {
             console.error(error);
 
-            setBookingError(
-                language === "es"
-                ? "No se pudo crear la cita."
-                : "The appointment could not be created."
-            );
+            if (error instanceof Error) {
+                if (error.message === "This appointment time is no longer available") {
+                    setBookingError(
+                        language === "es"
+                            ? "Este horario acaba de ser reservado. Por favor, selecciona otro horario."
+                            : "This time was just booked. Please select another time."
+                    );
+                } else {
+                    setBookingError(
+                        language === "es"
+                            ? "No se pudo crear la cita. Inténtalo de nuevo"
+                            : "the appointment could not be created. Please try again."
+                    );
+                }
+            }
         } finally {
             setIsSubmitting(false);
         }
