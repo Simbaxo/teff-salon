@@ -279,9 +279,9 @@ export default function BookPage() {
         <main className="min-h-screen bg-neutral-100 px-6 py-12">
             <div className="mx-auto max-w-2xl">
                 {/* Heading */}
-                <h1 className="text-3xl font-bold">
+                <h1 className="text-3xl font-bold text-black">
                     {language === "es"
-                        ? "Reserva tu cita"
+                        ? "Reserva Tu Cita"
                         : "Book Your Appointment"}
                 </h1>
                 <p className="mt-2 text-neutral-600">
@@ -308,7 +308,7 @@ export default function BookPage() {
                                 ${service.price.toLocaleString("es-CO")} COP
                             </p>
                             <p className="text-sm text-neutral-500">
-                                {service.duration} min
+                                {service.estimatedDuration} min
                             </p>
                         </button>
                     ))}
@@ -399,14 +399,13 @@ export default function BookPage() {
                 )}
 
                 {/* Temporary Available Time Slots */}
-
                 {selectedDate && (
                     <div className="mt-8">
                         <h2 className="text-xl font-semibold text-black">
                             {language === "es" ? "Elige una hora" : "Choose a time"}
                         </h2>
 
-                        <div className="mt-4 gird grid-cols2 gap-3 sm:grid-cols-4">
+                        <div className="mt-4 grid grid-cols2 gap-3 sm:grid-cols-4">
                             {availableTimeSlots.map((time) => (
                                 <button
                                     key={time}
@@ -425,7 +424,6 @@ export default function BookPage() {
                 )}
 
                 {/* Customer Information */}
-
                 {selectedTime && (
                     <div className="mt-8">
                         <h2 className="text-xl font-semibold text-black">
@@ -480,7 +478,6 @@ export default function BookPage() {
                 )}
 
                 {/* Continue Button */}
-
                 {selectedTime && !isReviewing && (
                     <button
                         onClick={() => setIsReviewing(true)}
@@ -540,7 +537,7 @@ export default function BookPage() {
 
                             <div>
                                 <p className="text-sm text-neutral-500">
-                                    {language === "es" ? "Tecnica" : "Technician"}
+                                    {language === "es" ? "Técnica" : "Technician"}
                                 </p>
 
                                 <p className="text-sm text-neutral-500">
@@ -578,6 +575,21 @@ export default function BookPage() {
                                 </p>
                             </div>
                         </div>
+                        {/* Add Edit and Confirm Buttons */}
+                        <div className="mt-8 flex gap-3">
+                            <button
+                                onClick={() => setIsReviewing(false)}
+                                className="flex-1 rounded-xl border border-black px-4 py-3 font-semibold text-black"
+                            >
+                                {language === "es" ? "Editar" : "Edit"}
+                            </button>
+
+                            <button
+                                className="flex-1 rounded-xl bg-black px-4 py-3 font-semibold text-white"
+                            >
+                                {language === "es" ? "Confirmar cita" : "Confirm Appointment"}
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -609,23 +621,6 @@ export default function BookPage() {
                         </div>
                     </div>
                 )}
-
-                {/* Add Edit and Confirm Buttons */}
-
-                <div className="mt-8 flex gap-3">
-                    <button
-                        onClick={() => setisReviewing(false)}
-                        className="flex-1 rounded-xl border border-black px-4 py-3 font-semibold text-black"
-                    >
-                        {language === "es" ? "Editar" : "Edit"}
-                    </button>
-
-                    <button
-                        className="flex-1 rounded-xl bg-black px-4 py-3 font-semibold text-white"
-                    >
-                        {language === "es" ? "Confirmar cita" : "Confirm Appointment"}
-                    </button>
-                </div>
             </div>
         </main>
     )
