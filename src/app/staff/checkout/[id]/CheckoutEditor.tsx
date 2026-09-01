@@ -26,6 +26,12 @@ type AvailableAddon = {
     estimatedDuration: number;
 }
 
+// Connects a service to an add-on that is allowed for that service
+type ServiceAddonRelation = {
+    serviceId: number;
+    addonId: number;
+};
+
 type CheckoutAddon = {
     bookedPrice: number;
     addon: {
@@ -54,6 +60,10 @@ export default function CheckoutEditor({
     );
     // Full active add-on menu used during checkout
     const [availableAddons, setAvailableAddons] = useState<AvailableAddon[]>([]);
+    // Stores the valid service/add-on combinations from the database
+    const [serviceAddonRelations, setServiceAddonRelations] = useState<
+        ServiceAddonRelation[]
+    >([]);
     
     // Calculate the value of the services still selected for checkout
     const servicesTotal = selectedServices.reduce(
@@ -70,29 +80,49 @@ export default function CheckoutEditor({
     // This is the current amount we expect to charge the customer
     const checkoutSubtotal = servicesTotal + addonsTotal;
 
+    // Find which add-ons are valid for the services currently selected
+    const allowedAddonIds = serviceAddonRelations
+        .filter((relation) =>
+            selectedServices.some(
+                (item) => item.service.id === relation.serviceId
+            )
+        )
+        .map((relation) => relation.addonId);
+    
+    // Only show add-ons that are allowed for the selected services
+    const filteredAvailableAddons = availableAddons.filter((addon) =>
+        allowedAddonIds.includes(addon.id)
+    );
+
     // Load the active service and add-on menus for checkout
     useEffect(() => {
         async function loadMenu() {
             const servicesResponse = await fetch("/api/services");
             const addonsResponse = await fetch("/api/addons");
+            const relationsResponse = await fetch("/api/service-addons");
 
-            if (!servicesResponse.ok || !addonsResponse.ok) {
+            if (!servicesResponse.ok || 
+                !addonsResponse.ok ||
+                !relationsResponse.ok
+            ) {
                 console.error("No se pudieron cargar el menu del salon");
                 return;
             }
 
             const servicesData = await servicesResponse.json();
-            const addonsData = await addonsResponse.json()
+            const addonsData = await addonsResponse.json();
+            const relationsData = await relationsResponse.json();
 
             setAvailableServices(servicesData);
             setAvailableAddons(addonsData);
+            setServiceAddonRelations(relationsData);
         }
 
         loadMenu();
     }, []);
 
     // Add a service to the final checkout selection
-    function addService(service: AvailableServie) {
+    function addService(service: AvailableService) {
         const alreadySelected = selectedServices.some(
             (item) => item.service.id === service.id
         );
@@ -112,6 +142,31 @@ export default function CheckoutEditor({
                 },
             },
         ]);
+    }
+
+    // Remove a service and clean up add-ons that are no longer valid
+    function removeService(serviceId: number) {
+        const remainingServices = selectedServices.filter(
+            (item) => item.service.id !== serviceId
+        );
+
+        // Find which add-ons are still allowed by the remaining services
+        const remainingAllowedAddonIds = serviceAddonRelations
+            .filter((relation) =>
+                remainingServices.some(
+                    (item) => item.service.id === relation.serviceId
+                )
+            )
+            .map((relation) => relation.addonId);
+
+        setSelectedServices(remainingServices);
+
+        // Remove selected add-ons that no longer belong to any service
+        setSelectedAddons((current) =>
+            current.filter((item) =>
+                remainingAllowedAddonIds.includes(item.addon.id)
+            )
+        )
     }
 
     // Add an add-on to the final checkout selection
@@ -181,14 +236,7 @@ export default function CheckoutEditor({
 
                                     <button
                                         type="button"
-                                        onClick={() =>
-                                            setSelectedServices((current) =>
-                                                current.filter(
-                                                    (serviceItem) =>
-                                                        serviceItem.service.id !== item.service.id
-                                                )
-                                            )
-                                        }
+                                        onClick={() => removeService(item.service.id)}
                                         className="text-xs font-semibold text-red-600"
                                     >
                                         Quitar
@@ -224,7 +272,7 @@ export default function CheckoutEditor({
 
                                             <button
                                                 type="button"
-                                                onClick={() =>
+                                                onClick={() => 
                                                     setSelectedAddons((current) =>
                                                         current.filter(
                                                             (addonItem) =>
@@ -288,7 +336,7 @@ export default function CheckoutEditor({
                         </p>
 
                         <div className="mt-3 space-y-2">
-                            {availableAddons.map((addon) => {
+                            {filteredAvailableAddons.map((addon) => {
                                 const alreadySelected = selectedAddons.some(
                                     (item) => item.addon.id === addon.id
                                 );
