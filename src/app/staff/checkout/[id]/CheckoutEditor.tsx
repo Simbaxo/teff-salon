@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type CheckoutService = {
     bookedPrice: number;
@@ -8,6 +8,14 @@ type CheckoutService = {
         id: number;
         nameEs: string;
     };
+};
+
+// Represents an active service available in the salon enu
+type AvailableService = {
+    id: number;
+    nameEs: string;
+    price: number;
+    estimatedDuration: number;
 };
 
 type CheckoutAddon = {
@@ -32,6 +40,10 @@ export default function CheckoutEditor({
     const [selectedServices, setSelectedServices] = useState(services);
     // Keep track of the add-ons that will actually be charged
     const [selectedAddons, setSelectedAddons] = useState(addons);
+    // Full active service menu used when staff needs to add something
+    const [availableServices, setAvailableServices] = useState<AvailableService[]>(
+        []
+    );
     
     // Calculate the value of the services still selected for checkout
     const servicesTotal = selectedServices.reduce(
@@ -47,6 +59,46 @@ export default function CheckoutEditor({
 
     // This is the current amount we expect to charge the customer
     const checkoutSubtotal = servicesTotal + addonsTotal;
+
+    // Load all active salon services when the checkout editor opens
+    useEffect(() => {
+        async function loadServices() {
+            const response = await fetch("/api/services")
+
+            if (!response.ok) {
+                console.error("No se pudieron cargar los servicios");
+                return;
+            }
+
+            const data = await response.json();
+            setAvailableServices(data);
+        }
+
+        loadServices()
+    }, []);
+
+    // Add a service to the final checkout selection
+    function addService(service: AvailableServie) {
+        const alreadySelected = selectedServices.some(
+            (item) => item.service.id === service.id
+        );
+
+        // Prevent the same service from being added twice
+        if (alreadySelected) {
+            return;
+        }
+
+        setSelectedServices((current) => [
+            ...current,
+            {
+                bookedPrice: service.price,
+                service: {
+                    id: service.id,
+                    nameEs: service.nameEs,
+                },
+            },
+        ]);
+    }
 
     return (
         <div className="mt-6 rounded-xl border border-neutral-200 p-4">
@@ -158,6 +210,40 @@ export default function CheckoutEditor({
                             </p>
                         )}
                     </div>
+
+                    {/* Staff can add a service that was not part of the original booking */}
+                    <div className="mt-5">
+                        <p className="text-sm font-semibold text-black">
+                            Agregar Servicio
+                        </p>
+
+                        <div className="mt-3 space-y-2">
+                            {availableServices.map((service) => {
+                                const alreadySelected = selectedServices.some(
+                                    (item) => item.service.id === service.id
+                                );
+
+                                return (
+                                    <button
+                                        key={service.id}
+                                        type="button"
+                                        onClick={() => addService(service)}
+                                        disabled={alreadySelected}
+                                        className="flex w-full items-center justify-between rounded-lg border border-neutral-200 bg-white px-3 py-2 text-left disabled:opacity-40"
+                                    >
+                                        <span className="text-sm text-neutral-700">
+                                            {service.nameEs}
+                                        </span>
+
+                                        <span className="text-sm font-semibold text-black">
+                                            ${service.price.toLocaleString("es-CO")}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                 </div>
             )}
 
