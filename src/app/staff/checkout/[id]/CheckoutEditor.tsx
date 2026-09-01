@@ -28,6 +28,25 @@ export default function CheckoutEditor({
     addons,
 }: CheckoutEditorProps) {
     const [isEditing, setIsEditing] = useState(false);
+    // Keep track of the services that will actually be charged
+    const [selectedServices, setSelectedServices] = useState(services);
+    // Keep track of the add-ons that will actually be charged
+    const [selectedAddons, setSelectedAddons] = useState(addons);
+    
+    // Calculate the value of the services still selected for checkout
+    const servicesTotal = selectedServices.reduce(
+        (total, item) => total + item.bookedPrice,
+        0
+    );
+
+    // Calculate the value of the add-ons still selected for checkout
+    const addonsTotal = selectedAddons.reduce(
+        (total, item) => total + item.bookedPrice,
+        0
+    );
+
+    // This is the current amount we expect to charge the customer
+    const checkoutSubtotal = servicesTotal + addonsTotal;
 
     return (
         <div className="mt-6 rounded-xl border border-neutral-200 p-4">
@@ -49,7 +68,7 @@ export default function CheckoutEditor({
             </button>
 
             {isEditing && (
-                <div className="mt-4 rounded-xl bg-neutral-100 py-4">
+                <div className="mt-4 rounded-xl bg-neutral-100 p-4">
                     {/* Show the services currently attached to the appointment */}
                     <div>
                         <p className="text-sm font-semibold text-black">
@@ -57,14 +76,36 @@ export default function CheckoutEditor({
                         </p>
 
                         <div className="mt-3 space-y-2">
-                            {services.map((item) => (
+                            {selectedServices.map((item) => (
                                 <div
                                     key={item.service.id}
                                     className="flex items-center justify-between rounded-lg bg-white px-3 py-2"
                                 >
+                                    <span className="text-sm text-neutral-700">
+                                        {item.service.nameEs}
+                                    </span>
+
+                                    <div className="flex items-center gap-3">
                                     <span className="text-sm font-semibold text-black">
                                         ${item.bookedPrice.toLocaleString("es-CO")}
                                     </span>
+
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setSelectedServices((current) =>
+                                                current.filter(
+                                                    (serviceItem) =>
+                                                        serviceItem.service.id !== item.service.id
+                                                )
+                                            )
+                                        }
+                                        className="text-xs font-semibold text-red-600"
+                                    >
+                                        Quitar
+                                    </button>
+                                </div>
+
                                 </div>
                             ))}
                         </div>
@@ -76,9 +117,9 @@ export default function CheckoutEditor({
                             Adicionales Actuales
                         </p>
 
-                        {addons.length > 0 ? (
+                        {selectedAddons.length > 0 ? (
                             <div className="mt-3 space-y-2">
-                                {addons.map((item) => (
+                                {selectedAddons.map((item) => (
                                     <div
                                         key={item.addon.id}
                                         className="flex items-center justify-between rounded-lg bg-white px-3 py-2"
@@ -87,9 +128,27 @@ export default function CheckoutEditor({
                                             {item.addon.nameEs}
                                         </span>
 
-                                        <span className="text-sm font-semibold text-black">
-                                            ${item.bookedPrice.toLocaleString("es-CO")}
-                                        </span>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-sm font-semibold text-black">
+                                                ${item.bookedPrice.toLocaleString("es-CO")}
+                                            </span>
+
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setSelectedAddons((current) =>
+                                                        current.filter(
+                                                            (addonItem) =>
+                                                                addonItem.addon.id !== item.addon.id
+                                                        )
+                                                    )
+                                                }
+                                                className="text-xs font-semibold text-red-600"
+                                            >
+                                                Quitar
+                                            </button>
+
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -101,6 +160,19 @@ export default function CheckoutEditor({
                     </div>
                 </div>
             )}
+
+            {/* This subtotal updates when checkout items change */}
+            <div className="mt-5 border-t border-neutral-200 pt-4">
+                <div className="flex items-center justify-between">
+                    <span className="font-semibold text-black">
+                        Subtotal Actualizado
+                    </span>
+
+                    <span className="text-lg font-bold text-black">
+                        ${checkoutSubtotal.toLocaleString("es-CO")}
+                    </span>
+                </div>
+            </div>
         </div>
     );
 }
