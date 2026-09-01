@@ -18,6 +18,14 @@ type AvailableService = {
     estimatedDuration: number;
 };
 
+// Represents an active add-on available in the salon menu
+type AvailableAddon = {
+    id: number;
+    nameEs: string;
+    price: number;
+    estimatedDuration: number;
+}
+
 type CheckoutAddon = {
     bookedPrice: number;
     addon: {
@@ -44,6 +52,8 @@ export default function CheckoutEditor({
     const [availableServices, setAvailableServices] = useState<AvailableService[]>(
         []
     );
+    // Full active add-on menu used during checkout
+    const [availableAddons, setAvailableAddons] = useState<AvailableAddon[]>([]);
     
     // Calculate the value of the services still selected for checkout
     const servicesTotal = selectedServices.reduce(
@@ -60,21 +70,25 @@ export default function CheckoutEditor({
     // This is the current amount we expect to charge the customer
     const checkoutSubtotal = servicesTotal + addonsTotal;
 
-    // Load all active salon services when the checkout editor opens
+    // Load the active service and add-on menus for checkout
     useEffect(() => {
-        async function loadServices() {
-            const response = await fetch("/api/services")
+        async function loadMenu() {
+            const servicesResponse = await fetch("/api/services");
+            const addonsResponse = await fetch("/api/addons");
 
-            if (!response.ok) {
-                console.error("No se pudieron cargar los servicios");
+            if (!servicesResponse.ok || !addonsResponse.ok) {
+                console.error("No se pudieron cargar el menu del salon");
                 return;
             }
 
-            const data = await response.json();
-            setAvailableServices(data);
+            const servicesData = await servicesResponse.json();
+            const addonsData = await addonsResponse.json()
+
+            setAvailableServices(servicesData);
+            setAvailableAddons(addonsData);
         }
 
-        loadServices()
+        loadMenu();
     }, []);
 
     // Add a service to the final checkout selection
@@ -95,6 +109,29 @@ export default function CheckoutEditor({
                 service: {
                     id: service.id,
                     nameEs: service.nameEs,
+                },
+            },
+        ]);
+    }
+
+    // Add an add-on to the final checkout selection
+    function addAddon(addon: AvailableAddon) {
+        const alreadySelected = selectedAddons.some(
+            (item) => item.addon.id === addon.id
+        );
+
+        // Prevent the same add-on from being added twice
+        if (alreadySelected) {
+            return;
+        }
+
+        setSelectedAddons((current) => [
+            ...current,
+            {
+                bookedPrice: addon.price,
+                addon: {
+                    id: addon.id,
+                    nameEs: addon.nameEs,
                 },
             },
         ]);
@@ -238,6 +275,39 @@ export default function CheckoutEditor({
                                         <span className="text-sm font-semibold text-black">
                                             ${service.price.toLocaleString("es-CO")}
                                         </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Staff can add an add-on that was not part of the original booking */}
+                    <div className="mt-5">
+                        <p className="text-sm font-semibold text-black">
+                            Agregar Adicional
+                        </p>
+
+                        <div className="mt-3 space-y-2">
+                            {availableAddons.map((addon) => {
+                                const alreadySelected = selectedAddons.some(
+                                    (item) => item.addon.id === addon.id
+                                );
+
+                                return (
+                                    <button
+                                        key={addon.id}
+                                        type="button"
+                                        onClick={() => addAddon(addon)}
+                                        disabled={alreadySelected}
+                                        className="flex w-full items-center justify-between rounded-lg border border-neutral-200 bg-white px-3 py-2 text-left disabled:opacity-40"
+                                    >
+                                        <span className="text-sm text-neutral-700">
+                                            {addon.nameEs}
+                                        </span>
+
+                                        <span className="text-sm font-semibold text-black">
+                                            ${addon.price.toLocaleString("es-CO")}
+                                        </span>   
                                     </button>
                                 );
                             })}
