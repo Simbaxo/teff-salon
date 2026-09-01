@@ -15,6 +15,51 @@ export async function GET() {
         startTime: true,
         duration: true,
         status: true,
+        notes: true,
+
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+          },
+        },
+
+        employee: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+
+        appointmentServices: {
+          select: {
+            bookedPrice: true,
+            bookedDuration: true,
+            service: {
+              select: {
+                id: true,
+                nameEs: true,
+                nameEn: true
+              },
+            },
+          },
+        },
+
+        appointmentAddons: {
+          select: {
+            bookedPrice: true,
+            bookedDuration: true,
+            addon: {
+              select: {
+                id: true,
+                nameEs: true,
+                nameEn: true,
+              },
+            },
+          },
+        },
       },
       orderBy: {
         date: "asc",

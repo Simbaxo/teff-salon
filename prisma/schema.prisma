@@ -91,6 +91,10 @@ model Appointment {
 
   createdAt   DateTime @default(now())
 
+  checkedInAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+
   customer    Customer @relation(fields: [customerId], references: [id])
   employee    Employee @relation(fields: [employeeId], references: [id])
 

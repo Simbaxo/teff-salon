@@ -69,15 +69,6 @@ export async function POST(request: Request) {
         },
       });
 
-      console.log("NEW BOOKING:", {
-        employeeId,
-        date,
-        startTime,
-        totalDuration,
-      });
-
-      console.log("EXISTING APPOINTMENTS:", existingAppointments)
-
       // Convert requested time to minutes
       function timeToMinutes(time: string) {
         const [hours, minutes] = time.split(":").map(Number);

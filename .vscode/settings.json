@@ -2,9 +2,11 @@
     "js/ts.tsdk.path": "node_modules/typescript/lib",
     "cSpell.language": "en,es-ES",
     "cSpell.words": [
-      "Rocelys",
-      "semipermanente",
-      "Yenifer"
+        "Manicurista",
+        "Rocelys",
+        "semipermanente",
+        "TEFF",
+        "Yenifer"
     ],
     "files.associations": {
         "*.tsx": "typescriptreact",
