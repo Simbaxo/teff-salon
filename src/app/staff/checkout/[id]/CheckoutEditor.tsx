@@ -69,9 +69,12 @@ export default function CheckoutEditor({
     >([]);
     // Discount entered by staff in Colombian pesos
     const [discount, setDiscount] = useState(0);
-    // Stores the payment method selected by staff
-    const [paymentMethod, setPaymentMethod] =
-        useState<PaymentMethod | null>(null);
+    // Stores how much was paid using each payment method
+    const [payments, setPayments] = useState({
+        CASH: 0,
+        BOLD: 0,
+        TRANSFER: 0,
+    });
     
     // Calculate the value of the services still selected for checkout
     const servicesTotal = selectedServices.reduce(
@@ -91,11 +94,24 @@ export default function CheckoutEditor({
     // Never allow a discount to make the final total negative
     const finalTotal = Math.max(checkoutSubtotal - discount, 0);
 
-    // For now, one selected payment method covers the full checkout total
-    const amountPaid = paymentMethod ? finalTotal : 0;
+    // Total amount entered across all payment methods
+    const amountPaid =
+        payments.CASH +
+        payments.BOLD +
+        payments.TRANSFER;
+    
+    // How much the customer still owes
+    const remainingBalance = Math.max(finalTotal - amountPaid, 0);
 
-    // Remaining balance must reach zero before checkout can be completed
-    const remainingBalance = finalTotal - amountPaid;
+    // Prevent staff from recording more money than the checkout total
+    const overpayment = Math.max(amountPaid - finalTotal, 0);
+
+    // Checkout is ready only when the total is paid exactly
+    const canCompleteCheckout =
+        selectedServices.length > 0 &&
+        finalTotal > 0 &&
+        remainingBalance === 0 &&
+        overpayment === 0;
 
     // Find which add-ons are valid for the services currently selected
     const allowedAddonIds = serviceAddonRelations
@@ -427,48 +443,63 @@ export default function CheckoutEditor({
                 </span>
             </div>
 
-            {/* Select how the customer is paying */}
-            <div className="mt-6 border-t border-neutral-200 pt-5">
-                <p className="text-sm font-semibold text-black">
-                    Método de Pago
-                </p>
-
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    <button
-                        type="button"
-                        onClick={() => setPaymentMethod("CASH")}
-                        className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
-                            paymentMethod === "CASH"
-                                ? "border-black bg-black text-white"
-                                : "border-neutral-300 bg-white text-black"
-                        }`}
-                    >
+            {/* Enter how much the customer paid with each method */}
+            <div className="mt-3 space-y-3">
+                <div>
+                    <label className="text-sm font-medium text-black">
                         Efectivo
-                    </button>
+                    </label>
 
-                    <button
-                        type="button"
-                        onClick={() => setPaymentMethod("BOLD")}
-                        className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
-                            paymentMethod === "BOLD"
-                                ? "border-black bg-black text-white"
-                                : "border-neutral-300 bg-white text-black"
-                        }`}
-                    >
-                        BOLD / Tarjeta
-                    </button>
+                    <input 
+                        type="number"
+                        min="0"
+                        value={payments.CASH}
+                        onChange={(event) => 
+                            setPayments((current) => ({
+                                ...current,
+                                CASH: Number(event.target.value),
+                            }))
+                        } 
+                        className="mt-1 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
+                    />
+                </div>
 
-                    <button
-                        type="button"
-                        onClick={() => setPaymentMethod("TRANSFER")}
-                        className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
-                            paymentMethod === "TRANSFER"
-                                ? "border-black bg-black text-white"
-                                : "border-neutral-300 bg-white text-black"
-                        }`}
-                    >
+                <div>
+                    <label className="text-sm font-medium text-black">
+                        Bold / Tarjeta
+                    </label>
+
+                    <input 
+                        type="number"
+                        min="0"
+                        value={payments.BOLD}
+                        onChange={(event) => 
+                            setPayments((current) => ({
+                                ...current,
+                                BOLD: Number(event.target.value),
+                            }))
+                        } 
+                        className="mt-1 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
+                    />
+                </div>
+
+                <div>
+                    <label className="text-sm font-medium text-black">
                         Transferencia
-                    </button>
+                    </label>
+
+                    <input 
+                        type="number"
+                        min="0"
+                        value={payments.TRANSFER}
+                        onChange={(event) => 
+                            setPayments((current) => ({
+                                ...current,
+                                TRANSFER: Number(event.target.value),
+                            }))
+                        } 
+                        className="mt-1 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
+                    />
                 </div>
             </div>
 
@@ -504,6 +535,37 @@ export default function CheckoutEditor({
                     </span>
                 </div>
             </div>
+
+            {/* Warn staff if the entered payments are greater than the total */}
+            {overpayment > 0 && (
+                <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p03">
+                    <p className="text-sm font-semibold text-red-700">
+                        Pago Excedido
+                    </p>
+
+                    <p className="mt-1 text-sm text-red-200">
+                        El pago supera el total por{" "}
+                        ${overpayment.toLocaleString("es-CO")}.
+                    </p>
+                </div>
+            )}
+
+            {/* Temporary checkout readiness indicator */}
+            <div className="mt-4">
+                <p
+                    className={`text-sm font-semibold ${
+                        canCompleteCheckout
+                            ? "text-green-700"
+                            : "text-neutral-500"
+                    }`}
+                >
+                    {canCompleteCheckout
+                        ? "Listo para finalizar la venta"
+                        : "Completa el pago para continuar"
+                    }
+                </p>
+            </div>
+
         </div>
     );
 }

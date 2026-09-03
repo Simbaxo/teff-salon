@@ -152,35 +152,6 @@ export default async function CheckoutPage({
                         services={appointment.appointmentServices}
                         addons={appointment.appointmentAddons}
                     />
-                    {/* <div className="mt-6 rounded-xl border border-neurtal-200 p-4">
-                        <p className="font-semibold text-black">
-                            Verificar Servicios
-                        </p>
-
-                        <p className="mt-1 text-sm text-neutral-500">
-                            Confirma que los servicios y adicionales realizados 
-                            coincidan con lo que se cobrara al cliente.
-                        </p>
-
-                        <button
-                            type="button"
-                            className="mt-4 rounded-xl border border-neutral-300 px-4 py-2 text-sm font-semibold text-black"
-                        >
-                            Editar Servicios
-                        </button>
-                    </div> */}
-
-                    <div className="mt-6 border-t border-neutral-200 pt-4">
-                        <div className="flex items-center justify-between">
-                            <p className="text-lg font-semibold text-black">
-                                Subtotal
-                            </p>
-
-                            <p className="text-xl font-bold text-black">
-                                ${subtotal.toLocaleString("es-CO")}
-                            </p>
-                        </div>
-                    </div>
                 </div>
             </div>
         </main>
