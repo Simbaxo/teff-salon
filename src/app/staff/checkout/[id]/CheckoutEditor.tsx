@@ -45,6 +45,9 @@ type CheckoutEditorProps = {
     addons: CheckoutAddon[];
 }
 
+// Payment methods currently accepted by TEFF
+type PaymentMethod = "CASH" | "BOLD" | "TRANSFER";
+
 export default function CheckoutEditor({
     services,
     addons,
@@ -66,6 +69,9 @@ export default function CheckoutEditor({
     >([]);
     // Discount entered by staff in Colombian pesos
     const [discount, setDiscount] = useState(0);
+    // Stores the payment method selected by staff
+    const [paymentMethod, setPaymentMethod] =
+        useState<PaymentMethod | null>(null);
     
     // Calculate the value of the services still selected for checkout
     const servicesTotal = selectedServices.reduce(
@@ -84,6 +90,12 @@ export default function CheckoutEditor({
 
     // Never allow a discount to make the final total negative
     const finalTotal = Math.max(checkoutSubtotal - discount, 0);
+
+    // For now, one selected payment method covers the full checkout total
+    const amountPaid = paymentMethod ? finalTotal : 0;
+
+    // Remaining balance must reach zero before checkout can be completed
+    const remainingBalance = finalTotal - amountPaid;
 
     // Find which add-ons are valid for the services currently selected
     const allowedAddonIds = serviceAddonRelations
@@ -413,6 +425,84 @@ export default function CheckoutEditor({
                 <span className="text-xl font-bold text-black">
                     ${finalTotal.toLocaleString("es-CO")}
                 </span>
+            </div>
+
+            {/* Select how the customer is paying */}
+            <div className="mt-6 border-t border-neutral-200 pt-5">
+                <p className="text-sm font-semibold text-black">
+                    Método de Pago
+                </p>
+
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <button
+                        type="button"
+                        onClick={() => setPaymentMethod("CASH")}
+                        className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
+                            paymentMethod === "CASH"
+                                ? "border-black bg-black text-white"
+                                : "border-neutral-300 bg-white text-black"
+                        }`}
+                    >
+                        Efectivo
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setPaymentMethod("BOLD")}
+                        className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
+                            paymentMethod === "BOLD"
+                                ? "border-black bg-black text-white"
+                                : "border-neutral-300 bg-white text-black"
+                        }`}
+                    >
+                        BOLD / Tarjeta
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setPaymentMethod("TRANSFER")}
+                        className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
+                            paymentMethod === "TRANSFER"
+                                ? "border-black bg-black text-white"
+                                : "border-neutral-300 bg-white text-black"
+                        }`}
+                    >
+                        Transferencia
+                    </button>
+                </div>
+            </div>
+
+            {/* Show payment progress before completing checkout */}
+            <div className="mt-5 rounded-xl bg-neutral-100 p-4">
+                <div className="flex justify-between text-sm">
+                    <span className="text-neutral-600">
+                        Total a Pagar
+                    </span>
+
+                    <span className="font-semibold text-black">
+                        ${finalTotal.toLocaleString("es-CO")}
+                    </span>
+                </div>
+
+                <div className="mt-2 flex justify-between text-sm">
+                    <span className="text-neutral-600">
+                        Pagado
+                    </span>
+
+                    <span className="font-semibold text-black">
+                        ${amountPaid.toLocaleString("es-CO")}
+                    </span>
+                </div>
+
+                <div className="mt-3 flex justify-between border-t border-neutral-200 pt-3">
+                    <span className="font-semibold text-black">
+                        Saldo Pendiente
+                    </span>
+
+                    <span className="font-semibold text-black">
+                        ${remainingBalance.toLocaleString("es-CO")}
+                    </span>
+                </div>
             </div>
         </div>
     );
