@@ -34,6 +34,8 @@ model Employee {
 
   employeeServices  EmployeeService[]
   appointments      Appointment[]
+  // Tracks commissions earned by this employee
+  commissions       Commission[]
 }
 
 model EmployeeService {
@@ -100,6 +102,8 @@ model Appointment {
 
   appointmentServices     AppointmentService[]
   appointmentAddons       AppointmentAddon[]
+  // Allows an appointment to be connected to a sale
+  saleAppointments        SaleAppointment[]
 }
 
 model AppointmentService {
@@ -124,4 +128,59 @@ model AppointmentAddon {
   addon         Addon       @relation(fields: [addonId], references: [id])
 
   @@id([appointmentId, addonId])
+}
+
+// Represents on completed customer transcation
+model Sale {
+  id            Int      @id @default(autoincrement())
+  subtotal      Int
+  discountTotal Int      @default(0)
+  finalTotal    Int
+  createdAt     DateTime @default(now())
+
+  saleAppointments SaleAppointment[]
+  // A sale can contain multiple payment methods
+  payments         Payment[]
+  // A sale can generate commissions for one or more technicians
+  commissions      Commission[]
+}
+
+// Connects one sale to one or more appointments
+model SaleAppointment {
+  saleId        Int
+  appointmentId Int
+
+  sale        Sale        @relation(fields: [saleId], references: [id])
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  @@id([saleId, appointmentId])
+  @@unique([appointmentId])
+}
+
+// Stores each payment used to pay a sale
+model Payment {
+  id             Int      @id @default(autoincrement())
+  saleId         Int
+  paymentMethod  String
+  amount         Int
+  processingFee  Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  sale Sale @relation(fields: [saleId], references: [id])
+}
+
+// Stores the commission earned by a technician from a sale
+model Commission {
+  id               Int       @id @default(autoincrement())
+  saleId           Int
+  employeeId       Int
+  commissionBase   Int
+  commissionRate   Int
+  commissionAmount Int
+  status           String    @default("PENDING")
+  paidAt           DateTime?
+  createdAt        DateTime  @default(now())
+
+  sale     Sale     @relation(fields: [saleId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
 }
