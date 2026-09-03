@@ -64,6 +64,8 @@ export default function CheckoutEditor({
     const [serviceAddonRelations, setServiceAddonRelations] = useState<
         ServiceAddonRelation[]
     >([]);
+    // Discount entered by staff in Colombian pesos
+    const [discount, setDiscount] = useState(0);
     
     // Calculate the value of the services still selected for checkout
     const servicesTotal = selectedServices.reduce(
@@ -79,6 +81,9 @@ export default function CheckoutEditor({
 
     // This is the current amount we expect to charge the customer
     const checkoutSubtotal = servicesTotal + addonsTotal;
+
+    // Never allow a discount to make the final total negative
+    const finalTotal = Math.max(checkoutSubtotal - discount, 0);
 
     // Find which add-ons are valid for the services currently selected
     const allowedAddonIds = serviceAddonRelations
@@ -376,6 +381,38 @@ export default function CheckoutEditor({
                         ${checkoutSubtotal.toLocaleString("es-CO")}
                     </span>
                 </div>
+            </div>
+
+            {/* Staff can enter a fixed discount in COP */}
+            <div className="mt-4">
+                <label 
+                    htmlFor="discount"
+                    className="text-sm font-semibold text-black"
+                >
+                    Descuento
+                </label>
+
+                <input 
+                    id="discount"
+                    type="text"
+                    min="0"
+                    max={checkoutSubtotal}
+                    value={discount}
+                    onChange={(event) =>
+                        setDiscount(Number(event.target.value))
+                    }
+                    className="mt-2 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
+                />
+            </div>
+
+            {/* Amount that will actually be charged to the customer */}
+            <div className="mt-5 flex items-center justify-between border-t border-neutral-200 pt-4">
+                <span className="font-semibold text-black">
+                    Total a Cobrar
+                </span>
+                <span className="text-xl font-bold text-black">
+                    ${finalTotal.toLocaleString("es-CO")}
+                </span>
             </div>
         </div>
     );
