@@ -148,7 +148,8 @@ export default async function CheckoutPage({
                         </div>
                     )}
                     
-                    <CheckoutEditor 
+                    <CheckoutEditor
+                        appointmentId={appointment.id} 
                         services={appointment.appointmentServices}
                         addons={appointment.appointmentAddons}
                     />

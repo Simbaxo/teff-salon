@@ -41,6 +41,7 @@ type CheckoutAddon = {
 };
 
 type CheckoutEditorProps = {
+    appointmentId: number;
     services: CheckoutService[];
     addons: CheckoutAddon[];
 }
@@ -49,6 +50,7 @@ type CheckoutEditorProps = {
 type PaymentMethod = "CASH" | "BOLD" | "TRANSFER";
 
 export default function CheckoutEditor({
+    appointmentId,
     services,
     addons,
 }: CheckoutEditorProps) {
@@ -75,6 +77,10 @@ export default function CheckoutEditor({
         BOLD: 0,
         TRANSFER: 0,
     });
+    // Prevents duplicate checkout submissions while the sale is saving
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    // Displays a checkout error without losing the entered information
+    const [checkoutError, setCheckoutError] = useState("");
     
     // Calculate the value of the services still selected for checkout
     const servicesTotal = selectedServices.reduce(
@@ -223,6 +229,64 @@ export default function CheckoutEditor({
                 },
             },
         ]);
+    }
+
+    // Send the verified checkout information to the server
+    async function handleCompleteCheckout() {
+        if (!canCompleteCheckout || isSubmitting) {
+            return;
+        }
+
+        setIsSubmitting(true);
+        setCheckoutError("");
+
+        try {
+            // Convert our payment object into database payment records
+            const paymentsToSubmit = (
+                Object.entries(payments) as [PaymentMethod, number] []
+            )
+                .filter(([, amount]) => amount > 0)
+                .map(([paymentMethod, amount]) => ({
+                    paymentMethod,
+                    amount,
+                }));
+
+                const response = await fetch("/api/checkout", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        appointmentId,
+                        serviceIds: selectedServices.map(
+                            (item) => item.service.id    
+                        ),
+                        addonIds: selectedAddons.map(
+                            (item) => item.addon.id
+                        ),
+                        discountTotal: discount,
+                        payments: paymentsToSubmit,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        data.error || "No se pudo finalizar la venta"
+                    );
+                }
+
+                console.log("Venta creada:", data);
+        } catch (error) {
+            setCheckoutError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo finalizar la venta"
+            );
+        } finally {
+            setIsSubmitting(false);
+        }
     }
 
     return (
@@ -565,6 +629,22 @@ export default function CheckoutEditor({
                     }
                 </p>
             </div>
+
+            {/* Complete checkout only when payment and service validation passes */}
+            <button
+                type="button"
+                onClick={handleCompleteCheckout}
+                disabled={!canCompleteCheckout || isSubmitting}
+                className="mt-4 w-full rounded-xl bg-black px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled: opacity-40"
+            >
+                {isSubmitting ? "Guardando Venta..." : "Finalizar Venta"}
+            </button>
+
+            {checkoutError && (
+                <p className="mt-3 text-sm font-semibold text-red-600">
+                    {checkoutError}
+                </p>
+            )}
 
         </div>
     );
