@@ -65,6 +65,21 @@ export async function POST(request: Request) {
             },
             include: {
                 employee: true,
+
+                // Load the original booking snapshots so we can honor booked prices
+                appointmentServices: {
+                    select: {
+                        serviceId: true,
+                        bookedPrice: true,
+                    },
+                },
+
+                appointmentAddons: {
+                    select: {
+                        addonId: true,
+                        bookedPrice: true,
+                    },
+                },
             },
         });
 
@@ -75,6 +90,21 @@ export async function POST(request: Request) {
                 { status: 404 }
             );
         }
+
+        // Remember the prices the customer was originally quoted
+        const bookedServicePrices = new Map(
+            appointment.appointmentServices.map((item) => [
+                item.serviceId,
+                item.bookedPrice,
+            ])
+        );
+
+        const bookedAddonPrices = new Map(
+            appointment.appointmentAddons.map((item) => [
+                item.addonId,
+                item.bookedPrice,
+            ])
+        )
 
         // Load the selected services from the database
         const services = await prisma.service.findMany({
@@ -161,17 +191,23 @@ export async function POST(request: Request) {
             );
         }
 
-        // Calculate the authoritative service total using database prices
-        const servicesTotal = services.reduce(
-            (total, service) => total + service.price,
-            0
-        );
+        // Use the booked price when the service was part of the original appointment
+        // Newly added services use today's menu price.
+        const servicesTotal = services.reduce((total, service) => {
+            const price =
+                bookedServicePrices.get(service.id) ?? service.price;
 
-        // Calculate the authoritative add-on total using database prices
-        const addonsTotal = addons.reduce(
-            (total, addon) => total + addon.price,
-            0
-        );
+            return total + price;
+        }, 0);
+
+        // Original add-ons keep their booked price
+        // Add-ons added durning checkout use today's menu price.
+        const addonsTotal = addons.reduce((total, addon) => {
+            const price =
+                bookedAddonPrices.get(addon.id) ?? addon.price;
+            
+            return total + price;
+        }, 0);
 
         // The browser's subtotal is never trusted
         const subtotal = servicesTotal + addonsTotal;
@@ -261,7 +297,8 @@ export async function POST(request: Request) {
                         itemType: "SERVICE",
                         itemId: service.id,
                         itemName: service.nameEs,
-                        unitPrice: service.price,
+                        unitPrice: 
+                            bookedServicePrices.get(service.id) ?? service.price,
                     })),
 
                     // Save a permanent snapshot of the add-ons actually sold
@@ -270,7 +307,8 @@ export async function POST(request: Request) {
                         itemType: "ADDON",
                         itemId: addon.id,
                         itemName: addon.nameEs,
-                        unitPrice: addon.price,
+                        unitPrice: 
+                            bookedAddonPrices.get(addon.id) ?? addon.price,
                     })),
                 ],
             });
