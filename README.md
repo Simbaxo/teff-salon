@@ -163,8 +163,8 @@ En servicio
 Finalizar servicio
     ↓
 Checkout
+```
 
-```md
 ### Staff Workflow Features
 
 - Appointment status updates
