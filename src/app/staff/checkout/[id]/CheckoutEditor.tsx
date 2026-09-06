@@ -49,6 +49,13 @@ type CheckoutEditorProps = {
 // Payment methods currently accepted by TEFF
 type PaymentMethod = "CASH" | "BOLD" | "TRANSFER";
 
+// Information returned after the sale is successfully saved
+type CompletedSale = {
+    saleId: number;
+    finalTotal: number;
+    commissionAmount: number;
+}
+
 export default function CheckoutEditor({
     appointmentId,
     services,
@@ -81,6 +88,9 @@ export default function CheckoutEditor({
     const [isSubmitting, setIsSubmitting] = useState(false);
     // Displays a checkout error without losing the entered information
     const [checkoutError, setCheckoutError] = useState("");
+    // Stores the completed sale so the checkout cannot be submitted again
+    const [completedSale, setCompletedSale] =
+        useState<CompletedSale | null>(null);
     
     // Calculate the value of the services still selected for checkout
     const servicesTotal = selectedServices.reduce(
@@ -277,7 +287,8 @@ export default function CheckoutEditor({
                     );
                 }
 
-                console.log("Venta creada:", data);
+                // Save the successful result and switch to the confirmation screen
+                setCompletedSale(data);
         } catch (error) {
             setCheckoutError(
                 error instanceof Error
@@ -287,6 +298,31 @@ export default function CheckoutEditor({
         } finally {
             setIsSubmitting(false);
         }
+    }
+
+    // Once checkout succeeds, replace the editor with a confirmation screen
+    if (completedSale) {
+        return (
+            <div className="mt-6 rounded-xl border border-neutral-200 p-6 text-center">
+                <p className="text-2xl font-bold text-black">
+                    Venta Registrada ✅
+                </p>
+
+                <p className="mt-2 text-sm text-neutral-500">
+                    La venta fue guardada correctamente.
+                </p>
+
+                <div className="mt-6 rounded-xl bg-neutral-100 p-4">
+                    <p className="text-sm text-neutral-500">
+                        Venta #{completedSale.saleId}
+                    </p>
+
+                    <p className="mt01 text-2xl font-bold text-black">
+                        ${completedSale.finalTotal.toLocaleString("es-CO")}
+                    </p>
+                </div>
+            </div>
+        );
     }
 
     return (

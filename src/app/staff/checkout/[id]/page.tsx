@@ -73,6 +73,30 @@ export default async function CheckoutPage({
 
     const subtotal = servicesTotal + addonsTotal;
 
+    // Prevent staff from opening an editable checkout for a finished appointment
+    if (appointment.status === "COMPLETED") {
+        return (
+            <main className="mx-auto max-w-2xl p-6">
+                <div className="rounded-xl border border-neutral-200 p-6 text-center">
+                    <h1 className="text-2xl font-bold">
+                        Venta ya registrada ✔︎
+                    </h1>
+
+                    <p className="mt-2 text-neutral-500">
+                        Esta cita ya fue finalizada y no puede volver a cobrarse.
+                    </p>
+
+                    <a 
+                        href="/staff"
+                        className="mt-6 inline-block rounded-lg bg-black px-4 py-2 text-white"
+                    >
+                        Volver a las citas
+                    </a>
+                </div>
+            </main>
+        )
+    }
+
     return (
         <main className="min-h-screen bg-neutral-100 p-6">
             <div className="mx-auto max-w-3xl">

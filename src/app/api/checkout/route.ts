@@ -58,7 +58,7 @@ export async function POST(request: Request) {
             );
         }
 
-        // Load the appointment and the techician assigned to it
+        // Load the appointment and the technician assigned to it
         const appointment = await prisma.appointment.findUnique({
             where: {
                 id: Number(appointmentId),
@@ -222,7 +222,15 @@ export async function POST(request: Request) {
             );
         }
 
-        // Only appointments that reached the service stage can be checked out
+        // Prevent a completed appointment from being sold again
+        if (appointment.status === "COMPLETED") {
+            return Response.json(
+                { error: "Appointment has already been completed" },
+                { status: 409 }
+            );
+        }
+
+        // Only active appointments can continue to checkout
         if (
             appointment.status !== "IN_PROGRESS" &&
             appointment.status !== "CHECKED_IN"
