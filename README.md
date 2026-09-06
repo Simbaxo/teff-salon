@@ -16,12 +16,12 @@ The goal of the MVP is to manage the complete salon workflow:
 | 2 | Database & Salon Data | ✅ Core Complete |
 | 3 | Customer Booking | ✅ Core Complete |
 | 4 | Scheduling & Availability | ✅ Core Complete |
-| 5 | Staff Operations | 🟡 In Progress |
-| 6 | Checkout, Payments & Commissions | 🔨 In Progress |
+| 5 | Staff Operations | 🟡 Core Working — Hardening |
+| 6 | Checkout, Payments & Commissions | 🟡 Core Working — Hardening |
 | 7 | Admin / Owner Dashboard | ⬜ Not Started |
 | 8 | Production Readiness & Deployment | ⬜ Not Started |
 
-**Estimated MVP completion: ~60–65%**
+**Estimated MVP completion: ~80%**
 
 ---
 
@@ -163,3 +163,110 @@ En servicio
 Finalizar servicio
     ↓
 Checkout
+
+```md
+### Staff Workflow Features
+
+- Appointment status updates
+- `BOOKED` → `CHECKED_IN`
+- `CHECKED_IN` → `IN_PROGRESS`
+- Checkout available for appointments in progress
+- Check-in timestamps
+- Service start timestamps
+- Completion timestamp recorded after successful checkout
+- Completed appointments protected from duplicate checkout
+
+### Remaining Staff Work
+
+- Authentication
+- Employee / receptionist roles and permissions
+- Improved loading and error states
+- Appointment history
+- Production-safe date handling
+
+---
+
+# 🟡 Phase 6 — Checkout, Payments & Commissions
+
+*The checkout system converts completed salon services into permanent financial records while keeping payments, commissions, and technician tips separated.*
+
+### Implemented Checkout Flow
+
+1. Load the appointment and its originally booked services and add-ons
+2. Review services before checkout
+3. Add or remove services
+4. Add or remove compatible add-ons
+5. Apply a discount
+6. Select one or more payment methods
+7. Add an optional technician tip
+8. Validate the complete transaction
+9. Save the sale atomically
+10. Mark the appointment as completed
+
+### Services & Add-ons
+
+- Editable services during checkout
+- Editable add-ons during checkout
+- Add-on compatibility validation
+- Technician qualification validation
+- Booked-price protection
+- Newly added checkout items use the current menu price
+- Final sold items stored as permanent sale line-item snapshots
+
+### Discounts
+
+- Discounts applied before commission calculation
+- Final sale total calculated as:
+
+`finalTotal = subtotal - discountTotal`
+
+- Discounts cannot exceed the subtotal
+
+### Payments
+
+Supported payment methods:
+
+- Cash
+- Bold / Card
+- Bank transfer
+- Split payments across multiple payment methods
+- Exact payment-total validation
+- Server-side payment validation
+
+### Commissions
+
+- Technician commission automatically created during checkout
+- Current commission rate: 50%
+- Commission calculated from the final service sale after discounts
+- Tips are excluded from commission calculations
+- Commission payout status is stored for future payroll management
+
+### Technician Tips
+
+Tips are tracked separately from salon service revenue.
+
+**Cash tips**
+
+- Assumed to be given directly to the technician
+- Do not increase the amount TEFF must collect
+- Stored with `PAID` status
+- `paidAt` recorded immediately
+
+**Bold / Transfer tips**
+
+- Collected by TEFF on behalf of the technician
+- Increase the amount charged to the customer
+- Stored separately from salon revenue
+- Stored with `PENDING` status until paid to the technician
+
+Example:
+
+```text
+Services                 $100.000
+Electronic Tip            $20.000
+Customer Pays            $120.000
+
+Sale Revenue             $100.000
+Commission Base          $100.000
+Technician Tip            $20.000
+Payment Collected        $120.000

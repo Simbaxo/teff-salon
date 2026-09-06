@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+
 // Payment methods currently accepted by TEFF
 const allowedPaymentMethods = ["CASH", "BOLD", "TRANSFER"];
 
@@ -138,7 +139,7 @@ export async function POST(request: Request) {
         });
 
         // Make sure every requested service actually exists and is active
-        if (services.length !== serviceIds.length) {
+        if (services.length !== uniqueServiceIds.length) {
             return Response.json(
                 { error: "One or more services are invalid" },
                 { status: 400 }
@@ -159,7 +160,7 @@ export async function POST(request: Request) {
         const serviceAddonRelations = await prisma.serviceAddon.findMany({
             where: {
                 serviceId: {
-                    in: serviceIds,
+                    in: uniqueServiceIds,
                 },
             },
         });
@@ -242,6 +243,14 @@ export async function POST(request: Request) {
         }
 
         const finalTotal = subtotal - discountTotal;
+
+        // A completed sale must have a positive service total
+        if (finalTotal <= 0) {
+            return Response.json(
+                { error: "Final total must be greater than zero" },
+                { status: 400 }
+            );
+        }
 
         // Add all submitted payment amounts together
         const paymentTotal = payments.reduce(
