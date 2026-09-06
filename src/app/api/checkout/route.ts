@@ -12,6 +12,8 @@ export async function POST(request: Request) {
             addonIds,
             discountTotal,
             payments,
+            tipAmount,
+            tipPaymentMethod,
         } = body;
 
         // Make sure the checkout contains the basic required information
@@ -54,6 +56,25 @@ export async function POST(request: Request) {
         if (!paymentsAreValid) {
             return Response.json(
                 { error: "Invalid payment information" },
+                { status: 400 }
+            );
+        }
+
+        // Tip must be a whole, non-negative COP amount
+        if (!Number.isInteger(tipAmount) || tipAmount < 0) {
+            return Response.json(
+                { error: "Invalid tip amount" },
+                { status: 400 }
+            );
+        }
+
+        // A payment method is only required when there is a tip
+        if (
+            tipAmount > 0 &&
+            !allowedPaymentMethods.includes(tipPaymentMethod)
+        ) {
+            return Response.json(
+                { error: "Invalid tip payment method" },
                 { status: 400 }
             );
         }
@@ -231,12 +252,17 @@ export async function POST(request: Request) {
             0
         );
 
-        if (paymentTotal !== finalTotal) {
+        // Cash tips go directly to the technician
+        // Electronic tips are collected by TEFF
+        const electronicTip =
+            tipPaymentMethod === "CASH" ? 0 : tipAmount;
+        
+        const expectedPaymentTotal = finalTotal + electronicTip;
+
+        if (paymentTotal !== expectedPaymentTotal) {
             return Response.json(
                 {
-                    error: "Payments do not match final total",
-                    finalTotal,
-                    paymentTotal,
+                    error: "Payment total does not match amount due",
                 },
                 { status: 400 }
             );
@@ -344,6 +370,24 @@ export async function POST(request: Request) {
                     status: "PENDING",
                 },
             });
+
+            // Save the tip only when the customer actually leaves one
+            if (tipAmount > 0) {
+                await tx.tip.create({
+                    data: {
+                        saleId: newSale.id,
+                        employeeId: appointment.employeeId,
+                        amount: tipAmount,
+                        paymentMethod: tipPaymentMethod,
+
+                        // Cash tips are assumed to be handed directly to the technician
+                        status: tipPaymentMethod === "CASH" ? "PAID" : "PENDING",
+
+                        // Record when a cash tip was already received
+                        paidAt: tipPaymentMethod === "CASH" ? new Date() : null
+                    },
+                });
+            }
 
             // Only mark the appointment complete after the sale is recorded
             await tx.appointment.update({

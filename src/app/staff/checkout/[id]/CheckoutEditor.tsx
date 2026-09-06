@@ -84,6 +84,11 @@ export default function CheckoutEditor({
         BOLD: 0,
         TRANSFER: 0,
     });
+    //Tips belongs directly to the technician
+    const [tipAmount, setTipAmount] = useState(0)
+    // Cash tips are treated differently because the technician may receive them immediately
+    const [tipPaymentMethod, setTipPaymentMethod] =
+        useState<PaymentMethod>("CASH");
     // Prevents duplicate checkout submissions while the sale is saving
     const [isSubmitting, setIsSubmitting] = useState(false);
     // Displays a checkout error without losing the entered information
@@ -110,17 +115,21 @@ export default function CheckoutEditor({
     // Never allow a discount to make the final total negative
     const finalTotal = Math.max(checkoutSubtotal - discount, 0);
 
-    // Total amount entered across all payment methods
-    const amountPaid =
-        payments.CASH +
-        payments.BOLD +
-        payments.TRANSFER;
-    
-    // How much the customer still owes
-    const remainingBalance = Math.max(finalTotal - amountPaid, 0);
+    // Electronic tips are collected by TEFF
+    // Cash tips are assumed to go directly to the technician
+    const electronicTip =
+        tipPaymentMethod === "CASH" ? 0 : tipAmount;
 
-    // Prevent staff from recording more money than the checkout total
-    const overpayment = Math.max(amountPaid - finalTotal, 0);
+    // Total amount TEFF must actually collect
+    const amountDue = finalTotal + electronicTip;
+
+    const amountPaid = Object.values(payments).reduce(
+        (total, amount) => total + amount,
+        0
+    );
+
+    const remainingBalance = Math.max(amountDue - amountPaid, 0);
+    const overpayment = Math.max(amountPaid - amountDue, 0)
 
     // Checkout is ready only when the total is paid exactly
     const canCompleteCheckout =
@@ -276,6 +285,10 @@ export default function CheckoutEditor({
                         ),
                         discountTotal: discount,
                         payments: paymentsToSubmit,
+                        
+                        // Send tip details separately from service revenue
+                        tipAmount,
+                        tipPaymentMethod,
                     }),
                 });
 
@@ -533,14 +546,57 @@ export default function CheckoutEditor({
                 />
             </div>
 
+            {/* Propina */}
+            <div className="mt-6">
+                <label className="block font-semibold text-black">
+                    Propina
+                </label>
+
+                <input 
+                    type="number"
+                    min="0"
+                    value={tipAmount}
+                    onChange={(event) =>
+                        setTipAmount(Number(event.target.value))
+                    }
+                    className="mt-2 w-full rounded-lg border border-neutral-300 p-3 text-black"
+                />
+
+                <label className="mt-4 block font-semibold text-black">
+                    Método de la propina
+                </label>
+
+                <select
+                    value={tipPaymentMethod}
+                    onChange={(event) =>
+                        setTipPaymentMethod(event.target.value as PaymentMethod)
+                    }
+                    className="mt-2 w-full rounded-lg border border-neutral-300 p-3 text-black"
+                >
+                    <option value="CASH">Efectivo</option>
+                    <option value="BOLD">Bold / Tarjeta</option>
+                    <option value="TRANSFER">Transferencia</option>
+                </select>
+            </div>
+
             {/* Amount that will actually be charged to the customer */}
-            <div className="mt-5 flex items-center justify-between border-t border-neutral-200 pt-4">
-                <span className="font-semibold text-black">
-                    Total a Cobrar
-                </span>
-                <span className="text-xl font-bold text-black">
-                    ${finalTotal.toLocaleString("es-CO")}
-                </span>
+            <div className="mt-5 border-t border-neutral-200 pt-4">
+                <div className="flex items-center justify-between">
+                    <span className="font-semibold text-black">
+                        Total a Cobrar
+                    </span>
+
+                    <span className="text-xl font-bold text-black">
+                        ${amountDue.toLocaleString("es-CO")}
+                    </span>
+                </div>
+                    
+                    {/* Explain when an electronic tip is included */}
+                    {electronicTip > 0 && (
+                        <p className="mt-1 text-sm text-neutral-500">
+                            Incluye ${electronicTip.toLocaleString("es-CO")} de propina
+                        </p>
+                    )}
             </div>
 
             {/* Enter how much the customer paid with each method */}

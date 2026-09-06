@@ -36,6 +36,7 @@ model Employee {
   appointments      Appointment[]
   // Tracks commissions earned by this employee
   commissions       Commission[]
+  tips              Tip[]
 }
 
 model EmployeeService {
@@ -144,6 +145,7 @@ model Sale {
   // A sale can generate commissions for one or more technicians
   commissions      Commission[]
   lineItems        SaleLineItem[]
+  tips             Tip[]
 }
 
 // Connects one sale to one or more appointments
@@ -194,6 +196,21 @@ model Commission {
   status           String    @default("PENDING")
   paidAt           DateTime?
   createdAt        DateTime  @default(now())
+
+  sale     Sale     @relation(fields: [saleId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+}
+
+// Tracks tips belonging directly to technicians
+model Tip {
+  id            Int       @id @default(autoincrement())
+  saleId        Int
+  employeeId    Int
+  amount        Int
+  paymentMethod String
+  status        String    @default("PENDING")
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
 
   sale     Sale     @relation(fields: [saleId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
