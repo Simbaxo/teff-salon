@@ -1,36 +1,6 @@
+import { prisma } from "@/lib/prisma";
+
 import CheckoutEditor from "./CheckoutEditor";
-
-type CheckoutAppointment = {
-    id: number;
-    status: string;
-    startTime: string;
-    duration: number;
-
-    customer: {
-        name: string;
-        phone: string;
-    };
-
-    employee: {
-        name: string;
-    };
-
-    appointmentServices: {
-        bookedPrice: number;
-        service: {
-            id: number;
-            nameEs: string;
-        };
-    }[];
-
-    appointmentAddons: {
-        bookedPrice: number;
-        addon: {
-            id: number;
-            nameEs: string;
-        };
-    }[];
-};
 
 export default async function CheckoutPage({
     params,
@@ -39,27 +9,40 @@ export default async function CheckoutPage({
 }) {
     const { id } = await params;
 
-    const response = await fetch(
-        `http://localhost:3000/api/appointments/${id}`,
-        {
-            cache: "no-store",
-        }
-    );
+    // Load the appointment directly from the database.
+    // This avoids calling our own API from the server component.
+    const appointment = await prisma.appointment.findUnique({
+        where: {
+            id: Number(id),
+        },
+        include: {
+            customer: true,
+            employee: true,
+            appointmentServices: {
+                include: {
+                    service: true,
+                },
+            },
+            appointmentAddons: {
+                include: {
+                    addon: true,
+                },
+            },
+        },
+    });
 
-    if (!response.ok) {
+    // Show an error if the appointment does not exist
+    if (!appointment) {
         return (
             <main className="min-h-screen bg-neutral-100 p-6">
                 <div className="mx-auto max-w-3xl">
-                    <h1 className="text-3xl font-bold text-black"> 
+                    <h1 className="text-3xl font-bold text-black">
                         No se pudo cargar la cita
                     </h1>
                 </div>
             </main>
-        );
+        )
     }
-
-    const appointment: CheckoutAppointment =
-        await response.json();
 
     // Prevent staff from opening an editable checkout for a finished appointment
     if (appointment.status === "COMPLETED") {
