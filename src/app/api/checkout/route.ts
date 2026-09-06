@@ -128,7 +128,8 @@ export async function POST(request: Request) {
             ])
         )
 
-        // Load the selected services from the database
+        // Load all selected services, including inactive ones.
+        // Previously booked services must still be honored at checkout
         const services = await prisma.service.findMany({
             where: {
                 id: {
@@ -146,13 +147,27 @@ export async function POST(request: Request) {
             );
         }
 
-        // Load the selected add-ons from the database
+        // An inactive service is allowed only if it was part of the original booking
+        const hasInvalidInactiveService = services.some(
+            (service) =>
+                !service.active &&
+                !bookedServicePrices.has(service.id)
+        );
+
+        if (hasInvalidInactiveService) {
+            return Response.json(
+                { error: "An inactive service cannot be added during checkout" },
+                { status: 400 }
+            );
+        }
+
+        // Load all selected add-ons, including inactive ones.
+        // Previously booked add-ons must still be honored at checkout
         const addons = await prisma.addon.findMany({
             where: {
                 id: {
                     in: uniqueAddonIds,
                 },
-                active: true,
             },
         });
 
@@ -205,10 +220,24 @@ export async function POST(request: Request) {
             );
         }
 
-        // Make sure every requested add-on actually exists and is active
+        // Make sure every requested add-on actually exists
         if (addons.length !== uniqueAddonIds.length) {
             return Response.json(
                 { error: "One or more add-ons are invalid"},
+                { status: 400 }
+            );
+        }
+
+        // An inactive add-on is allowed only if it was part of the original booking
+        const hasInvalidInactiveAddon = addons.some(
+            (addon) =>
+                !addon.active &&
+                !bookedAddonPrices.has(addon.id)
+        );
+
+        if (hasInvalidInactiveAddon) {
+            return Response.json(
+                { error: "An inactive add-on cannot be added during checkout" },
                 { status: 400 }
             );
         }
