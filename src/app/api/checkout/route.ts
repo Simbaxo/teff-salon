@@ -68,11 +68,19 @@ export async function POST(request: Request) {
             },
         });
 
+        // Stop checkout if the appointment does not exist
+        if (!appointment) {
+            return Response.json(
+                { error: "Appointment not found" },
+                { status: 404 }
+            );
+        }
+
         // Load the selected services from the database
         const services = await prisma.service.findMany({
             where: {
                 id: {
-                    in: serviceIds,
+                    in: uniqueServiceIds,
                 },
                 active: true,
             },
@@ -215,13 +223,6 @@ export async function POST(request: Request) {
             commissionBase * (commissionRate /100)
         );
 
-        if (!appointment) {
-            return Response.json(
-                { error: "Appointment not found" },
-                { status: 400 }
-            );
-        }
-
         // Prevent a completed appointment from being sold again
         if (appointment.status === "COMPLETED") {
             return Response.json(
@@ -250,6 +251,28 @@ export async function POST(request: Request) {
                     discountTotal,
                     finalTotal,
                 },
+            });
+
+            // Save a permanent snapshot of the services actually sold
+            await tx.saleLineItem.createMany({
+                data: [
+                    ...services.map((service) => ({
+                        saleId: newSale.id,
+                        itemType: "SERVICE",
+                        itemId: service.id,
+                        itemName: service.nameEs,
+                        unitPrice: service.price,
+                    })),
+
+                    // Save a permanent snapshot of the add-ons actually sold
+                    ...addons.map((addon) => ({
+                        saleId: newSale.id,
+                        itemType: "ADDON",
+                        itemId: addon.id,
+                        itemName: addon.nameEs,
+                        unitPrice: addon.price,
+                    })),
+                ],
             });
 
             // Connect this appointment to the sale

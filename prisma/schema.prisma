@@ -143,6 +143,7 @@ model Sale {
   payments         Payment[]
   // A sale can generate commissions for one or more technicians
   commissions      Commission[]
+  lineItems        SaleLineItem[]
 }
 
 // Connects one sale to one or more appointments
@@ -155,6 +156,19 @@ model SaleAppointment {
 
   @@id([saleId, appointmentId])
   @@unique([appointmentId])
+}
+
+// Stores the final services and add-ons that were actually sold
+model SaleLineItem {
+  id        Int    @id @default(autoincrement())
+  saleId    Int
+
+  itemType  String
+  itemId    Int?
+  itemName  String
+  unitPrice Int
+
+  sale Sale @relation(fields: [saleId], references: [id])
 }
 
 // Stores each payment used to pay a sale

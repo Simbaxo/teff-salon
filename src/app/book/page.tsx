@@ -49,6 +49,12 @@ type Addon = {
     active: boolean;
 };
 
+// Connects services to the add-ons they support
+type ServiceAddon = {
+    serviceId: number;
+    addonId: number;
+}
+
 // Create Appointment Type
 type Appointment = {
     id: number;

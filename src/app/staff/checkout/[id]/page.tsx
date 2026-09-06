@@ -18,6 +18,7 @@ type CheckoutAppointment = {
     appointmentServices: {
         bookedPrice: number;
         service: {
+            id: number;
             nameEs: string;
         };
     }[];
@@ -25,6 +26,7 @@ type CheckoutAppointment = {
     appointmentAddons: {
         bookedPrice: number;
         addon: {
+            id: number;
             nameEs: string;
         };
     }[];
@@ -58,20 +60,6 @@ export default async function CheckoutPage({
 
     const appointment: CheckoutAppointment =
         await response.json();
-
-    const servicesTotal =
-        appointment.appointmentServices.reduce(
-            (total, item) => total + item.bookedPrice,
-            0
-        );
-
-    const addonsTotal =
-        appointment.appointmentAddons.reduce(
-            (total, item) => total + item.bookedPrice,
-            0
-        )
-
-    const subtotal = servicesTotal + addonsTotal;
 
     // Prevent staff from opening an editable checkout for a finished appointment
     if (appointment.status === "COMPLETED") {
