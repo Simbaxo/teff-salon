@@ -151,7 +151,8 @@ export default function BookPage() {
     // Get the appointments from API
     useEffect(() => {
         async function loadAppointments() {
-            const response = await fetch("/api/appointments");
+            // Only load appointments that should block booking availability
+            const response = await fetch("/api/appointments?mode=availability");
             const data = await response.json();
 
             setBookedAppointments(data);
@@ -176,9 +177,9 @@ export default function BookPage() {
             .map((relation) => relation.addonId)
 
         setSelectedAddons((current) =>
-            current.filter((addonId) => availableAddonIds.includes(addonId))
+            current.filter((addonId) => validAddonIds.includes(addonId))
         );
-    }, [selectedServices]);
+    }, [selectedServices, serviceAddons]);
 
     const availableAddons = addons.filter((addon) => 
         availableAddonIds.includes(addon.id)

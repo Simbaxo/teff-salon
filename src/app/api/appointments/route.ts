@@ -1,11 +1,20 @@
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const mode = searchParams.get("mode");
+
+    // Only active appointment statuses should block customer availability
+    const statuses =
+      mode === "availability"
+        ? ["BOOKED", "REQUESTED", "CHECKED_IN", "IN_PROGRESS"]
+        : ["BOOKED", "REQUESTED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED"];
+
     const appointments = await prisma.appointment.findMany({
       where: {
         status: {
-          in: ["BOOKED", "REQUESTED"],
+          in: statuses,
         },
       },
       select: {
