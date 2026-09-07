@@ -64,7 +64,8 @@ export async function POST(request: Request) {
           employeeId,
           date: new Date(`${date}T00:00:00.000Z`),
           status: {
-            in: ["BOOKED", "REQUESTED"]
+            // These appointments still occupy the technician's schedule
+            in: ["BOOKED", "REQUESTED", "CHECKED_IN", "IN_PROGRESS"],
           },
         },
       });
