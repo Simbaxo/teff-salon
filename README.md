@@ -16,18 +16,18 @@ The goal of the MVP is to manage the complete salon workflow:
 | 2 | Database & Salon Data | ✅ Core Complete |
 | 3 | Customer Booking | ✅ Core Complete |
 | 4 | Scheduling & Availability | ✅ Core Complete |
-| 5 | Staff Operations | 🟡 Core Working — Hardening |
-| 6 | Checkout, Payments & Commissions | 🟡 Core Working — Hardening |
+| 5 | Staff Operations & Authentication | 🟡 Core Complete — Hardening |
+| 6 | Checkout, Payments & Commissions | 🟡 Core Complete — Hardening |
 | 7 | Admin / Owner Dashboard | ⬜ Not Started |
 | 8 | Production Readiness & Deployment | ⬜ Not Started |
 
-**Estimated MVP completion: ~80%**
+**Estimated MVP completion: ~85%**
 
 ---
 
 # ✅ Phase 1 — Project Foundation
 
-Core development environment and application architecture.
+*Core development environment and application architecture.*
 
 ### Completed
 
@@ -45,14 +45,14 @@ Core development environment and application architecture.
 - Shared language context
 - Spanish / English customer interface
 - `/book` customer route
-- `/staff` employee route
+- `/staff` internal staff route
 - API route structure
 
 ---
 
 # ✅ Phase 2 — Database & Salon Data
 
-The application now uses real relational salon data rather than hard-coded frontend data.
+*The application now uses real relational salon data rather than hard-coded frontend data.*
 
 ### Implemented Models
 
@@ -65,6 +65,13 @@ The application now uses real relational salon data rather than hard-coded front
 - Appointment
 - AppointmentService
 - AppointmentAddon
+- User
+- Sale
+- SaleAppointment
+- SaleLineItem
+- Payment
+- Commission
+- Tip
 
 ### Implemented Relationships
 
@@ -74,6 +81,11 @@ The application now uses real relational salon data rather than hard-coded front
 - Employees → Appointments
 - Appointments → Services
 - Appointments → Add-ons
+- Appointments → Sales
+- Sales → Payments
+- Sales → Commissions
+- Sales → Tips
+- Users → optional Employee account
 
 Appointment services and add-ons store price and duration snapshots so historical bookings are not affected if menu prices change later.
 
@@ -81,7 +93,7 @@ Appointment services and add-ons store price and duration snapshots so historica
 
 # ✅ Phase 3 — Customer Booking
 
-Customers can complete a real appointment booking flow.
+*Customers can complete a real appointment booking flow.*
 
 ### Current Booking Flow
 
@@ -114,7 +126,7 @@ Customers can complete a real appointment booking flow.
 
 # ✅ Phase 4 — Scheduling & Availability
 
-The booking system checks real appointments before displaying available times.
+*The booking system checks real appointments before displaying available times.*
 
 ### Implemented
 
@@ -122,9 +134,12 @@ The booking system checks real appointments before displaying available times.
 - Appointment duration blocking
 - Existing appointment conflict detection
 - Server-side conflict protection
+- `BOOKED`, `REQUESTED`, `CHECKED_IN`, and `IN_PROGRESS` appointments block availability
 - HTTP `409` response when a time becomes unavailable
 - Customer-facing message when another customer books a selected time
 - Real appointment data used for availability
+- Public availability API exposes only the scheduling data required by the booking system
+- Customer personal information is excluded from public availability responses
 
 ### Future Hardening
 
@@ -134,11 +149,11 @@ Before production, stronger database-level concurrency protection should be adde
 
 ---
 
-# 🟡 Phase 5 — Staff Operations
+# 🟡 Phase 5 — Staff Operations & Authentication
 
-The staff interface manages the salon's daily appointment workflow.
+*The internal staff application manages TEFF's daily appointment workflow.*
 
-### Implemented
+### Implemented Staff Interface
 
 - Spanish-only staff interface
 - Daily appointment view
@@ -176,13 +191,44 @@ Checkout
 - Completion timestamp recorded after successful checkout
 - Completed appointments protected from duplicate checkout
 
-### Remaining Staff Work
+### Authentication & Permissions
 
-- Authentication
-- Employee / receptionist roles and permissions
+- Auth.js authentication
+- Email/password login
+- Passwords securely hashed with bcrypt
+- Authenticated staff sessions
+- Logout functionality
+- Protected `/staff` route
+- Protected checkout route
+- Protected appointment status API
+- Protected checkout API
+- Protected detailed appointment API
+- Server-side role authorization
+- `401 Unauthorized` protection for unauthenticated requests
+- `403 Forbidden` protection for unauthorized roles
+
+### Current Roles
+
+- `OWNER`
+- `RECEPTIONIST`
+- `TECHNICIAN`
+
+Current access policy:
+
+- OWNER → staff application and checkout
+- RECEPTIONIST → staff application and checkout
+- TECHNICIAN → no application access yet
+
+Technicians remain Employee records for scheduling, commissions, and tips without requiring login accounts.
+
+### Remaining Staff Hardening
+
 - Improved loading and error states
 - Appointment history
 - Production-safe date handling
+- Password change/reset
+- Login rate limiting / lockout protection
+- Session revalidation when account roles or active status change
 
 ---
 
@@ -212,6 +258,12 @@ Checkout
 - Booked-price protection
 - Newly added checkout items use the current menu price
 - Final sold items stored as permanent sale line-item snapshots
+- Originally booked inactive services remain valid at checkout
+- Originally booked inactive add-ons remain valid at checkout
+- Originally booked services remain valid if technician qualifications later change
+- Originally booked add-ons remain valid if service/add-on relationships later change
+- Newly added services must satisfy current technician qualifications
+- Newly added add-ons must satisfy current compatibility rules
 
 ### Discounts
 
@@ -239,7 +291,7 @@ Supported payment methods:
 - Current commission rate: 50%
 - Commission calculated from the final service sale after discounts
 - Tips are excluded from commission calculations
-- Commission payout status is stored for future payroll management
+- Commission payout status stored for future payroll management
 
 ### Technician Tips
 
@@ -265,8 +317,8 @@ Example:
 Services                 $100.000
 Electronic Tip            $20.000
 Customer Pays            $120.000
-
 Sale Revenue             $100.000
 Commission Base          $100.000
 Technician Tip            $20.000
 Payment Collected        $120.000
+```

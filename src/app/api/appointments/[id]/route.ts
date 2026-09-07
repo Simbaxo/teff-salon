@@ -1,10 +1,29 @@
 import { prisma } from "@/lib/prisma"
+import { auth } from "@/auth";
+import { canManageStaff } from "@/lib/auth-roles";
 
 export async function GET(
     request: Request,
     context: { params: Promise<{ id: string}> }
 ) {
     try {
+
+        const session = await auth();
+
+        if (!session?.user) {
+            return Response.json(
+                { error: "Unauthorized" },
+                { status: 401 }
+            );
+        }
+
+        if (!canManageStaff(session.user.role)) {
+            return Response.json(
+                { error: "Forbidden" },
+                { status: 403 }
+            );
+        }
+
         const { id } = await context.params;
         const appointmentId = Number(id);
 
@@ -38,7 +57,7 @@ export async function GET(
         if (!appointment) {
             return Response.json(
                 { error: "Appointment not found" },
-                { status: 400 }
+                { status: 404 }
             );
         }
 
