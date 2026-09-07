@@ -1,9 +1,20 @@
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
 
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth();
+
+  // Only authenticated TEFF staff can change appointment statuses
+  if (!session?.user) {
+    return Response.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+  
   try {
     const { id } = await context.params;
     const body = await request.json();

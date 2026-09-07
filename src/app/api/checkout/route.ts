@@ -1,9 +1,20 @@
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
 
 // Payment methods currently accepted by TEFF
 const allowedPaymentMethods = ["CASH", "BOLD", "TRANSFER"];
 
 export async function POST(request: Request) {
+    const session = await auth();
+
+    // Only authenticated TEFF staff can complete sales
+    if (!session?.user) {
+        return Response.json(
+            { error: "Unauthorized" },
+            { status: 401 }
+        );
+    }
+    
     try {
         const body = await request.json();
 

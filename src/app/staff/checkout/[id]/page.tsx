@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 
 import CheckoutEditor from "./CheckoutEditor";
 
@@ -7,6 +9,13 @@ export default async function CheckoutPage({
 }: {
     params: Promise<{ id: string }>;
 }) {
+    const session = await auth();
+
+    // Checkout is only available to authenticated TEFF staff
+    if (!session?.user) {
+        redirect("/login");
+    }
+    
     const { id } = await params;
 
     // Load the appointment directly from the database.
