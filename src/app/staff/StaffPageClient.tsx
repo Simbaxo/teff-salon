@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
 import { signOut } from "next-auth/react";
 
 type Appointment = {
