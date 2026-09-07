@@ -13,120 +13,146 @@ datasource db {
 }
 
 model Service {
-  id                Int               @id @default(autoincrement())
+  id                Int     @id @default(autoincrement())
   nameEs            String
   nameEn            String
   category          String
   price             Int
   estimatedDuration Int
-  requiresApproval  Boolean           @default(false)
-  active            Boolean           @default(true)
+  requiresApproval  Boolean @default(false)
+  active            Boolean @default(true)
 
-  employeeServices  EmployeeService[]
+  employeeServices    EmployeeService[]
   serviceAddons       ServiceAddon[]
-  appointmentServices   AppointmentService[]
+  appointmentServices AppointmentService[]
 }
 
 model Employee {
-  id                Int               @id @default(autoincrement())
-  name              String
-  active            Boolean           @default(true)
+  id     Int     @id @default(autoincrement())
+  name   String
+  active Boolean @default(true)
 
-  employeeServices  EmployeeService[]
-  appointments      Appointment[]
+  employeeServices EmployeeService[]
+  appointments     Appointment[]
   // Tracks commissions earned by this employee
-  commissions       Commission[]
-  tips              Tip[]
+  commissions      Commission[]
+  tips             Tip[]
+
+  // Optional login account for employees who need system access
+  user User?
+}
+
+// Login accounts for people who can access the internal TEFF system
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole
+  active       Boolean  @default(true)
+
+  // Not every login account has to be a salon technician
+  employeeId Int?      @unique
+  employee   Employee? @relation(fields: [employeeId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum UserRole {
+  OWNER
+  RECEPTIONIST
+  TECHNICIAN
 }
 
 model EmployeeService {
   employeeId Int
   serviceId  Int
 
-  employee   Employee @relation(fields: [employeeId], references: [id])
-  service    Service  @relation(fields: [serviceId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+  service  Service  @relation(fields: [serviceId], references: [id])
 
   @@id([employeeId, serviceId])
 }
 
 model Addon {
-  id                Int            @id @default(autoincrement())
+  id                Int     @id @default(autoincrement())
   nameEs            String
   nameEn            String
   price             Int
   estimatedDuration Int
-  active            Boolean        @default(true)
+  active            Boolean @default(true)
 
   serviceAddons     ServiceAddon[]
-  appointmentAddons   AppointmentAddon[]
+  appointmentAddons AppointmentAddon[]
 }
 
 model ServiceAddon {
   serviceId Int
   addonId   Int
 
-  service   Service @relation(fields: [serviceId], references: [id])
-  addon     Addon   @relation(fields: [addonId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+  addon   Addon   @relation(fields: [addonId], references: [id])
 
   @@id([serviceId, addonId])
 }
 
 model Customer {
-  id           Int           @id @default(autoincrement())
-  name         String
-  phone        String
-  email        String?
-  createdAt    DateTime      @default(now())
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String
+  email     String?
+  createdAt DateTime @default(now())
 
   appointments Appointment[]
 }
 
 model Appointment {
-  id          Int      @id @default(autoincrement())
-  customerId  Int
-  employeeId  Int
+  id         Int @id @default(autoincrement())
+  customerId Int
+  employeeId Int
 
-  date        DateTime
-  startTime   String
-  duration    Int
-  status      String
-  notes       String?
+  date      DateTime
+  startTime String
+  duration  Int
+  status    String
+  notes     String?
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 
   checkedInAt DateTime?
   startedAt   DateTime?
   completedAt DateTime?
 
-  customer    Customer @relation(fields: [customerId], references: [id])
-  employee    Employee @relation(fields: [employeeId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
 
-  appointmentServices     AppointmentService[]
-  appointmentAddons       AppointmentAddon[]
+  appointmentServices AppointmentService[]
+  appointmentAddons   AppointmentAddon[]
   // Allows an appointment to be connected to a sale
-  saleAppointments        SaleAppointment[]
+  saleAppointments    SaleAppointment[]
 }
 
 model AppointmentService {
-  appointmentId Int
-  serviceId     Int
-  bookedPrice   Int
+  appointmentId  Int
+  serviceId      Int
+  bookedPrice    Int
   bookedDuration Int
 
-  appointment   Appointment @relation(fields: [appointmentId], references: [id])
-  service       Service     @relation(fields: [serviceId], references: [id])
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  service     Service     @relation(fields: [serviceId], references: [id])
 
   @@id([appointmentId, serviceId])
 }
 
 model AppointmentAddon {
-  appointmentId Int
-  addonId       Int
-  bookedPrice   Int
+  appointmentId  Int
+  addonId        Int
+  bookedPrice    Int
   bookedDuration Int
 
-  appointment   Appointment @relation(fields: [appointmentId], references: [id])
-  addon         Addon       @relation(fields: [addonId], references: [id])
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  addon       Addon       @relation(fields: [addonId], references: [id])
 
   @@id([appointmentId, addonId])
 }
@@ -162,8 +188,8 @@ model SaleAppointment {
 
 // Stores the final services and add-ons that were actually sold
 model SaleLineItem {
-  id        Int    @id @default(autoincrement())
-  saleId    Int
+  id     Int @id @default(autoincrement())
+  saleId Int
 
   itemType  String
   itemId    Int?
@@ -175,12 +201,12 @@ model SaleLineItem {
 
 // Stores each payment used to pay a sale
 model Payment {
-  id             Int      @id @default(autoincrement())
-  saleId         Int
-  paymentMethod  String
-  amount         Int
-  processingFee  Int      @default(0)
-  createdAt      DateTime @default(now())
+  id            Int      @id @default(autoincrement())
+  saleId        Int
+  paymentMethod String
+  amount        Int
+  processingFee Int      @default(0)
+  createdAt     DateTime @default(now())
 
   sale Sale @relation(fields: [saleId], references: [id])
 }
