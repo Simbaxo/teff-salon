@@ -22,7 +22,9 @@ export async function POST(request: Request) {
       !employeeId ||
       !date ||
       !startTime ||
-      !serviceIds?.length
+      !Array.isArray(serviceIds) ||
+      serviceIds.length === 0 ||
+      !Array.isArray(addonIds)
     ) {
       return Response.json(
         { error: "Missing required booking information" },
@@ -30,23 +32,91 @@ export async function POST(request: Request) {
       );
     }
 
+    // Remove duplicate selections before validation
+    const uniqueServiceIds = [...new Set<number>(serviceIds)];
+    const uniqueAddonIds = [...new Set<number>(addonIds ?? [])];
+
     const services = await prisma.service.findMany({
       where: {
         id: {
-          in: serviceIds,
+          in: uniqueServiceIds,
         },
         active: true,
       },
     });
 
+    // Make sure every requested service exists and is active
+    if (services.length !== uniqueServiceIds.length) {
+      return Response.json(
+        { error: "One or more services are invalid" },
+        { status: 400 }
+      );
+    }
+
+    // Load the services this technician is qualified to perform
+    const employeeServices = await prisma.employeeService.findMany({
+      where: {
+        employeeId,
+      },
+    });
+
+    const employeeServiceIds = new Set(
+      employeeServices.map((item) => item.serviceId)
+    );
+
+    // The selected technician must be qualified for every requested service
+    const hasUnsupportedService = uniqueServiceIds.some(
+      (serviceId: number) => !employeeServiceIds.has(serviceId)
+    );
+
+    if (hasUnsupportedService) {
+      return Response.json(
+        { error: " Technician is not qualified for one or more services" },
+        { status: 400 }
+      );
+    }
+
     const addons = await prisma.addon.findMany({
       where: {
         id: {
-          in: addonIds ?? [],
+          in: uniqueAddonIds ?? [],
         },
         active: true,
       },
     });
+
+    // Make sure ever requested add-on exists and is active
+    if (addons.length !== (uniqueAddonIds ?? []).length) {
+      return Response.json(
+        { error: "One or more add-ons are invalid" },
+        { status: 400 }
+      );
+    }
+
+    // Load the valid add-on relationships for the selected services
+    const serviceAddonRelations = await prisma.serviceAddon.findMany({
+      where: {
+        serviceId: {
+          in: uniqueServiceIds,
+        },
+      },
+    });
+
+    const allowedAddonIds = new Set(
+      serviceAddonRelations.map((relation) => relation.addonId)
+    );
+
+    // Every selected add-on must belong to at least one selected service
+    const hasInvalidAddon = (uniqueAddonIds ?? []).some(
+      (addonId: number) => !allowedAddonIds.has(addonId)
+    );
+
+    if (hasInvalidAddon) {
+      return Response.json(
+        { error: "One or more add-ons are not valid for the selected services" },
+        { status: 400}
+      );
+    }
 
     const totalDuration =
       services.reduce(
