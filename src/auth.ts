@@ -34,6 +34,11 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
                     return null;
                 }
 
+                // Technician account are not allowed to use the app yet
+                if (user.role === "TECHNICIAN") {
+                    return null;
+                }
+
                 // Compare the submitted password with the stored hash
                 const passwordMatches = await bcrypt.compare(
                     credentials.password,

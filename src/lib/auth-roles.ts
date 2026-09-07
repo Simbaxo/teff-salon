@@ -12,3 +12,8 @@ export function canManageStaff(role: TeffUserRole) {
 export function canCheckout(role: TeffUserRole) {
     return role === "OWNER" || role === "RECEPTIONIST";
 }
+
+// Only OWNER and RECEPTIONIST can access the internal staff app
+export function canAccessStaff(role: TeffUserRole) {
+    return role === "OWNER" || role === "RECEPTIONIST";
+}
