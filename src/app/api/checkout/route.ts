@@ -232,8 +232,13 @@ export async function POST(request: Request) {
             employeeServices.map((item) => item.serviceId)
         );
 
+        // Only newly added services must match the technician's current qualifications
+        const newServiceIds = uniqueServiceIds.filter(
+            (serviceId) => !bookedServicePrices.has(serviceId)
+        )
+
         // Make sure the assigned technician can perform every selected service
-        const hasUnsupportedService = uniqueServiceIds.some(
+        const hasUnsupportedService = newServiceIds.some(
             (serviceId: number) => !employeeServiceIds.has(serviceId)
         );
 
