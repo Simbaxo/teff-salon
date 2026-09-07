@@ -155,7 +155,6 @@ export async function POST(request: Request) {
                 id: {
                     in: uniqueServiceIds,
                 },
-                active: true,
             },
         });
 
@@ -205,8 +204,13 @@ export async function POST(request: Request) {
             serviceAddonRelations.map((relation) => relation.addonId)
         );
 
+        // Only newly added add-ons must must the current service/add-on rules
+        const newAddonIds = uniqueAddonIds.filter(
+            (addonId) => !bookedAddonPrices.has(addonId)
+        );
+
         // Reject add-ons that do not belong to any selected services
-        const hasInvalidAddon = uniqueAddonIds.some(
+        const hasInvalidAddon = newAddonIds.some(
             (addonId: number) => !allowedAddonIds.has(addonId)
         );
 
