@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { canManageStaff } from "@/lib/auth-roles";
 
 export async function PATCH(
   request: Request,
@@ -12,6 +13,14 @@ export async function PATCH(
     return Response.json(
       { error: "Unauthorized" },
       { status: 401 }
+    );
+  }
+
+  // Only OWNER and RECEPTIONIST can manage appointment statuses
+  if (!canManageStaff(session.user.role)) {
+    return Response.json(
+      { error: "Forbidden" },
+      { status: 403 }
     );
   }
   

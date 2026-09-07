@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { canCheckout } from "@/lib/auth-roles";
 
 import CheckoutEditor from "./CheckoutEditor";
 
@@ -14,6 +15,11 @@ export default async function CheckoutPage({
     // Checkout is only available to authenticated TEFF staff
     if (!session?.user) {
         redirect("/login");
+    }
+
+    // Only OWNER and RECEPTIONIST can access checkout
+    if (!canCheckout(session.user.role)) {
+        redirect("/staff");
     }
     
     const { id } = await params;

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { canCheckout } from "@/lib/auth-roles";
 
 // Payment methods currently accepted by TEFF
 const allowedPaymentMethods = ["CASH", "BOLD", "TRANSFER"];
@@ -12,6 +13,14 @@ export async function POST(request: Request) {
         return Response.json(
             { error: "Unauthorized" },
             { status: 401 }
+        );
+    }
+
+    // Only OWNER and RECEPTIONIST can complete checkout
+    if (!canCheckout(session.user.role)) {
+        return Response.json(
+            { error: "Forbidden" },
+            { status: 403 }
         );
     }
     

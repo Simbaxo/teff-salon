@@ -10,5 +10,10 @@ export default async function StaffPage() {
     redirect("/login");
   }
 
-  return <StaffPageClient />;
+  return (
+    <StaffPageClient 
+      userName={session.user.name ?? "Usuario"}
+      userRole={session.user.role}
+    />
+  );
 }

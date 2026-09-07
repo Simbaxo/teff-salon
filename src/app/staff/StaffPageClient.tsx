@@ -46,6 +46,11 @@ type Appointment = {
     }[];
 };
 
+type StaffPageClientProps = {
+    userName: string;
+    userRole: "OWNER" | "RECEPTIONIST" | "TECHNICIAN";
+}
+
 // Translate Appointment Status to Spanish
 function getStatusLabel(status: string){
     switch (status) {
@@ -68,7 +73,10 @@ function getStatusLabel(status: string){
     }
 }
 
-export default  function StaffPage() {
+export default  function StaffPage({
+    userName,
+    userRole,
+}: StaffPageClientProps) {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [selectedDate, setSelectedDate] = useState(
         new Date().toISOString().slice(0, 10)
@@ -153,6 +161,10 @@ export default  function StaffPage() {
                         
                         <p className="mt-2 text-neutral-600">
                             Gestión de Citas
+                        </p>
+                        {/* Show the authenticated TEFF account */}
+                        <p className="mt-1 text-sm text-neutral-500">
+                            {userName} · {userRole}
                         </p>
                     </div>
 
