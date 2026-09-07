@@ -1,22 +1,69 @@
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
+import { canManageStaff } from "@/lib/auth-roles";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const mode = searchParams.get("mode");
 
-    // Only active appointment statuses should block customer availability
-    const statuses =
-      mode === "availability"
-        ? ["BOOKED", "REQUESTED", "CHECKED_IN", "IN_PROGRESS"]
-        : ["BOOKED", "REQUESTED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED"];
+    // Public booking availability only needs scheduling data
+    if (mode === "availability") {
+      const appointments = await prisma.appointment.findMany({
+        where: {
+          status: {
+            in: ["BOOKED", "REQUESTED", "CHECKED_IN", "IN_PROGRESS"],
+          },
+        },
 
+        select: {
+          id: true,
+          employeeId: true,
+          date: true,
+          startTime: true,
+          duration: true,
+          status: true,
+        },
+
+        orderBy: {
+          date: "asc"
+        },
+      });
+
+      return Response.json(appointments)
+    }
+
+    // Detailed appointment data is only available to TEFF staff
+    const session = await auth();
+
+    if (!session?.user) {
+      return Response.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    if (!canManageStaff(session.user.role)) {
+      return Response.json(
+        { error: "Forbidden" },
+        { status: 403 }
+      );
+    }
+
+    // Staff appointment data
     const appointments = await prisma.appointment.findMany({
       where: {
         status: {
-          in: statuses,
+          in: [
+            "BOOKED",
+            "REQUESTED",
+            "CHECKED_IN",
+            "IN_PROGRESS",
+            "COMPLETED",
+          ],
         },
       },
+
       select: {
         id: true,
         employeeId: true,
@@ -50,7 +97,7 @@ export async function GET(request: Request) {
               select: {
                 id: true,
                 nameEs: true,
-                nameEn: true
+                nameEn: true,
               },
             },
           },
@@ -70,6 +117,7 @@ export async function GET(request: Request) {
           },
         },
       },
+
       orderBy: {
         date: "asc",
       },
