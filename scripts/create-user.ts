@@ -3,6 +3,11 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../src/lib/prisma";
 
 async function main() {
+   // Never allow this administrative script to run in production
+   if (process.env.NODE_ENV === "production") {
+    throw new Error("User creation script cannot run in production");
+   }
+
   const email = process.env.NEW_USER_EMAIL?.trim().toLowerCase();
   const password = process.env.NEW_USER_PASSWORD;
   const name = process.env.NEW_USER_NAME;
@@ -21,6 +26,17 @@ async function main() {
 
   // Never store the plaintext password
   const passwordHash = await bcrypt.hash(password, 12);
+
+  // Prevent accidentally creating the same login twice
+  const existingUser = await prisma.user.findUnique({
+    where: {
+        email,
+    },
+  });
+
+  if (existingUser) {
+    throw new Error(`A user with email ${email} already exists`);
+  }
 
   const user = await prisma.user.create({
     data: {
