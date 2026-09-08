@@ -175,6 +175,11 @@ Before production, stronger database-level concurrency protection should be adde
 - Added staff-facing customer profile page for OWNER and RECEPTIONIST.
 - Customer profiles show contact information, completed visits, no-shows, lifetime spend, and last visit.
 - Appointment history shows technician, services, add-ons, duration, Spanish status labels, and actual checkout totals when available.
+- Staff-facing customer profiles for OWNER and RECEPTIONIST.
+- Customer profiles show contact information, completed visits, no-shows, lifetime spend, and last visit.
+- Customer visit history shows technician, services, add-ons, duration, Spanish status labels, and checkout totals when available.
+- Customer names in the staff appointment view link directly to their customer profiles.
+- Customer profiles include navigation back to the staff appointment view.
 
 ### Appointment Workflow
 
@@ -239,6 +244,11 @@ Technicians remain Employee records for scheduling, commissions, and tips withou
 - Password change/reset
 - Login rate limiting / lockout protection
 - Session revalidation when account roles or active status change
+- Global light/dark theme support
+- Default theme follows the user's system setting
+- Manual Auto / Light / Dark theme selector
+- Persist the user's theme preference
+- Consistent theme across staff, customer profiles, checkout, and future admin pages
 
 ---
 
