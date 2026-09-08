@@ -273,17 +273,56 @@ export default  function StaffPage({
                                             )}
 
                                             {appointment.status === "BOOKED" && (
-                                                <button
-                                                    onClick={() =>
-                                                        updateAppointmentStatus(
-                                                            appointment.id,
-                                                            "CHECKED_IN"
-                                                        )
-                                                    }
-                                                    className="mt-5 rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white"
-                                                >
-                                                    Cliente Llegó
-                                                </button>
+                                                <div className="mt-5 flex gap-3">
+                                                    <button
+                                                        onClick={() =>
+                                                            updateAppointmentStatus(
+                                                                appointment.id,
+                                                                "CHECKED_IN"
+                                                            )
+                                                        }
+                                                        className="rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white"
+                                                    >
+                                                        Cliente Llegó
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => {
+                                                            const confirmed = window.confirm(
+                                                                "¿Marcar esta cita como No Asistió?"
+                                                            );
+                                                            
+                                                            if (confirmed) {
+                                                                updateAppointmentStatus(
+                                                                    appointment.id,
+                                                                    "NO_SHOW"
+                                                                );
+                                                            }
+                                                        }}
+
+                                                        className="rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black"
+                                                    >
+                                                        No Asistió
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => {
+                                                            const confirmed = window.confirm(
+                                                                "¿Seguro que deseas cancelar esta cita?"
+                                                            );
+                                                            
+                                                            if (confirmed) {
+                                                                updateAppointmentStatus(
+                                                                    appointment.id,
+                                                                    "CANCELLED"
+                                                                );
+                                                            }
+                                                        }}
+                                                        className="rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black"
+                                                    >
+                                                        Cancelar Cita
+                                                    </button>
+                                                </div>
                                             )}
 
                                             {appointment.status === "CHECKED_IN" && (
