@@ -73,6 +73,15 @@ function getStatusLabel(status: string){
     }
 }
 
+// A client can only be marked as a no-show after the appointment starts.
+function canMarkNoShow(date: string, startTime: string) {
+    const appointmentDateTime = new Date(
+        `${date.slice(0, 10)}T${startTime}:00-05:00`
+    );
+
+    return new Date() >= appointmentDateTime;
+}
+
 export default  function StaffPage({
     userName,
     userRole,
@@ -286,7 +295,11 @@ export default  function StaffPage({
                                                         Cliente Llegó
                                                     </button>
 
-                                                    <button
+                                                    {canMarkNoShow(
+                                                        appointment.date,
+                                                        appointment.startTime
+                                                    ) && (
+                                                        <button
                                                         onClick={() => {
                                                             const confirmed = window.confirm(
                                                                 "¿Marcar esta cita como No Asistió?"
@@ -304,6 +317,7 @@ export default  function StaffPage({
                                                     >
                                                         No Asistió
                                                     </button>
+                                                    )}
 
                                                     <button
                                                         onClick={() => {
