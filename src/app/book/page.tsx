@@ -384,6 +384,7 @@ export default function BookPage() {
                             ? "Selecciona los servicios que deseas reservar."
                             : "Select the services you would like to book."}
                     </p>
+                    
                     {/* Service Cards */}
                     <div className="mt-8 space-y-4">
                         {services.map((service) => (
@@ -500,7 +501,7 @@ export default function BookPage() {
                                 {language === "es" ? "Elige una hora" : "Choose a time"}
                             </h2>
 
-                            <div className="mt-4 grid grid-cols2 gap-3 sm:grid-cols-4">
+                            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                                 {availableTimeSlots.map((time) => (
                                     <button
                                         key={time}

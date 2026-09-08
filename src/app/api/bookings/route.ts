@@ -16,6 +16,7 @@ export async function POST(request: Request) {
       addonIds,
     } = body;
 
+    // Make sure the booking contains the required information
     if (
       !customerName ||
       !customerPhone ||
@@ -34,8 +35,9 @@ export async function POST(request: Request) {
 
     // Remove duplicate selections before validation
     const uniqueServiceIds = [...new Set<number>(serviceIds)];
-    const uniqueAddonIds = [...new Set<number>(addonIds ?? [])];
+    const uniqueAddonIds = [...new Set<number>(addonIds)];
 
+    // Load the active services requested by the customer
     const services = await prisma.service.findMany({
       where: {
         id: {
@@ -71,22 +73,23 @@ export async function POST(request: Request) {
 
     if (hasUnsupportedService) {
       return Response.json(
-        { error: " Technician is not qualified for one or more services" },
+        { error: "Technician is not qualified for one or more services" },
         { status: 400 }
       );
     }
 
+    // Load the active add-ons requested by the customer
     const addons = await prisma.addon.findMany({
       where: {
         id: {
-          in: uniqueAddonIds ?? [],
+          in: uniqueAddonIds,
         },
         active: true,
       },
     });
 
-    // Make sure ever requested add-on exists and is active
-    if (addons.length !== (uniqueAddonIds ?? []).length) {
+    // Make sure every requested add-on exists and is active
+    if (addons.length !== uniqueAddonIds.length) {
       return Response.json(
         { error: "One or more add-ons are invalid" },
         { status: 400 }
@@ -107,17 +110,21 @@ export async function POST(request: Request) {
     );
 
     // Every selected add-on must belong to at least one selected service
-    const hasInvalidAddon = (uniqueAddonIds ?? []).some(
+    const hasInvalidAddon = uniqueAddonIds.some(
       (addonId: number) => !allowedAddonIds.has(addonId)
     );
 
     if (hasInvalidAddon) {
       return Response.json(
-        { error: "One or more add-ons are not valid for the selected services" },
-        { status: 400}
+        {
+          error:
+            "One or more add-ons are not valid for the selected services",
+        },
+        { status: 400 }
       );
     }
 
+    // Calculate how much time the complete appointment requires
     const totalDuration =
       services.reduce(
         (total, service) => total + service.estimatedDuration,
@@ -128,101 +135,163 @@ export async function POST(request: Request) {
         0
       );
 
-      // Prevent double bookings on server
-      const existingAppointments = await prisma.appointment.findMany({
-        where: {
-          employeeId,
-          date: new Date(`${date}T00:00:00.000Z`),
-          status: {
-            // These appointments still occupy the technician's schedule
-            in: ["BOOKED", "REQUESTED", "CHECKED_IN", "IN_PROGRESS"],
-          },
-        },
-      });
-
-      // Convert requested time to minutes
-      function timeToMinutes(time: string) {
-        const [hours, minutes] = time.split(":").map(Number);
-        return hours * 60 + minutes;
-      }
-      
-      const requestedStart = timeToMinutes(startTime);
-      const requestedEnd = requestedStart + totalDuration;
-
-      // Check for overlap
-      const hasConflict = existingAppointments.some((appointment) => {
-        const existingStart = timeToMinutes(appointment.startTime);
-        const existingEnd = existingStart + appointment.duration;
-
-        return (
-          requestedStart < existingEnd &&
-          requestedEnd > existingStart
-        );
-      });
-
-      if (hasConflict) {
-        return Response.json(
-          {
-            error: "This appointment time is no longer available",
-          },
-          { status: 409 }
-        );
-      }
-
+    // Approval-required services are requests until the salon confirms them
     const requiresApproval = services.some(
       (service) => service.requiresApproval
     );
 
     const status = requiresApproval ? "REQUESTED" : "BOOKED";
 
-    const result = await prisma.$transaction(async (tx) => {
-      const customer = await tx.customer.create({
-        data: {
-          name: customerName,
-          phone: customerPhone,
-          email: customerEmail || null,
-        },
-      });
+    // Retry serializable transactions if two booking race at the same time
+    const maxAttempts = 3;
 
-      const appointment = await tx.appointment.create({
-        data: {
-          customerId: customer.id,
-          employeeId,
-          date: new Date(`${date}T00:00:00.000Z`),
-          startTime,
-          duration: totalDuration,
-          status,
-          notes: customerNotes || null,
+    let result = null;
 
-          appointmentServices: {
-            create: services.map((service) => ({
-              serviceId: service.id,
-              bookedPrice: service.price,
-              bookedDuration: service.estimatedDuration,
-            })),
+    for (let attempt =1; attempt <= maxAttempts; attempt++) {
+      try {
+        result = await prisma.$transaction(
+          async (tx) => {
+            // Check availability inside the same transaction that creates the booking
+            const existingAppointments = await tx.appointment.findMany({
+              where: {
+                employeeId,
+                date: new Date(`${date}T00:00:00.000Z`),
+                status: {
+                  // These appointments still occupy the technician's schedule
+                  in: ["BOOKED", "REQUESTED", "CHECKED_IN", "IN_PROGRESS"],
+                },
+              },
+            });
+
+            // Convert a time such at "10:30" into minutes
+            function timeToMinutes(time: string) {
+              const [hours, minutes] = time.split(":").map(Number);
+
+              return hours * 60 + minutes;
+            }
+
+            const requestedStart = timeToMinutes(startTime);
+            const requestedEnd = requestedStart + totalDuration;
+
+            // Check whether this appointment overlaps an existing appointment
+            const hasConflict = existingAppointments.some((appointment) => {
+              const existingStart = timeToMinutes(appointment.startTime);
+              const existingEnd =
+                existingStart + appointment.duration;
+                
+              return (
+                requestedStart < existingEnd &&
+                requestedEnd > existingStart
+              );
+            });
+
+            // Stop before creating anything if the slot is already occupied
+            if (hasConflict) {
+              throw new Error("BOOKING_CONFLICT");
+            }
+
+            // Create the customer only after availability has been confirmed
+            const customer = await tx.customer.create({
+              data: {
+                name: customerName,
+                phone: customerPhone,
+                email: customerEmail || null,
+              },
+            });
+
+            // Create the appointment and permanent booking snapshots
+            const appointment = await tx.appointment.create({
+              data: {
+                customerId: customer.id,
+                employeeId,
+                date: new Date(`${date}T00:00:00.000Z`),
+                startTime,
+                duration: totalDuration,
+                status,
+                notes: customerNotes || null,
+
+                appointmentServices: {
+                  create: services.map((service) => ({
+                    serviceId: service.id,
+                bookedPrice: service.price,
+                bookedDuration: service.estimatedDuration,
+                  }))
+                },
+
+                appointmentAddons: {
+                  create: addons.map((addon) => ({
+                    addonId: addon.id,
+                    bookedPrice: addon.price,
+                    bookedDuration: addon.estimatedDuration,
+                  })),
+                },
+              },
+
+              include: {
+                customer: true,
+                employee: true,
+                appointmentServices: true,
+                appointmentAddons: true,
+              },
+            });
+
+            return appointment;
           },
+          {
+            // PostgreSQL prevents concurrent transactions from silently conflicting
+            isolationLevel: "Serializable",
+          }
+        );
 
-          appointmentAddons: {
-            create: addons.map((addon) => ({
-              addonId: addon.id,
-              bookedPrice: addon.price,
-              bookedDuration: addon.estimatedDuration,
-            })),
-          },
-        },
-        include: {
-          customer: true,
-          employee: true,
-          appointmentServices: true,
-          appointmentAddons: true,
-        },
-      });
+      // Transaction succeeded, so no retry is needed
+      break;
+    } catch (error) {
+      // A normal occupied-slot conflict should not be retired
+      if (
+        error instanceof Error &&
+        error.message === "BOOKING_CONFLICT"
+      ) {
+        throw error;
+      }
 
-      return appointment;
-    });
+      // Prisma uses P2034 for transaction write/serialization conflicts
+      const isSerializableConflict =
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "P2034"
+
+        if (!isSerializableConflict) {
+          throw error;
+        }
+
+        // If all retry attempts were used, treat the slot as unavailable
+        if (attempt === maxAttempts) {
+          throw new Error("BOOKING_CONFLICT");
+        }
+
+        // Otherwise retry the entire availability check + booking transaction
+      }
+    }
+
+    if (!result) {
+      throw new Error("Unable to complete booking transaction")
+    }
 
     return Response.json(result, { status: 201 });
+
   } catch (error) {
+    // Return the normal booking conflict response to the customer
+    if (
+      error instanceof Error &&
+      error.message === "BOOKING_CONFLICT"
+    ) {
+      return Response.json(
+        { error: "This appointment time is no longer available" },
+        { status: 409 }
+      );
+    }
+
     console.error("Booking creation failed:", error);
 
     return Response.json(
