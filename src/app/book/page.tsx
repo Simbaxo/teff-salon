@@ -98,6 +98,8 @@ export default function BookPage() {
     const [selectedDate, setSelectedDate] = useState("");
     const [selectedTime, setSelectedTime] = useState("");
     const [customerName, setCustomerName] = useState("");
+    // Colombia is the default because TEFF is located in Medellin
+    const [countryCode, setCountryCode] = useState("+57");
     const [customerPhone, setCustomerPhone] = useState("");
     const [customerEmail, setCustomerEmail] = useState("");
     const [customerNotes, setCustomerNotes] = useState("");
@@ -342,6 +344,12 @@ export default function BookPage() {
             setIsSubmitting(true);
             setBookingError("");
 
+            // If the customer typed an international number themselves,
+            // don't add the selected country code a second time.
+            const fullCustomerPhone = customerPhone.trim().startsWith("+")
+                ? customerPhone
+                : `${countryCode}${customerPhone}`
+
             const response = await fetch("/api/bookings", {
                 method: "POST",
                 headers: {
@@ -349,7 +357,7 @@ export default function BookPage() {
                 },
                 body: JSON.stringify({
                     customerName,
-                    customerPhone,
+                    customerPhone: fullCustomerPhone,
                     customerEmail,
                     customerNotes,
                     employeeId: selectedEmployee,
@@ -573,17 +581,35 @@ export default function BookPage() {
                                     className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black" 
                                 />
 
-                                <input 
-                                    type="tel"
-                                    value={customerPhone}
-                                    onChange={(event) => setCustomerPhone(event.target.value)}
-                                    placeholder={
-                                        language === "es" 
+                                {/* Country code + customer's local phone number */}
+                                <div className="flex gap-2">
+                                    <select 
+                                        value={countryCode}
+                                        onChange={(event) => setCountryCode(event.target.value)}
+                                        className="rounded-xl border border-neutral-300 bg-white p-4 text-black"
+                                        aria-label={language === "es" ? "Código de País" : "Country Code"}
+                                    >
+                                        <option value="+57">🇨🇴 +57</option>
+                                        <option value="+1">🇺🇸 +1</option>
+                                        <option value="+1">🇨🇦 +1</option>
+                                        <option value="+44">🇬🇧 +44</option>
+                                        <option value="+34">🇪🇸 +34</option>
+                                        <option value="+52">🇲🇽 +52</option>
+                                    </select>
+
+                                    <input
+                                        type="tel"
+                                        value={customerPhone}
+                                        onChange={(event) => setCustomerPhone(event.target.value)}
+                                        placeholder={
+                                        language === "es"
                                             ? "Teléfono / WhatsApp"
                                             : "Phone / WhatsApp"
-                                    }
-                                    className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
-                                />
+                                        }
+                                        className="min-w-0 flex-1 rounded-xl border border-neutral-300 bg-white p-4 text-black"
+                                    />
+                                    </div>
+                            </div>
 
                                 <input 
                                     type="email"
@@ -608,7 +634,6 @@ export default function BookPage() {
                                     className="min-h-28 w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
                                 />
                             </div>
-                        </div>
                     )}
 
                     {/* Continue Button */}
@@ -640,7 +665,9 @@ export default function BookPage() {
                                         {language === "es" ? "Cliente" : "Customer"}
                                     </p>
                                     <p className="font-semibold text-black">{customerName}</p>
-                                    <p className="text-neutral-600">{customerPhone}</p>
+                                    <p className="text-neutral-600">
+                                        {countryCode} {customerPhone}
+                                    </p>
                                 </div>
 
                                 <div>
