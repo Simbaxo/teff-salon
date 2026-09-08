@@ -100,7 +100,8 @@ model ServiceAddon {
 model Customer {
   id        Int      @id @default(autoincrement())
   name      String
-  phone     String
+  // Normalized phone number uniquely identifies a customer
+  phone     String   @unique
   email     String?
   createdAt DateTime @default(now())
 

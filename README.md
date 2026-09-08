@@ -121,6 +121,8 @@ Appointment services and add-ons store price and duration snapshots so historica
 - Real database appointment creation
 - `BOOKED` appointment status
 - `REQUESTED` status for services requiring approval
+- Repeat customers are now matched by unique phone number instead of creating duplicate Customer records.
+- New appointments reuse the existing customer profile and keep the customer's name/email current.
 
 ---
 

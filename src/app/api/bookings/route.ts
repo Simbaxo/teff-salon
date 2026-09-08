@@ -382,9 +382,19 @@ export async function POST(request: Request) {
               throw new Error("BOOKING_CONFLICT");
             }
 
-            // Create the customer only after availability has been confirmed
-            const customer = await tx.customer.create({
-              data: {
+            // Reuse an existing customer when the phone number already exists
+            const customer = await tx.customer.upsert({
+              where: {
+                phone: normalizedCustomerPhone,
+              },
+
+              update: {
+                // Keep customer details current when they book again
+                name: normalizedCustomerName,
+                email: normalizedCustomerEmail || null,
+              },
+
+              create: {
                 name: normalizedCustomerName,
                 phone: normalizedCustomerPhone,
                 email: normalizedCustomerEmail || null,
