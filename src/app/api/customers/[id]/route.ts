@@ -77,6 +77,21 @@ export async function GET(
                             },
                         },
                     },
+
+                    // Include completed checkout records connected to this appointment
+                    saleAppointments: {
+                        include: {
+                            sale: {
+                                select: {
+                                    id: true,
+                                subtotal: true,
+                                discountTotal: true,
+                                finalTotal: true,
+                                createdAt: true,
+                                },
+                            },
+                        },
+                    },
                 },
             },
         },
@@ -89,5 +104,40 @@ export async function GET(
         );
     }
 
-    return Response.json(customer);
+    // Calculate simple customer history metrics
+    const completedAppointments = customer.appointments.filter(
+        (appointment) => appointment.status === "COMPLETED"
+    );
+
+    const noShows = customer.appointments.filter(
+        (appointment) => appointment.status === "NO_SHOW"
+    );
+
+    const lifetimeSpend = completedAppointments.reduce(
+        (total, appointment) => {
+            const appointmentSpend = appointment.saleAppointments.reduce(
+                (saleTotal, saleAppointment) =>
+                    saleTotal + saleAppointment.sale.finalTotal,
+                0
+            );
+
+            return total + appointmentSpend;
+        },
+        0
+    );
+
+    const lastVisit =
+        completedAppointments.length > 0
+        ? completedAppointments[0].date
+        : null;
+
+    return Response.json({
+        customer,
+        summary: {
+            completedVisits: completedAppointments.length,
+            noShows: noShows.length,
+            lifetimeSpend,
+            lastVisit,
+        },
+    });
 }

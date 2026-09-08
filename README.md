@@ -172,6 +172,9 @@ Before production, stronger database-level concurrency protection should be adde
 - Added protected customer profile API with appointment history.
 - Customer history includes technician, services, add-ons, status, date, and duration.
 - Customer profile data is restricted to OWNER and RECEPTIONIST roles.
+- Added staff-facing customer profile page for OWNER and RECEPTIONIST.
+- Customer profiles show contact information, completed visits, no-shows, lifetime spend, and last visit.
+- Appointment history shows technician, services, add-ons, duration, Spanish status labels, and actual checkout totals when available.
 
 ### Appointment Workflow
 
