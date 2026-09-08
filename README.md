@@ -169,6 +169,9 @@ Before production, stronger database-level concurrency protection should be adde
 - Display add-ons
 - Display appointment duration
 - Display appointment status
+- Added protected customer profile API with appointment history.
+- Customer history includes technician, services, add-ons, status, date, and duration.
+- Customer profile data is restricted to OWNER and RECEPTIONIST roles.
 
 ### Appointment Workflow
 
