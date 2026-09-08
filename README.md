@@ -121,10 +121,13 @@ Appointment services and add-ons store price and duration snapshots so historica
 - Real database appointment creation
 - `BOOKED` appointment status
 - `REQUESTED` status for services requiring approval
-- Repeat customers are now matched by unique phone number instead of creating duplicate Customer records.
+- Repeat customers are matched by normalized phone number instead of creating duplicate Customer records.
 - New appointments reuse the existing customer profile and keep the customer's name/email current.
-- Customer phone numbers are normalized before storage so equivalent formats reuse the same customer record.
-- Colombian mobile numbers entered locally are stored with the +57 country code.
+- Customer phone numbers are normalized into a consistent international format.
+- Colombian mobile numbers default to the +57 country code.
+- International customers can select their country code during booking.
+- Full international numbers entered manually are supported without duplicating the selected country code.
+
 
 ---
 

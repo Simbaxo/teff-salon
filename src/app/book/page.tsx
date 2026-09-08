@@ -338,6 +338,11 @@ export default function BookPage() {
         (employee) => employee.id === selectedEmployee
     );
 
+    // Show the full phone number without duplicating a country code
+    const displayCustomerPhone = customerPhone.trim().startsWith("+")
+        ? customerPhone
+        : `${countryCode} ${customerPhone}`;
+
     // Confirm Booking Details
     async function handleConfirmBooking() {
         try {
@@ -666,7 +671,7 @@ export default function BookPage() {
                                     </p>
                                     <p className="font-semibold text-black">{customerName}</p>
                                     <p className="text-neutral-600">
-                                        {countryCode} {customerPhone}
+                                        {displayCustomerPhone}
                                     </p>
                                 </div>
 
