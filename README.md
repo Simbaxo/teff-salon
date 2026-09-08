@@ -123,6 +123,8 @@ Appointment services and add-ons store price and duration snapshots so historica
 - `REQUESTED` status for services requiring approval
 - Repeat customers are now matched by unique phone number instead of creating duplicate Customer records.
 - New appointments reuse the existing customer profile and keep the customer's name/email current.
+- Customer phone numbers are normalized before storage so equivalent formats reuse the same customer record.
+- Colombian mobile numbers entered locally are stored with the +57 country code.
 
 ---
 
@@ -144,6 +146,7 @@ Appointment services and add-ons store price and duration snapshots so historica
 - Customer personal information is excluded from public availability responses
 - Server-side booking validation now enforces valid IDs, active technicians, Medellín dates, and TEFF business hours.
 - Customer booking slots now match TEFF hours: Mon–Sat 9:30–18:30, Sunday 10:30–17:30.
+- Fixed server-side opening-hours validation for Monday-Saturday 9:30 AM.
 
 ### Future Hardening
 
@@ -175,9 +178,6 @@ Before production, stronger database-level concurrency protection should be adde
 - Added staff-facing customer profile page for OWNER and RECEPTIONIST.
 - Customer profiles show contact information, completed visits, no-shows, lifetime spend, and last visit.
 - Appointment history shows technician, services, add-ons, duration, Spanish status labels, and actual checkout totals when available.
-- Staff-facing customer profiles for OWNER and RECEPTIONIST.
-- Customer profiles show contact information, completed visits, no-shows, lifetime spend, and last visit.
-- Customer visit history shows technician, services, add-ons, duration, Spanish status labels, and checkout totals when available.
 - Customer names in the staff appointment view link directly to their customer profiles.
 - Customer profiles include navigation back to the staff appointment view.
 

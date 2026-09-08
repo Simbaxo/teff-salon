@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { normalizePhoneNumber } from "@/lib/phone";
 
 export async function POST(request: Request) {
   try {
@@ -68,7 +69,9 @@ export async function POST(request: Request) {
       typeof customerName === "string" ? customerName.trim() : "";
     
     const normalizedCustomerPhone =
-      typeof customerPhone === "string" ? customerPhone.trim() : "";
+      typeof customerPhone === "string" 
+        ? normalizePhoneNumber(customerPhone)
+        : null;
     
     const normalizedCustomerEmail =
       typeof customerEmail === "string" ? customerEmail.trim() : "";
@@ -88,11 +91,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate customer phone without forcing full E.164 yet
-    const isValidPhone =
-      /^\+?[0-9\s()-]{7,20}$/.test(normalizedCustomerPhone);
-    
-    if (!isValidPhone) {
+    // Phone normalization already validates the supported format
+    if (!normalizedCustomerPhone) {
       return Response.json(
         { error: "Invalid customer phone" },
         { status: 400 }
@@ -305,8 +305,8 @@ export async function POST(request: Request) {
 
     const openingMinutes =
       dayOfWeek === 0
-        ? 10 * 60 + 30 // Sunday: 17:30
-        : 18 * 60 + 30; // Monday-Saturday 18:30
+        ? 10 * 60 + 30 // Sunday: 10:30
+        : 9 * 60 + 30; // Monday-Saturday 9:30
     
     const closingMinutes = 
       dayOfWeek === 0
