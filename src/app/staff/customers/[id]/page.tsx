@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
 
@@ -134,6 +135,14 @@ export default async function CustomerProfilePage({
 
     return (
         <main className="mx-auto max-w-5xl p-6">
+
+            {/* Return to the staff appointment list */}
+            <Link
+                href="/staff"
+                className="mb-6 inline-block text-sm font-medium text-neutral-600 hover:text-black"
+            >
+                ← Volver a Citas
+            </Link>
 
             {/* Customer Identity */}
             <div className="mb-8">

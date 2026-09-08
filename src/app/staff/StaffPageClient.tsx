@@ -210,7 +210,12 @@ export default  function StaffPage({
                                             <div className="flex items-start justify-between">
                                                 <div>
                                                     <h3 className="text-lg font-semibold text-black">
-                                                        {appointment.customer.name}
+                                                        <Link
+                                                            href={`/staff/customers/${appointment.customer.id}`}
+                                                            className="underline-offset-4 hover:underline"
+                                                        >
+                                                            {appointment.customer.name}
+                                                        </Link>
                                                     </h3>
 
                                                     <p className="text-sm text-neutral-500">
