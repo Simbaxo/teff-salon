@@ -140,6 +140,8 @@ Appointment services and add-ons store price and duration snapshots so historica
 - Real appointment data used for availability
 - Public availability API exposes only the scheduling data required by the booking system
 - Customer personal information is excluded from public availability responses
+- Server-side booking validation now enforces valid IDs, active technicians, Medellín dates, and TEFF business hours.
+- Customer booking slots now match TEFF hours: Mon–Sat 9:30–18:30, Sunday 10:30–17:30.
 
 ### Future Hardening
 

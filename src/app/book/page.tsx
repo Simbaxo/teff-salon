@@ -3,16 +3,40 @@
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 
-const timeSlots = [
-  "10:00",
-  "11:00",
-  "12:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-  "17:00",
-];
+// Generate available start times based on TEFF's business hours
+function getTimeSlots(date: string) {
+    if (!date) return [];
+
+    const bookingDate = new Date(`${date}T12:00:00-05:00`);
+    const dayOfWeek = bookingDate.getDay(); // 0 = Sunday
+
+    const openingMinutes =
+        dayOfWeek === 0
+            ? 10 * 60 + 30 // Sunday: 10:30
+            : 9 * 60 + 30; // Monday-Saturday: 9:30
+    const closingMinutes =
+        dayOfWeek === 0
+            ? 17 * 60 + 30 // Sunday: 17:30
+            : 18 * 60 + 30; // Monday-Saturday: 18:30
+    
+    const slots: string[] = [];
+
+    // Create 30-minute start time throughout the day
+    for (
+        let minutes = openingMinutes;
+        minutes < closingMinutes;
+        minutes += 30
+    ) {
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+
+        slots.push(
+            `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`
+        );
+    }
+
+    return slots;
+}
 
 // Create a Service Type
 type Service = {
@@ -266,12 +290,26 @@ export default function BookPage() {
         return hours * 60 + minutes;
     }
 
-    const closingTime = 19 * 60;
+    const timeSlots = getTimeSlots(selectedDate);
+
+    // Get the correct closing time for the selected day
+    const bookingDate = selectedDate
+        ? new Date(`${selectedDate}T12:00:00-05:00`)
+        : null;
+    
+    const dayOfWeek = bookingDate?.getDay();
+
+
+    const closingTime =
+        dayOfWeek === 0
+            ? 17 * 60 + 30 // Sunday: 17:30
+            : 18 * 60 + 30; // Monday-Saturday: 18:30
 
     const availableTimeSlots = timeSlots.filter((time) => {
         const startTime = timeToMinutes(time);
         const endTime = startTime + totalDuration;
 
+        // Hide slots where the service would run past closing
         if (endTime > closingTime) {
             return false;
         }
@@ -671,6 +709,7 @@ export default function BookPage() {
                                     </p>
                                 </div>
                             </div>
+
                             {/* Add Edit and Confirm Buttons */}
                             <div className="mt-8 flex gap-3">
                                 <button

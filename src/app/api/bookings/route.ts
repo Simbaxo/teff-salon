@@ -33,6 +33,74 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validate that IDs are positive integers
+    const hasInvalidIds =
+      !Number.isInteger(employeeId) ||
+      employeeId <= 9 ||
+      serviceIds.some(
+        (id: unknown) => !Number.isInteger(id) || (id as number) <= 0
+      ) ||
+      addonIds.some(
+        (id: unknown) => !Number.isInteger(id) || (id as number) <= 0
+      );
+
+      if (hasInvalidIds) {
+        return Response.json(
+          { error: "Invalid booking IDs" },
+          { status: 400 }
+        );
+      }
+
+    // Validate the booking date format: YYYY-MM_DD
+    const isValidDate = 
+      /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+      !Number.isNaN(new Date(`${date}T00:00:00.000Z`).getTime());
+
+    // Validate the start time format: HH:MM using a 24-hour clock
+    const isValidStartTime =
+      /^([01]\d|2[0-3]):[0-5]\d$/.test(startTime);
+      
+    if (!isValidDate || !isValidStartTime) {
+      return Response.json(
+        { error: "Invalid booking date or time" },
+        { status: 400 }
+      );
+    }
+
+    // Make sure the selected technician exits and is currently active
+    const employee = await prisma.employee.findFirst({
+      where: {
+        id: employeeId,
+        active: true,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!employee) {
+      return Response.json(
+        { error: "Selected technician is not available "},
+        { status: 400 }
+      );
+    }
+
+    // Get today's calendar date in Medellín
+    const todayInMedellin = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Bogota",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    // YYYY-MM-DD strings can be compared safely in chronological order
+    if (date < todayInMedellin) {
+      return Response.json(
+        { error: "Booking date cannot be in the past" },
+        { status: 400 }
+      );
+    }
+
     // Remove duplicate selections before validation
     const uniqueServiceIds = [...new Set<number>(serviceIds)];
     const uniqueAddonIds = [...new Set<number>(addonIds)];
@@ -134,6 +202,34 @@ export async function POST(request: Request) {
         (total, addon) => total + addon.estimatedDuration,
         0
       );
+
+    // TEFF business hours depend on the day of the week
+    const bookingDateForDay = new Date(`${date}T12:00:00-05:00`);
+    const dayOfWeek = bookingDateForDay.getDay(); // 0 = Sunday
+
+    const openingMinutes =
+      dayOfWeek === 0
+        ? 10 * 60 + 30 // Sunday: 17:30
+        : 18 * 60 + 30; // Monday-Saturday 18:30
+    
+    const closingMinutes = 
+      dayOfWeek === 0
+      ? 17 * 60 + 30 // Sunday: 17:30
+      : 18 * 60 + 30; // Monday-Saturday: 18:30
+      
+    const [startHour, startMinute] = startTime.split(":").map(Number);
+    const bookingStartMinutes = startHour * 60 + startMinute;
+    const bookingEndMinutes = bookingStartMinutes + totalDuration;
+
+    if (
+      bookingStartMinutes < openingMinutes ||
+      bookingEndMinutes > closingMinutes
+    ) {
+      return Response.json(
+        { error: "Appointment is outside business hours" },
+        { status: 400 }
+      );
+    }
 
     // Approval-required services are requests until the salon confirms them
     const requiresApproval = services.some(
