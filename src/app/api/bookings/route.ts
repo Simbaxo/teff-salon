@@ -16,10 +16,93 @@ export async function POST(request: Request) {
       addonIds,
     } = body;
 
+    // Validate the basic payload types before using the values
+    const hasInvalidPayloadTypes =
+      typeof employeeId !== "number" ||
+      typeof date !== "string" ||
+      typeof startTime !== "string" ||
+      !Array.isArray(serviceIds) ||
+      !Array.isArray(addonIds);
+
+    if (hasInvalidPayloadTypes) {
+      return Response.json(
+        { error: "Invalid booking payload" },
+        { status: 400 }
+      );
+    }
+
+    // Customer text fields must be strings when provided
+    const hasInvalidCustomerFieldTypes =
+      typeof customerName !== "string" ||
+      typeof customerPhone !== "string" ||
+      (customerEmail !== undefined &&
+        customerEmail !== null &&
+        typeof customerEmail !== "string") ||
+      (customerNotes !== undefined &&
+        customerNotes !== null &&
+        typeof customerNotes !== "string");
+
+    if (hasInvalidCustomerFieldTypes) {
+      return Response.json(
+        { error: "Invalid customer information" },
+        { status: 400 }
+      );
+    }
+
+    // Keep public booking text fields within reasonable limits
+    const hasInvalidCustomerFieldLength =
+      customerName.length > 100 ||
+      customerPhone.length > 30 ||
+      (typeof customerEmail === "string" && customerEmail.length > 254) ||
+      (typeof customerNotes === "string" && customerNotes.length > 1000);
+
+    if (hasInvalidCustomerFieldLength) {
+      return Response.json(
+        { error: "Customer information is too long" },
+        { status: 400 }
+      );
+    }
+
+    // Normalize customer text fields before validation and saving
+    const normalizedCustomerName =
+      typeof customerName === "string" ? customerName.trim() : "";
+    
+    const normalizedCustomerPhone =
+      typeof customerPhone === "string" ? customerPhone.trim() : "";
+    
+    const normalizedCustomerEmail =
+      typeof customerEmail === "string" ? customerEmail.trim() : "";
+
+    const normalizedCustomerNotes =
+      typeof customerNotes === "string" ? customerNotes.trim() : "";
+
+    // Validate optional customer email
+    const isValidEmail =
+      normalizedCustomerEmail === "" ||
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedCustomerEmail);
+
+    if (!isValidEmail) {
+      return Response.json(
+        { error: "Invalid customer email" },
+        { status: 400 }
+      );
+    }
+
+    // Validate customer phone without forcing full E.164 yet
+    const isValidPhone =
+      /^\+?[0-9\s()-]{7,20}$/.test(normalizedCustomerPhone);
+    
+    if (!isValidPhone) {
+      return Response.json(
+        { error: "Invalid customer phone" },
+        { status: 400 }
+      );
+    }
+
     // Make sure the booking contains the required information
     if (
-      !customerName ||
-      !customerPhone ||
+      !normalizedCustomerName ||
+      !normalizedCustomerPhone ||
       !employeeId ||
       !date ||
       !startTime ||
@@ -36,7 +119,7 @@ export async function POST(request: Request) {
     // Validate that IDs are positive integers
     const hasInvalidIds =
       !Number.isInteger(employeeId) ||
-      employeeId <= 9 ||
+      employeeId <= 0 ||
       serviceIds.some(
         (id: unknown) => !Number.isInteger(id) || (id as number) <= 0
       ) ||
@@ -51,10 +134,23 @@ export async function POST(request: Request) {
         );
       }
 
-    // Validate the booking date format: YYYY-MM_DD
-    const isValidDate = 
-      /^\d{4}-\d{2}-\d{2}$/.test(date) &&
-      !Number.isNaN(new Date(`${date}T00:00:00.000Z`).getTime());
+    // Validate YYYY-MM-DD and reject impossible calendar dates
+    const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+
+    let isValidDate = false;
+
+    if (dateMatch) {
+      const year = Number(dateMatch[1]);
+      const month = Number(dateMatch[2]);
+      const day = Number(dateMatch[3]);
+
+      const parsedDate = new Date(Date.UTC(year, month - 1, day));
+
+    isValidDate =
+      parsedDate.getUTCFullYear() === year &&
+      parsedDate.getUTCMonth() === month - 1 &&
+      parsedDate.getUTCDate() === day;
+    }
 
     // Validate the start time format: HH:MM using a 24-hour clock
     const isValidStartTime =
@@ -67,7 +163,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Make sure the selected technician exits and is currently active
+    // Make sure the selected technician exists and is currently active
     const employee = await prisma.employee.findFirst({
       where: {
         id: employeeId,
@@ -289,9 +385,9 @@ export async function POST(request: Request) {
             // Create the customer only after availability has been confirmed
             const customer = await tx.customer.create({
               data: {
-                name: customerName,
-                phone: customerPhone,
-                email: customerEmail || null,
+                name: normalizedCustomerName,
+                phone: normalizedCustomerPhone,
+                email: normalizedCustomerEmail || null,
               },
             });
 
@@ -304,7 +400,7 @@ export async function POST(request: Request) {
                 startTime,
                 duration: totalDuration,
                 status,
-                notes: customerNotes || null,
+                notes: normalizedCustomerNotes || null,
 
                 appointmentServices: {
                   create: services.map((service) => ({
