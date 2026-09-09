@@ -4,7 +4,7 @@ TEFF Salon is a full salon management and customer booking application being bui
 
 The goal of the MVP is to manage the complete salon workflow:
 
-**Customer Booking → Scheduling → Staff Operations → Service → Checkout → Payments → Commissions → Owner Reporting**
+**Customer Booking → Scheduling → Staff Operations → Service → Checkout → Payments → Commissions → Basic Owner Reporting**
 
 ---
 
@@ -18,7 +18,7 @@ The goal of the MVP is to manage the complete salon workflow:
 | 4 | Scheduling & Availability | ✅ Core Complete |
 | 5 | Staff Operations & Authentication | 🟡 Core Complete — Hardening |
 | 6 | Checkout, Payments & Commissions | 🟡 Core Complete — Hardening |
-| 7 | Admin / Owner Dashboard | ⬜ Not Started |
+| 7 | Basic Owner Reporting | ⬜ Not Started |
 | 8 | Production Readiness & Deployment | ⬜ Not Started |
 
 **Estimated MVP completion: ~85%**
@@ -151,11 +151,12 @@ Appointment services and add-ons store price and duration snapshots so historica
 - Customer booking slots now match TEFF hours: Mon–Sat 9:30–18:30, Sunday 10:30–17:30.
 - Fixed server-side opening-hours validation for Monday-Saturday 9:30 AM.
 
-### Future Hardening
+### Concurrency Protection
 
-The current conflict system protects against normal stale-browser booking conflicts.
-
-Before production, stronger database-level concurrency protection should be added for requests that reach the server at almost exactly the same time.
+- Database-level Serializable transaction protection
+- Automatic retry handling for Prisma transaction conflicts
+- Concurrent booking requests cannot reserve the same technician/time slot
+- Race-condition protection verified with simultaneous booking requests
 
 ---
 
@@ -203,6 +204,11 @@ Checkout
 - Appointment status updates
 - `BOOKED` → `CHECKED_IN`
 - `CHECKED_IN` → `IN_PROGRESS`
+- `BOOKED` → `CANCELLED`
+- `BOOKED` → `NO_SHOW`
+- Cancellation confirmation prevents accidental cancellations
+- No-show confirmation prevents accidental status changes
+- No-show action is only available once the appointment start time has arrived
 - Checkout available for appointments in progress
 - Check-in timestamps
 - Service start timestamps
@@ -242,16 +248,10 @@ Technicians remain Employee records for scheduling, commissions, and tips withou
 ### Remaining Staff Hardening
 
 - Improved loading and error states
-- Appointment history
 - Production-safe date handling
 - Password change/reset
 - Login rate limiting / lockout protection
 - Session revalidation when account roles or active status change
-- Global light/dark theme support
-- Default theme follows the user's system setting
-- Manual Auto / Light / Dark theme selector
-- Persist the user's theme preference
-- Consistent theme across staff, customer profiles, checkout, and future admin pages
 
 ---
 
@@ -345,3 +345,90 @@ Commission Base          $100.000
 Technician Tip            $20.000
 Payment Collected        $120.000
 ```
+
+# ⬜ Phase 7 — Basic Owner Reporting
+
+**Provide the owner with the essential financial information needed to verify salon operations before launch.**
+
+### MVP Scope
+
+- Total sales
+- Sales by technician
+- Customer count
+- Average ticket
+- Payment totals by Cash / Bold / Transfer
+- Commission totals
+- Tip totals
+- Basic payment reconciliation
+
+Advanced dashboards, sales goals, payroll management, expense tracking, trends, and performance analytics are planned for Post-MVP.
+
+## 🚀 Post-MVP Roadmap
+
+The following features are intentionally planned for after the first production release of the TEFF Salon app.
+
+### Operations & Reception
+- Receptionist dashboard with weekly and monthly salon performance
+- Technician production totals and progress toward sales goals
+- Alerts when new appointments are created
+- Improved appointment management and reassignment between technicians
+- Customer defaults to "Any Technician" when booking
+- Smart technician assignment based on availability
+- Family / group appointment checkout
+
+### Owner Dashboard & Reporting
+- Total sales dashboard
+- Sales by technician
+- Customer count
+- Average ticket
+- Technician commissions
+- Tips and tip payout tracking
+- Supply purchases and operating expenses
+- Cash / Bold / transfer reconciliation
+- Weekly and monthly sales goals
+- Historical performance reports
+
+### Payroll & Commissions
+- Employee-specific commission rates and pay structures
+- Payroll period tracking
+- Commission payout tracking
+- Tip payout tracking
+- Employee deductions and loans
+- Payroll summaries and reports
+
+### Integrations & Automation
+- Google Calendar integration
+- Color-coded appointments by technician
+- Automatic WhatsApp appointment confirmations
+- Automatic WhatsApp appointment reminders
+- WhatsApp notifications to reception when appointments are created
+- Future integrations with additional payment or communication services
+
+### Customer Experience
+- "Any Technician" booking option
+- Smarter technician recommendations and assignment
+- Improved customer history
+- Customer preferences and notes
+- Potential deposits / booking fees if no-show rates justify them
+- Additional automated appointment notifications
+
+### Services & Booking
+- Approval workflow for services that require manual confirmation
+- Lash technician / off-site service workflow
+- Advanced service availability rules
+- Technician-specific service availability
+- Group / family bookings
+
+### UI & Personalization
+- Global Auto / Light / Dark theme
+- System theme as default
+- Manual Auto / Light / Dark selector
+- Persisted theme preference
+- Consistent theme across booking, staff, checkout, customer profiles, and admin
+
+### Future Staff Features
+- Optional technician accounts
+- Technician-specific dashboards
+- Individual schedules and performance
+- Staff notifications
+- Expanded permissions and role management
