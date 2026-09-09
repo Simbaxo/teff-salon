@@ -63,12 +63,36 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 
     callbacks: {
         async jwt({ token, user }) {
-            // Save TEFF=specific access data into the session token
+            // Save TEFF-specific access data when the user first signs in.
             if (user) {
                 token.role = user.role;
                 token.employeeId = user.employeeId;
+                return token;
             }
 
+            // Revalidate existing sessions against the current database user.
+            if (token.sub) {
+                const currentUser = await prisma.user.findUnique({
+                    where: {
+                        id: Number(token.sub),
+                    },
+                    select: {
+                        active: true,
+                        role: true,
+                        employeeId: true
+                    },
+                });
+
+                // Invalidate the session if the account was removed or deactivated.
+                if (!currentUser || !currentUser.active) {
+                    return null;
+                }
+
+                // Keep permissions synchronized with the current database values
+                token.role = currentUser.role;
+                token.employeeId = currentUser.employeeId;
+            }
+            
             return token;
         },
 
