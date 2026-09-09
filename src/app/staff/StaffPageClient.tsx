@@ -87,20 +87,37 @@ export default  function StaffPage({
     userRole,
 }: StaffPageClientProps) {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
+    // Track whether the staff appointment data is still loading.
+    const [isLoading, setIsLoading] = useState(true);
+    // Show a useful message if appointment data cannot be loaded.
+    const [loadError, setLoadError] = useState(false);
     const [selectedDate, setSelectedDate] = useState(
         new Date().toISOString().slice(0, 10)
     );
 
-    // Load The Appointments
-    useEffect(() => {
-        async function loadAppointments() {
+    // Load The Appointments from the Staff API
+    async function loadAppointments() {
+        try {
+            setIsLoading(true);
+            setLoadError(false);
+
             const response = await fetch("/api/appointments");
+
+            if (!response.ok) {
+                throw new Error("No se pudieron cargar las citas")
+            }
+
             const data = await response.json();
-
             setAppointments(data);
+        } catch (error) {
+            console.error(error);
+            setLoadError(true);
+        } finally {
+            setIsLoading(false);
         }
-
-        loadAppointments();
+    }
+        useEffect(() => {
+            loadAppointments();
     }, []);
 
     // Create the Filtered Appointments
@@ -201,6 +218,27 @@ export default  function StaffPage({
                     />
                 </div>
                 <div className="mt-8 space-y-4">
+                    {isLoading && (
+                        <p className="text-sm text-neutral-600">
+                            Cargando Citas...
+                        </p>
+                    )}
+
+                    {loadError && (
+                        <div className="space-y-2">
+                            <p className="text-sm text-red-600">
+                                No se pudieron cargar las citas. Intenta nuevamente.
+                            </p>
+
+                            <button
+                                onClick={loadAppointments}
+                                className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black"
+                            >
+                                Reintentar
+                            </button>
+                        </div>
+                    )}
+
                     {Object.entries(appointmentsByEmployee).map(
                         ([employeeName, employeeAppointments]) => (
                             <section key={employeeName}>
