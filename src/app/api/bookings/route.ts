@@ -1,5 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { normalizePhoneNumber } from "@/lib/phone";
+import {
+  getTeffCurrentMinutes,
+  getTeffDayOfWeek,
+  getTeffToday,
+} from "@/lib/datetime";
 
 export async function POST(request: Request) {
   try {
@@ -181,13 +186,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get today's calendar date in Medellín
-    const todayInMedellin = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Bogota",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
+    // Get today's calendar date in TEFF's Medellín timezone
+    const todayInMedellin = getTeffToday();
 
     // YYYY-MM-DD strings can be compared safely in chronological order
     if (date < todayInMedellin) {
@@ -300,8 +300,7 @@ export async function POST(request: Request) {
       );
 
     // TEFF business hours depend on the day of the week
-    const bookingDateForDay = new Date(`${date}T12:00:00-05:00`);
-    const dayOfWeek = bookingDateForDay.getDay(); // 0 = Sunday
+    const dayOfWeek = getTeffDayOfWeek(date);
 
     const openingMinutes =
       dayOfWeek === 0
@@ -316,6 +315,17 @@ export async function POST(request: Request) {
     const [startHour, startMinute] = startTime.split(":").map(Number);
     const bookingStartMinutes = startHour * 60 + startMinute;
     const bookingEndMinutes = bookingStartMinutes + totalDuration;
+
+    // Prevent bookings for a time that has already passed today in Medellin.
+    if (
+      date === getTeffToday() &&
+      bookingStartMinutes <= getTeffCurrentMinutes()
+    ) {
+      return Response.json(
+        { error: "Booking time cannot be in the past" },
+        { status: 400 }
+      );
+    }
 
     if (
       bookingStartMinutes < openingMinutes ||

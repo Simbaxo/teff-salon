@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
+import {
+  getTeffCurrentMinutes,
+  getTeffDayOfWeek,
+  getTeffToday,
+} from "@/lib/datetime";
 
 // Generate available start times based on TEFF's business hours
 function getTimeSlots(date: string) {
@@ -95,7 +100,9 @@ export default function BookPage() {
     const [selectedServices, setSelectedServices] = useState<number[]>([]);
     const [selectedAddons, setSelectedAddons] = useState<number[]>([]);
     const [selectedEmployee, setSelectedEmployee] = useState<number | null>(null);
-    const [selectedDate, setSelectedDate] = useState("");
+    const [selectedDate, setSelectedDate] = useState(
+        getTeffToday()
+    );
     const [selectedTime, setSelectedTime] = useState("");
     const [customerName, setCustomerName] = useState("");
     // Colombia is the default because TEFF is located in Medellin
@@ -294,13 +301,10 @@ export default function BookPage() {
 
     const timeSlots = getTimeSlots(selectedDate);
 
-    // Get the correct closing time for the selected day
-    const bookingDate = selectedDate
-        ? new Date(`${selectedDate}T12:00:00-05:00`)
-        : null;
-    
-    const dayOfWeek = bookingDate?.getDay();
-
+    // Get the weekday without depending on the browser's timezone.
+    const dayOfWeek = selectedDate
+        ? getTeffDayOfWeek(selectedDate)
+        : undefined;
 
     const closingTime =
         dayOfWeek === 0
@@ -310,6 +314,14 @@ export default function BookPage() {
     const availableTimeSlots = timeSlots.filter((time) => {
         const startTime = timeToMinutes(time);
         const endTime = startTime + totalDuration;
+
+        // Hide time slots that have already passed today in Medellin.
+        if (
+            selectedDate === getTeffToday() &&
+            startTime <= getTeffCurrentMinutes()
+        ) {
+            return false;
+        }
 
         // Hide slots where the service would run past closing
         if (endTime > closingTime) {
@@ -546,7 +558,7 @@ export default function BookPage() {
                     )}
 
                     {/* Temporary Available Time Slots */}
-                    {selectedDate && (
+                    {selectedEmployee && selectedDate && (
                         <div className="mt-8">
                             <h2 className="text-xl font-semibold text-black">
                                 {language === "es" ? "Elige una hora" : "Choose a time"}

@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
+import {
+  getTeffToday,
+  hasTeffAppointmentStarted,
+} from "@/lib/datetime";
 
 type Appointment = {
     id: number;
@@ -75,11 +79,7 @@ function getStatusLabel(status: string){
 
 // A client can only be marked as a no-show after the appointment starts.
 function canMarkNoShow(date: string, startTime: string) {
-    const appointmentDateTime = new Date(
-        `${date.slice(0, 10)}T${startTime}:00-05:00`
-    );
-
-    return new Date() >= appointmentDateTime;
+    return hasTeffAppointmentStarted(date, startTime)
 }
 
 export default  function StaffPage({
@@ -91,8 +91,9 @@ export default  function StaffPage({
     const [isLoading, setIsLoading] = useState(true);
     // Show a useful message if appointment data cannot be loaded.
     const [loadError, setLoadError] = useState(false);
+    // Default the staff calendar to today's date in Medellin.
     const [selectedDate, setSelectedDate] = useState(
-        new Date().toISOString().slice(0, 10)
+        getTeffToday()
     );
 
     // Load The Appointments from the Staff API
