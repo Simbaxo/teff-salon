@@ -23,6 +23,32 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 
                 const email = credentials.email.trim().toLowerCase();
 
+                // Limit repeated failed login attempts for the same email
+                const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+
+                // Remove expired login attempts so the table does not grow indefinitely
+                await prisma.loginAttempt.deleteMany({
+                    where: {
+                        email,
+                        createdAt: {
+                            lt: fifteenMinutesAgo,
+                        },
+                    },
+                });
+
+                const recentFailedAttempts = await prisma.loginAttempt.count({
+                    where: {
+                        email,
+                        createdAt: {
+                            gte: fifteenMinutesAgo,
+                        },
+                    },
+                });
+
+                if (recentFailedAttempts >= 5) {
+                    return null;
+                }
+
                 // Find an active TEFF login account
                 const user = await prisma.user.findUnique({
                     where: {
@@ -31,11 +57,19 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
                 });
 
                 if (!user || !user.active) {
+                    await prisma.loginAttempt.create({
+                        data: { email },
+                    });
+
                     return null;
                 }
 
                 // Technician account are not allowed to use the app yet
                 if (user.role === "TECHNICIAN") {
+                    await prisma.loginAttempt.create({
+                        data: { email },
+                    });
+
                     return null;
                 }
 
@@ -46,6 +80,10 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
                 );
 
                 if (!passwordMatches) {
+                    await prisma.loginAttempt.create({
+                        data: { email },
+                    });
+
                     return null;
                 }
 
