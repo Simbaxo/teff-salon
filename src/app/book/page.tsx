@@ -607,8 +607,7 @@ export default function BookPage() {
                                         aria-label={language === "es" ? "Código de País" : "Country Code"}
                                     >
                                         <option value="+57">🇨🇴 +57</option>
-                                        <option value="+1">🇺🇸 +1</option>
-                                        <option value="+1">🇨🇦 +1</option>
+                                        <option value="+1">🇺🇸/🇨🇦 +1</option>
                                         <option value="+44">🇬🇧 +44</option>
                                         <option value="+34">🇪🇸 +34</option>
                                         <option value="+52">🇲🇽 +52</option>

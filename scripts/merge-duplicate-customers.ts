@@ -1,12 +1,35 @@
 import "dotenv/config";
 
 import { prisma } from "../src/lib/prisma";
+import { normalizePhoneNumber } from "../src/lib/phone";
 
 async function main() {
+  const dryRun = process.env.DRY_RUN === "true";
+
   // Find every customer so we can group exact duplicate phone numbers
   const customers = await prisma.customer.findMany({
     orderBy: {
       id: "asc",
+    },
+    include: {
+      _count: {
+        select: {
+          appointments: true,
+        },
+      },
+      appointments: {
+        select: {
+          id: true,
+          date: true,
+          startTime: true,
+          status: true,
+          saleAppointments: {
+            select: {
+              saleId: true,
+            }
+          }
+        }
+      }
     },
   });
 
@@ -16,41 +39,80 @@ async function main() {
   >();
 
   for (const customer of customers) {
-    const existing = customersByPhone.get(customer.phone) ?? [];
+    const normalizedPhone = normalizePhoneNumber(customer.phone);
+
+    // Skip values that cannot be safely normalized
+    if (!normalizedPhone) {
+      console.warn(
+        `\nCustomer ${customer.id} (${customer.name}) | ${customer.phone}`
+      );
+
+      for (const appointment of customer.appointments) {
+        console.warn(
+          `  Appointment ${appointment.id} | ${appointment.date.toISOString().slice(0, 10)} | ${appointment.startTime} | ${appointment.status} | Sales: ${
+            appointment.saleAppointments.length > 0
+              ? appointment.saleAppointments.map((sale) => sale.saleId).join(", ")
+              : "none"
+          }`
+        );
+      }
+
+      continue;
+    }
+
+    const existing = customersByPhone.get(normalizedPhone) ?? [];
     existing.push(customer);
-    customersByPhone.set(customer.phone, existing);
+    customersByPhone.set(normalizedPhone, existing);
   }
 
   let mergedCustomers = 0;
 
-  for (const [phone, duplicates] of customersByPhone) {
-    // Nothing to merge when only one customer uses the phone number
-    if (duplicates.length <= 1) {
-      continue;
-    }
-
+  for (const [normalizedPhone, duplicates] of customersByPhone) {
     // Keep the oldest customer record
     const keeper = duplicates[0];
     const duplicateIds = duplicates.slice(1).map((customer) => customer.id);
 
-    console.log(
-      `Merging ${duplicates.length} customers with phone ${phone} into customer ${keeper.id}`
-    );
+    if (duplicateIds.length > 0) {
+      console.log(
+        `Merging ${duplicates.length} customers with phone ${normalizedPhone} into customer ${keeper.id}`
+      );
+    }
+
+    if (dryRun) {
+      if (duplicateIds.length > 0) {
+        console.log(
+          `[DRY RUN] Would merge customer ID ${duplicateIds.join(", ")} into customer ${keeper.id}`
+        );
+      }
+
+      if (keeper.phone !== normalizedPhone) {
+        console.log(
+          `[DRY RUN] Would normalize customer ${keeper.id}: ${keeper.phone} -> ${normalizedPhone}`
+        );
+      }
+
+      mergedCustomers += duplicateIds.length;
+      continue;
+    }
+
 
     await prisma.$transaction(async (tx) => {
-      // Move every appointment to the customer record we are keeping
-      await tx.appointment.updateMany({
-        where: {
-          customerId: {
-            in: duplicateIds,
+      if (duplicateIds.length > 0) {
+        // Move every appointment to the customer record we are keeping
+        await tx.appointment.updateMany({
+          where: {
+            customerId: {
+              in: duplicateIds,
+            },
           },
-        },
-        data: {
-          customerId: keeper.id,
-        },
-      });
+          data: {
+            customerId: keeper.id,
+          },
+        });
+      }
 
-      // Delete only after their appointments have been reassigned
+      // Delete duplicates before assigning the normalized phone
+      // This avoids collisions with the unique phone constraint
       await tx.customer.deleteMany({
         where: {
           id: {
@@ -58,8 +120,20 @@ async function main() {
           },
         },
       });
-    });
+      
 
+    // Normalize the keeper even when there were no duplicates
+    if (keeper.phone !== normalizedPhone) {
+      await tx.customer.update({
+        where: {
+          id: keeper.id,
+        },
+        data: {
+          phone: normalizedPhone,
+        },
+      });
+    }
+    });
     mergedCustomers += duplicateIds.length;
   }
 
