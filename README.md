@@ -346,20 +346,29 @@ Technician Tip            $20.000
 Payment Collected        $120.000
 ```
 
-# ⬜ Phase 7 — Basic Owner Reporting
+# 🟨 Phase 7 — Basic Owner Reporting
 
 **Provide the owner with the essential financial information needed to verify salon operations before launch.**
 
 ### MVP Scope
 
-- Total sales
-- Sales by technician
-- Customer count
-- Average ticket
-- Payment totals by Cash / Bold / Transfer
-- Commission totals
-- Tip totals
-- Basic payment reconciliation
+- [x] Total sales
+- [ ] Sales by technician
+- [x] Customer count
+- [x] Average ticket
+- [x] Payment totals by Cash / Bold / Transfer
+- [x] Commission totals by technician
+- [x] Tip totals
+- [x] Basic payment reconciliation
+
+### Current Implementation
+
+- Owner-only `/admin` dashboard
+- Financial values formatted in COP
+- Active technicians remain visible even when they have zero commissions
+- Commission totals separated into pending and paid amounts
+- Tips tracked separately from salon revenue
+- Payment reconciliation accounts for salon-collected tips
 
 Advanced dashboards, sales goals, payroll management, expense tracking, trends, and performance analytics are planned for Post-MVP.
 
