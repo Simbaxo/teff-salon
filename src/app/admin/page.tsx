@@ -74,19 +74,22 @@ export default async function AdminPage() {
 
     const totalTips = tipSummary._sum.amount ?? 0;
 
-    // Only tips still held by the salon belong in payment reconciliation
-    // Cash tips paid directly to technicians are already marked PAID and
-    // never become money the salon needs to account for
-    const salonHeldTipSummary = await prisma.tip.aggregate({
+    // Electronic tips car collected by TEFF and are part of the customer's payment
+    // Use the payment method instead of payout status because the tip may later
+    // be marked PAID without changing the original payment received by the salon
+    const salonCollectedTipSummary = await prisma.tip.aggregate({
         where: {
-            status: "PENDING",
+            paymentMethod: {
+                in: ["BOLD", "TRANSFER"],
+            },
         },
         _sum: {
             amount: true,
         },
     });
 
-    const salonHeldTips = salonHeldTipSummary._sum.amount ?? 0;
+    const salonCollectedTips =
+        salonCollectedTipSummary._sum.amount ?? 0;
 
     // Total money recorded as received by the salon across every payment method
     const totalPayments = cashTotal + boldTotal + transferTotal;
@@ -94,7 +97,7 @@ export default async function AdminPage() {
     // Payments should equal salon revenue plus tips currently held
     // by TEFF on behalf of technicians
     const reconciliationDifference =
-        totalPayments - totalSales - salonHeldTips;
+        totalPayments - totalSales - salonCollectedTips;
 
     // Start from active technicians so employees with zero commissions
     // still appear on the owner dashboard
@@ -107,6 +110,7 @@ export default async function AdminPage() {
             name: true,
             commissions: {
                 select: {
+                    commissionBase: true,
                     commissionAmount: true,
                     status: true,
                 },
@@ -118,11 +122,16 @@ export default async function AdminPage() {
     });
 
     const commissionSummary = employeesWithCommissions.map((employee) => {
+        let sales = 0;
         let total = 0;
         let pending = 0;
         let paid = 0;
 
         for (const commission of employee.commissions) {
+            // commissionBase represents the final sale amount attributed
+            // to this technician before their commission is calculated
+            sales += commission.commissionBase;
+
             total += commission.commissionAmount;
 
             if (commission.status === "PENDING") {
@@ -137,6 +146,7 @@ export default async function AdminPage() {
         return {
             id: employee.id,
             name: employee.name,
+            sales,
             total,
             pending,
             paid,
@@ -255,6 +265,32 @@ export default async function AdminPage() {
                                     {formatCOP(reconciliationDifference)}
                                 </p>
                             </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-8">
+                        <h2 className="text-xl font-bold text-black">
+                            Ventas por Técnica
+                        </h2>
+
+                        <div className="mt-4 grid gap-4 md:grid-cols-2">
+                            {commissionSummary.map((employee) => (
+                                <div
+                                    key={employee.id}
+                                    className="rounded-xl bg-white p-5 shadow-sm"
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-lg font-semibold text-black">
+                                            {employee.name}
+                                        </h3>
+
+                                        <span className="text-lg font-bold text-black">
+                                            {formatCOP(employee.sales)}
+                                        </span>
+                                    </div>
+
+                                </div>
+                            ))}
                         </div>
                     </div>
                     

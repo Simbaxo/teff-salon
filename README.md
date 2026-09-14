@@ -353,7 +353,7 @@ Payment Collected        $120.000
 ### MVP Scope
 
 - [x] Total sales
-- [ ] Sales by technician
+- [x] Sales by technician
 - [x] Customer count
 - [x] Average ticket
 - [x] Payment totals by Cash / Bold / Transfer
