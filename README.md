@@ -372,6 +372,68 @@ Payment Collected        $120.000
 
 Advanced dashboards, sales goals, payroll management, expense tracking, trends, and performance analytics are planned for Post-MVP.
 
+# ✅ Phase 8 — Production Readiness & Deployment
+
+**Prepare, deploy, and verify the TEFF Salon MVP in a real production environment.**
+
+### Production Infrastructure
+
+- [x] Deploy TEFF Salon to Vercel
+- [x] Configure production `DATABASE_URL`
+- [x] Configure production `AUTH_SECRET`
+- [x] Use `sslmode=verify-full` for PostgreSQL connections
+- [x] Verify all 11 Prisma migrations are applied
+- [x] Separate Neon production and development branches
+- [x] Keep local development connected to the `development` branch
+- [x] Keep Vercel connected to the `production` branch
+- [x] Verify production build succeeds
+
+### Security & Dependency Hardening
+
+- [x] Update Next.js to 16.3.5
+- [x] Resolve critical npm audit findings
+- [x] Keep Prisma on 7.10.0 instead of forcing a breaking downgrade/upgrade
+- [x] Preserve OWNER and RECEPTIONIST authentication
+- [x] Verify production secrets are excluded from Git
+- [x] Verify production database connection uses SSL certificate verification
+
+### Production Smoke Test
+
+The complete MVP workflow was tested successfully in production:
+
+- [x] Production home page loads
+- [x] Customer booking page loads with salon configuration
+- [x] OWNER authentication works
+- [x] Staff dashboard loads successfully
+- [x] Customer can create an appointment
+- [x] New appointment appears correctly in `/staff`
+- [x] `BOOKED → CHECKED_IN → IN_PROGRESS` workflow works
+- [x] Checkout successfully creates the sale, payment, and commission
+- [x] Appointment becomes `COMPLETED`
+- [x] Owner dashboard financial reporting is correct
+- [x] Payment reconciliation returns zero difference
+- [x] Completed appointment cannot be checked out again
+- [x] Production smoke-test data removed after verification
+
+### Production Baseline
+
+After the production smoke test, temporary operational data was removed.
+
+Production operational tables were verified at:
+
+- Customers: 0
+- Appointments: 0
+- Sales: 0
+- Payments: 0
+- Commissions: 0
+- Tips: 0
+
+Salon configuration, employees, services, add-ons, relationships, and authorized staff accounts remain intact.
+
+**MVP production deployment completed September 15, 2026.**
+
+Live production application: `https://teff-salon.vercel.app`
+
 ## 🚀 Post-MVP Roadmap
 
 The following features are intentionally planned for after the first production release of the TEFF Salon app.
