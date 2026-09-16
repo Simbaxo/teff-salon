@@ -23,8 +23,9 @@ export async function POST(request: Request) {
     } = body;
 
     // Validate the basic payload types before using the values
+    // employeeId can be a technician ID or "any" for automatic assignment
     const hasInvalidPayloadTypes =
-      typeof employeeId !== "number" ||
+      (typeof employeeId !== "number" && employeeId !== "any") ||
       typeof date !== "string" ||
       typeof startTime !== "string" ||
       !Array.isArray(serviceIds) ||
@@ -121,10 +122,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // A specific technician must have a valid positive ID.
+    // "any" is handled later by automatic technician assignment
+    const hasInvalidEmployeeId = 
+      employeeId !== "any" &&
+      (!Number.isInteger(employeeId) || employeeId <= 0);
+
     // Validate that IDs are positive integers
     const hasInvalidIds =
-      !Number.isInteger(employeeId) ||
-      employeeId <= 0 ||
+      hasInvalidEmployeeId ||
       serviceIds.some(
         (id: unknown) => !Number.isInteger(id) || (id as number) <= 0
       ) ||
@@ -168,24 +174,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Make sure the selected technician exists and is currently active
-    const employee = await prisma.employee.findFirst({
-      where: {
-        id: employeeId,
-        active: true,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (!employee) {
-      return Response.json(
-        { error: "Selected technician is not available "},
-        { status: 400 }
-      );
-    }
-
     // Get today's calendar date in TEFF's Medellín timezone
     const todayInMedellin = getTeffToday();
 
@@ -219,25 +207,48 @@ export async function POST(request: Request) {
       );
     }
 
-    // Load the services this technician is qualified to perform
-    const employeeServices = await prisma.employeeService.findMany({
+    // Find every active technician who is qualified for all selected services.
+    const activeEmployees = await prisma.employee.findMany({
       where: {
-        employeeId,
+        active: true,
+      },
+      select: {
+        id: true,
+        employeeServices: {
+          select: {
+            serviceId: true,
+          },
+        },
       },
     });
 
-    const employeeServiceIds = new Set(
-      employeeServices.map((item) => item.serviceId)
-    );
+    const qualifiedEmployees = activeEmployees.filter((employee) => {
+      const qualifiedServiceIds = new Set(
+        employee.employeeServices.map((relation) => relation.serviceId)
+      );
 
-    // The selected technician must be qualified for every requested service
-    const hasUnsupportedService = uniqueServiceIds.some(
-      (serviceId: number) => !employeeServiceIds.has(serviceId)
-    );
+      return uniqueServiceIds.every((serviceId) =>
+        qualifiedServiceIds.has(serviceId)
+      );
+    });
 
-    if (hasUnsupportedService) {
+    // A specific technician must exist and be qualified.
+    // "any" keeps all qualified technicians as possible candidates.
+    const candidateEmployeeIds =
+      employeeId === "any"
+        ? qualifiedEmployees.map((employee) => employee.id)
+        : qualifiedEmployees.some((employee) => employee.id === employeeId)
+          ? [employeeId]
+          : [];
+
+    if (candidateEmployeeIds.length === 0) {
       return Response.json(
-        { error: "Technician is not qualified for one or more services" },
+        {
+          error:
+            employeeId === "any"
+              ? "No technician is qualified for the selected services"
+              : "Selected technician is not available for the selected services",
+        },
         { status: 400 }
       );
     }
@@ -353,10 +364,13 @@ export async function POST(request: Request) {
       try {
         result = await prisma.$transaction(
           async (tx) => {
-            // Check availability inside the same transaction that creates the booking
+            // Load schedule-blocking appointments for every possible technician
+            // For a specific technician this contains one ID; "any" may contain several
             const existingAppointments = await tx.appointment.findMany({
               where: {
-                employeeId,
+                employeeId: {
+                  in: candidateEmployeeIds,
+                },
                 date: new Date(`${date}T00:00:00.000Z`),
                 status: {
                   // These appointments still occupy the technician's schedule
@@ -375,22 +389,63 @@ export async function POST(request: Request) {
             const requestedStart = timeToMinutes(startTime);
             const requestedEnd = requestedStart + totalDuration;
 
-            // Check whether this appointment overlaps an existing appointment
-            const hasConflict = existingAppointments.some((appointment) => {
-              const existingStart = timeToMinutes(appointment.startTime);
-              const existingEnd =
-                existingStart + appointment.duration;
-                
-              return (
-                requestedStart < existingEnd &&
-                requestedEnd > existingStart
-              );
-            });
+            // Keep only technicians who are free for the entire requested appointment
+            const availableEmployeeIds = candidateEmployeeIds.filter(
+              (candidateEmployeeId) => {
+                // Check whether this appointment overlaps an existing appointment
+                const hasConflict = existingAppointments.some((appointment) => {
+                  if (appointment.employeeId !== candidateEmployeeId) {
+                    return false;
+                  }
 
-            // Stop before creating anything if the slot is already occupied
-            if (hasConflict) {
+                  const existingStart = timeToMinutes(appointment.startTime);
+                  const existingEnd = existingStart + appointment.duration;
+                  
+                  return (
+                    requestedStart < existingEnd &&
+                    requestedEnd > existingStart
+                  );
+                });
+
+                return !hasConflict;
+              }
+            )
+
+            // The requested time is unavailable only when every candidate is busy
+            if (availableEmployeeIds.length === 0) {
               throw new Error("BOOKING_CONFLICT");
             }
+
+            // Balance "Any Technician" bookings by scheduled workload for the day
+            // A specifically selected technician always keeps the customer's choice
+            const assignedEmployeeId =
+              employeeId === "any"
+                ? availableEmployeeIds.reduce((bestEmployeeId, currentEmployeeId) => {
+                  const scheduledMinutes = (candidateId: number) =>
+                    existingAppointments
+                      .filter((appointment) => appointment.employeeId === candidateId)
+                      .reduce(
+                        (total, appointment) => total + appointment.duration,
+                        0
+                      );
+                      
+                        const bestMinutes = scheduledMinutes(bestEmployeeId);
+                        const currentMinutes = scheduledMinutes(currentEmployeeId);
+
+                        if (currentMinutes < bestMinutes) {
+                          return currentEmployeeId;
+                        }
+
+                        if (
+                          currentMinutes === bestMinutes &&
+                          currentEmployeeId < bestEmployeeId
+                        ) {
+                          return currentEmployeeId;
+                        }
+
+                        return bestEmployeeId;
+                })
+                : availableEmployeeIds[0]
 
             // Reuse an existing customer when the phone number already exists
             const customer = await tx.customer.upsert({
@@ -415,7 +470,7 @@ export async function POST(request: Request) {
             const appointment = await tx.appointment.create({
               data: {
                 customerId: customer.id,
-                employeeId,
+                employeeId: assignedEmployeeId,
                 date: new Date(`${date}T00:00:00.000Z`),
                 startTime,
                 duration: totalDuration,

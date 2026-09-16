@@ -99,7 +99,9 @@ export default function BookPage() {
     const { language } = useLanguage();
     const [selectedServices, setSelectedServices] = useState<number[]>([]);
     const [selectedAddons, setSelectedAddons] = useState<number[]>([]);
-    const [selectedEmployee, setSelectedEmployee] = useState<number | null>(null);
+    // "any" lets the salon automatically assign an available qualified technician
+    const [selectedEmployee, setSelectedEmployee] = 
+        useState<number | "any" | null>(null);
     const [selectedDate, setSelectedDate] = useState(
         getTeffToday()
     );
@@ -119,6 +121,7 @@ export default function BookPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [bookingError, setBookingError] = useState("");
     const [bookingSuccess, setBookingSuccess] = useState(false);
+    const [assignedEmployeeName, setAssignedEmployeeName] = useState("");
     const [bookedAppointments, setBookedAppointments] =
         useState<Appointment[]>([]);
 
@@ -256,15 +259,33 @@ export default function BookPage() {
     );
 
     useEffect(() => {
+        // No technician can perform the current service combination
+        if (qualifiedEmployees.length === 0) {
+            setSelectedEmployee(null);
+            return;
+        }
+
+        // "Any Technician" is the default for customers
+        if (selectedEmployee === null) {
+            setSelectedEmployee("any");
+            return;
+        }
+
+        // Keep "any" selected while qualified technicians are available
+        if (selectedEmployee === "any") {
+            return;
+        }
+
+        // Reset to "any" if a specifically selected technician is no longer
+        // qualifed after the customer changes their services
         if (
-            selectedEmployee !== null &&
             !qualifiedEmployees.some(
                 (employee) => employee.id == selectedEmployee
             )
         ) {
-            setSelectedEmployee(null);
+            setSelectedEmployee("any");
         }
-    }, [selectedServices, selectedEmployee, qualifiedEmployees])
+    }, [selectedEmployee, qualifiedEmployees])
 
     // Calculate Price
     const serviceTotal = selectedServiceDetails.reduce(
@@ -328,22 +349,39 @@ export default function BookPage() {
             return false;
         }
 
-        const hasConflict = bookedAppointments.some((appointment) => {
-            if (
-                appointment.employeeId !== selectedEmployee ||
-                appointment.date.slice(0, 10) !== selectedDate
-            ) {
-                return false;
-            }
+        // Check whether one technician is free for eht entire requested time
+        const isEmployeeAvailable = (employeeId: number) => {
+            const hasConflict = bookedAppointments.some((appointment) => {
+                if (
+                    appointment.employeeId !== selectedEmployee ||
+                    appointment.date.slice(0, 10) !== selectedDate
+                ) {
+                    return false;
+                }
 
-            const bookedStart = timeToMinutes(appointment.startTime);
-            const bookedEnd = bookedStart + appointment.duration;
+                const bookedStart = timeToMinutes(appointment.startTime);
+                const bookedEnd = bookedStart + appointment.duration;
 
-            return startTime < bookedEnd && endTime > bookedStart;
+                return startTime < bookedEnd && endTime > bookedStart;
         });
 
         return !hasConflict;
-    })
+    };
+
+    // "Any Technician" only needs one qualified technician to be free
+    // A named technician must personally be available
+    if (selectedEmployee === "any") {
+        return qualifiedEmployees.some((employee) =>
+            isEmployeeAvailable(employee.id)
+        );
+    }
+
+    if (typeof selectedEmployee === "number") {
+        return isEmployeeAvailable(selectedEmployee);
+    }
+
+    return false;
+    });
 
     // Find The Selected Technician Details
     const selectedEmployeeDetails = employees.find(
@@ -391,6 +429,9 @@ export default function BookPage() {
                 throw new Error(data.error || "Booking failed");
             }
 
+            // The server returns the technician actually assigned to the appointment
+            setAssignedEmployeeName(data.employee?.name || "");
+
             setBookingSuccess(true);
             setIsReviewing(false);
         } catch(error) {
@@ -431,6 +472,14 @@ export default function BookPage() {
                             ? "Tu cita ha sido registrada."
                             : "Your appointment has been registered."}
                     </p>
+                    
+                    {assignedEmployeeName && (
+                    <p className="mt-4 font-semibold text-black">
+                        {language === "es"
+                            ? `Técnica asignada: ${assignedEmployeeName}`
+                            : `Assigned technician: ${assignedEmployeeName}`}
+                    </p>
+                )}
                 </div>
             )}
 
@@ -522,6 +571,27 @@ export default function BookPage() {
                             </h2>
 
                             <div className="mt-4 space-y-3">
+                                <button
+                                    onClick={() => setSelectedEmployee("any")}
+                                    className={`w-full rounded-xl border p-4 text-left ${
+                                    selectedEmployee === "any"
+                                        ? "border-black bg-neutral-200"
+                                        : "border-neutral-200 bg-white"
+                                    }`}
+                                >
+                                    <span className="font-semibold text-black">
+                                        {language === "es"
+                                            ? "Cualquier técnica — Recomendado"
+                                            : "Any Technician — Recommended"}
+                                    </span>
+
+                                    <p className="mt-1 text-sm text-neutral-500">
+                                        {language === "es"
+                                            ? "Te asignaremos una técnica disponible para tu cita."
+                                            : "We'll assign an available technician for your appointment."}
+                                    </p>
+                                </button>
+                                
                                 {qualifiedEmployees.map((employee) => (
                                     <button
                                         key={employee.id}
@@ -717,8 +787,12 @@ export default function BookPage() {
                                         {language === "es" ? "Técnica" : "Technician"}
                                     </p>
 
-                                    <p className="text-sm text-neutral-500">
-                                        {selectedEmployeeDetails?.name}
+                                    <p className="font-semibold text-black">
+                                        {selectedEmployee === "any"
+                                            ? language === "es"
+                                                ? "Cualquier técnica"
+                                                : "Any Technician"
+                                            : selectedEmployeeDetails?.name}
                                     </p>
                                 </div>
 

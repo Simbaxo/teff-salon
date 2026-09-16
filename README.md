@@ -442,10 +442,12 @@ The following features are intentionally planned for after the first production 
 - Receptionist dashboard with weekly and monthly salon performance
 - Technician production totals and progress toward sales goals
 - Alerts when new appointments are created
-- Improved appointment management and reassignment between technicians
-- Customer defaults to "Any Technician" when booking
-- Smart technician assignment based on availability
 - Family / group appointment checkout
+- ✅ Customer defaults to "Any Technician" when booking
+- ✅ "Any Technician" assigns a qualified technician who is available for the full appointment
+- ✅ Automatic assignment balances technicians by scheduled minutes for the selected day
+- Future receptionist reassignment between technicians
+- Future smarter assignment using workload and production data
 
 ### Owner Dashboard & Reporting
 - Total sales dashboard
@@ -476,8 +478,8 @@ The following features are intentionally planned for after the first production 
 - Future integrations with additional payment or communication services
 
 ### Customer Experience
-- "Any Technician" booking option
-- Smarter technician recommendations and assignment
+- ✅ "Any Technician" booking option with automatic server-side assignment
+- Smarter technician recommendations and assignment based on future workload and business rules
 - Improved customer history
 - Customer preferences and notes
 - Potential deposits / booking fees if no-show rates justify them
