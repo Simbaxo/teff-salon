@@ -16,12 +16,14 @@ The goal of the MVP is to manage the complete salon workflow:
 | 2 | Database & Salon Data | ✅ Core Complete |
 | 3 | Customer Booking | ✅ Core Complete |
 | 4 | Scheduling & Availability | ✅ Core Complete |
-| 5 | Staff Operations & Authentication | 🟡 Core Complete — Hardening |
-| 6 | Checkout, Payments & Commissions | 🟡 Core Complete — Hardening |
-| 7 | Basic Owner Reporting | ⬜ Not Started |
-| 8 | Production Readiness & Deployment | ⬜ Not Started |
+| 5 | Staff Operations & Authentication | ✅ MVP Complete |
+| 6 | Checkout, Payments & Commissions | ✅ MVP Complete |
+| 7 | Basic Owner Reporting | ✅ Complete |
+| 8 | Production Readiness & Deployment | ✅ Complete |
 
-**Estimated MVP completion: ~85%**
+**MVP completion: 100% — deployed and production smoke-tested September 15, 2026.**
+
+*The live MVP supports the complete workflow from customer booking through scheduling, staff operations, checkout, payments, commissions, customer history, and owner reporting. The first Post-MVP enhancement, “Any Technician,” has also been completed.*
 
 ---
 
@@ -160,7 +162,7 @@ Appointment services and add-ons store price and duration snapshots so historica
 
 ---
 
-# 🟡 Phase 5 — Staff Operations & Authentication
+# ✅ Phase 5 — Staff Operations & Authentication
 
 *The internal staff application manages TEFF's daily appointment workflow.*
 
@@ -189,13 +191,21 @@ Appointment services and add-ons store price and duration snapshots so historica
 
 ```text
 Reservada
-    ↓
+
+↓
+
 Cliente llegó
-    ↓
+
+↓
+
 En servicio
-    ↓
+
+↓
+
 Finalizar servicio
-    ↓
+
+↓
+
 Checkout
 ```
 
@@ -245,7 +255,7 @@ Current access policy:
 
 Technicians remain Employee records for scheduling, commissions, and tips without requiring login accounts.
 
-### Remaining Staff Hardening
+### Future Security & Experience Hardening
 
 - Improved loading and error states
 - Production-safe date handling
@@ -255,7 +265,7 @@ Technicians remain Employee records for scheduling, commissions, and tips withou
 
 ---
 
-# 🟡 Phase 6 — Checkout, Payments & Commissions
+# ✅ Phase 6 — Checkout, Payments & Commissions
 
 *The checkout system converts completed salon services into permanent financial records while keeping payments, commissions, and technician tips separated.*
 
@@ -346,7 +356,7 @@ Technician Tip            $20.000
 Payment Collected        $120.000
 ```
 
-# 🟨 Phase 7 — Basic Owner Reporting
+# ✅ Phase 7 — Basic Owner Reporting
 
 **Provide the owner with the essential financial information needed to verify salon operations before launch.**
 
@@ -369,6 +379,8 @@ Payment Collected        $120.000
 - Commission totals separated into pending and paid amounts
 - Tips tracked separately from salon revenue
 - Payment reconciliation accounts for salon-collected tips
+
+*Phase 7 was completed and pushed before the production deployment.*
 
 Advanced dashboards, sales goals, payroll management, expense tracking, trends, and performance analytics are planned for Post-MVP.
 
@@ -434,11 +446,28 @@ Salon configuration, employees, services, add-ons, relationships, and authorized
 
 Live production application: `https://teff-salon.vercel.app`
 
+### Current Production Configuration
+
+- 4 employees
+- 3 services
+- 3 add-ons
+- 11 employee/service qualification mappings
+- 8 service/add-on compatibility mappings
+- 2 authorized application users
+
+### Next Operational Setup
+
+- Enter the complete TEFF service menu and prices
+- Enter all production add-ons and compatibility rules
+- Confirm every employee's service qualifications and active status
+- Verify production users and roles before daily salon use
+
 ## 🚀 Post-MVP Roadmap
 
 The following features are intentionally planned for after the first production release of the TEFF Salon app.
 
 ### Operations & Reception
+
 - Receptionist dashboard with weekly and monthly salon performance
 - Technician production totals and progress toward sales goals
 - Alerts when new appointments are created
@@ -448,20 +477,28 @@ The following features are intentionally planned for after the first production 
 - ✅ Automatic assignment balances technicians by scheduled minutes for the selected day
 - Future receptionist reassignment between technicians
 - Future smarter assignment using workload and production data
+- Inventory management accessible to OWNER and RECEPTIONIST roles
+- Track product quantities, low-stock items, and replenishment needs
+- Owner/receptionist tools for managing services, add-ons, employees, qualifications, prices, and active status
 
-### Owner Dashboard & Reporting
-- Total sales dashboard
-- Sales by technician
-- Customer count
-- Average ticket
-- Technician commissions
-- Tips and tip payout tracking
+### Advanced Owner Dashboard & Reporting
+
+- ✅ Total sales dashboard
+- ✅ Sales by technician
+- ✅ Customer count
+- ✅ Average ticket
+- ✅ Technician commissions
+- ✅ Tip totals and separation from salon revenue
 - Supply purchases and operating expenses
-- Cash / Bold / transfer reconciliation
+- ✅ Cash / Bold / transfer reconciliation
 - Weekly and monthly sales goals
 - Historical performance reports
+- Generate TEFF-branded weekly salon summary images
+- Generate individual weekly technician commission/pay images
+- Generate TEFF-branded monthly summary images
 
 ### Payroll & Commissions
+
 - Employee-specific commission rates and pay structures
 - Payroll period tracking
 - Commission payout tracking
@@ -470,6 +507,7 @@ The following features are intentionally planned for after the first production 
 - Payroll summaries and reports
 
 ### Integrations & Automation
+
 - Google Calendar integration
 - Color-coded appointments by technician
 - Automatic WhatsApp appointment confirmations
@@ -478,6 +516,7 @@ The following features are intentionally planned for after the first production 
 - Future integrations with additional payment or communication services
 
 ### Customer Experience
+
 - ✅ "Any Technician" booking option with automatic server-side assignment
 - Smarter technician recommendations and assignment based on future workload and business rules
 - Improved customer history
@@ -486,6 +525,7 @@ The following features are intentionally planned for after the first production 
 - Additional automated appointment notifications
 
 ### Services & Booking
+
 - Approval workflow for services that require manual confirmation
 - Lash technician / off-site service workflow
 - Advanced service availability rules
@@ -493,6 +533,7 @@ The following features are intentionally planned for after the first production 
 - Group / family bookings
 
 ### UI & Personalization
+
 - Global Auto / Light / Dark theme
 - System theme as default
 - Manual Auto / Light / Dark selector
@@ -500,6 +541,7 @@ The following features are intentionally planned for after the first production 
 - Consistent theme across booking, staff, checkout, customer profiles, and admin
 
 ### Future Staff Features
+
 - Optional technician accounts
 - Technician-specific dashboards
 - Individual schedules and performance
