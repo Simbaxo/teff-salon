@@ -50,6 +50,12 @@ type Appointment = {
     }[];
 };
 
+type Employee = {
+    id: number;
+    name: string;
+    active: boolean;
+}
+
 type StaffPageClientProps = {
     userName: string;
     userRole: "OWNER" | "RECEPTIONIST" | "TECHNICIAN";
@@ -87,6 +93,11 @@ export default  function StaffPage({
     userRole,
 }: StaffPageClientProps) {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
+    // Active technicians available for appointment reassignment
+    const [employees, setEmployees] = useState<Employee[]>([]); 
+    // Track which appointment is currently being reassigned
+    const [reassigningAppointmentId, setReassigningAppointmentId] =
+        useState<number | null>(null);
     // Track whether the staff appointment data is still loading.
     const [isLoading, setIsLoading] = useState(true);
     // Show a useful message if appointment data cannot be loaded.
@@ -117,9 +128,27 @@ export default  function StaffPage({
             setIsLoading(false);
         }
     }
-        useEffect(() => {
-            loadAppointments();
-    }, []);
+
+    // Load active technicians for appointment reassignment
+    async function loadEmployees() {
+        try {
+            const response = await fetch("/api/employees");
+            
+            if (!response.ok) {
+                throw new Error("No se pudieron cargar las técnicas");
+            }
+
+            const data = await response.json();
+            setEmployees(data);
+        } catch (error) {
+            console.error(error)
+        }
+    }
+
+    useEffect(() => {
+        loadAppointments();
+        loadEmployees();
+   }, []);
 
     // Create the Filtered Appointments
     const appointmentsForDate = appointments.filter(
@@ -173,6 +202,42 @@ export default  function StaffPage({
             );
         } catch (error) {
             console.error(error);
+        }
+    }
+
+    // Reassign an appointment to another qualified technician
+    async function reassignEmployee(
+        appointmentId: number,
+        employeeId: number
+    ) {
+        try {
+            setReassigningAppointmentId(appointmentId);
+            
+            const response = await fetch(
+                `/api/appointments/${appointmentId}/employee`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ employeeId }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                alert(data.error || "No se puedo cambiar la técnica");
+                return;
+            }
+
+            // Reload appointments so the card moves to the correct technician
+            await loadAppointments();
+        } catch (error) {
+            console.error(error);
+            alert("No se pudo cambiar la técnica")
+        } finally {
+            setReassigningAppointmentId(null);
         }
     }
 
@@ -317,6 +382,54 @@ export default  function StaffPage({
                                                             {item.bookedPrice.toLocaleString("es-CO")}
                                                         </p>
                                                     ))}
+                                                </div>
+                                            )}
+
+                                            {(
+                                                userRole === "OWNER" ||
+                                                (
+                                                    userRole === "RECEPTIONIST" &&
+                                                    ["REQUESTED", "BOOKED", "CHECKED_IN"].includes(appointment.status)
+                                                )
+                                            ) && (
+                                                <div className="mt-5">
+                                                    <label 
+                                                        htmlFor={`employee-${appointment.id}`}
+                                                        className="block text-sm font-semibold text-black"
+                                                    >
+                                                        Técnica
+                                                    </label>
+
+                                                    <select 
+                                                        id={`employee-${appointment.id}`}
+                                                        value={appointment.employeeId}
+                                                        disabled={reassigningAppointmentId === appointment.id}
+                                                        onChange={(event) => {
+                                                            const newEmployeeId = Number(event.target.value);
+
+                                                            if (newEmployeeId !== appointment.employeeId) {
+                                                                reassignEmployee(
+                                                                    appointment.id,
+                                                                    newEmployeeId
+                                                                );
+                                                            }
+                                                        }}
+                                                        className="mt-2 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm text-black"
+                                                    >
+                                                        {employees.map((employee) => (
+                                                            <option
+                                                                key={employee.id} 
+                                                                value={employee.id}
+                                                            >
+                                                                {employee.name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    {reassigningAppointmentId === appointment.id && (
+                                                        <p className="mt-2 text-sm text-neutral-500">
+                                                            Cambiando Técnica...
+                                                        </p>
+                                                    )}
                                                 </div>
                                             )}
 

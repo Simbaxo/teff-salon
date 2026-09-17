@@ -93,63 +93,232 @@ export async function PATCH(
             );
         }
 
-            // Load the requested technician and their service qualifications
-    const newEmployee = await prisma.employee.findUnique({
-        where: {
-            id: employeeId,
-        },
-        select: {
-            id: true,
-            name: true,
-            active: true,
-            employeeServices: {
-                select: {
-                    serviceId: true,
+        // Load the requested technician and their service qualifications
+        const newEmployee = await prisma.employee.findUnique({
+            where: {
+                id: employeeId,
+            },
+            select: {
+                id: true,
+                name: true,
+                active: true,
+                employeeServices: {
+                    select: {
+                        serviceId: true,
+                    },
                 },
             },
-        },
-    });
-
-    if (!newEmployee) {
-        return Response.json(
-            { error: "Employee not found" },
-            { status: 400 }
-        );
-    }
-
-    if (!newEmployee.active) {
-        return Response.json(
-            { error: "Employee is not active" },
-            { status: 400 }
-        );
-    }
-
-    // A technician must be qualified for every service already booked
-    const qualifiedServiceIds = new Set(
-        newEmployee.employeeServices.map((item) => item.serviceId)
-    );
-
-    const isQualifiedForAllServices =
-        appointment.appointmentServices.every((item) =>
-            qualifiedServiceIds.has(item.serviceId)
-        );
-
-    if (!isQualifiedForAllServices) {
-        return Response.json(
-            {
-                error: "Employee is not qualified for all appointment services",
-            },
-            { status: 400 }
-        );
-    }
-
-        return Response.json({
-            message: "Reassignment Validation Passed",
-            appointmentId: appointment.id,
-            currentEmployeeId: appointment.employeeId,
-            newEmployeeId: employeeId,
         });
+
+        if (!newEmployee) {
+            return Response.json(
+                { error: "Employee not found" },
+                { status: 400 }
+            );
+        }
+
+        if (!newEmployee.active) {
+            return Response.json(
+                { error: "Employee is not active" },
+                { status: 400 }
+            );
+        }
+
+        // A technician must be qualified for every service already booked
+        const qualifiedServiceIds = new Set(
+            newEmployee.employeeServices.map((item) => item.serviceId)
+        );
+
+        const isQualifiedForAllServices =
+            appointment.appointmentServices.every((item) =>
+                qualifiedServiceIds.has(item.serviceId)
+            );
+
+        if (!isQualifiedForAllServices) {
+            return Response.json(
+                {
+                    error: "Employee is not qualified for all appointment services",
+                },
+                { status: 400 }
+            );
+        }
+
+        // If the appointment is already assigned to this technician
+        // there is nothing to change
+        if (appointment.employeeId === employeeId) {
+            return Response.json({
+                message: "Appointment is already assigned to this employee",
+                appointment,
+            });
+        }
+
+        const maxAttempts = 3;
+        let result = null;
+
+        for (let attempt =1; attempt <= maxAttempts; attempt++) {
+            try {
+                result = await prisma.$transaction(
+                    async (tx) => {
+                        // Only appointments that currently occupy the schedule need
+                        // availability protection when changing technicians
+                        const scheduleBlockingStatuses = [
+                            "REQUESTED",
+                            "BOOKED",
+                            "CHECKED_IN",
+                            "IN_PROGRESS",
+                        ]
+
+                        if (scheduleBlockingStatuses.includes(appointment.status)) {
+                            const existingAppointments = await tx.appointment.findMany({
+                                where: {
+                                    employeeId,
+                                    date: appointment.date,
+    
+                                    // Never let the appointment conflict with itself
+                                    id: {
+                                        not: appointment.id,
+                                    },
+    
+                                    status: {
+                                        in: scheduleBlockingStatuses,
+                                    },
+                                },
+                            });
+
+                            // Convert "10:30" into minutes from midnight
+                            function timeToMinutes(time: string) {
+                                const [hours, minutes] = time.split(":").map(Number);
+                                return hours * 60 + minutes;
+                            }
+                            
+                            const requestedStart = timeToMinutes(appointment.startTime);
+                            const requestedEnd =
+                                requestedStart + appointment.duration;
+                            
+                            const hasConflict = existingAppointments.some(
+                                (existingAppointment) => {
+                                    const existingStart = timeToMinutes(
+                                        existingAppointment.startTime
+                                    );
+    
+                                    const existingEnd =
+                                        existingStart + existingAppointment.duration;
+                                    
+                                    return (
+                                        requestedStart < existingEnd &&
+                                        requestedEnd > existingStart
+                                    );
+                                }
+                            );
+    
+                            if (hasConflict) {
+                                throw new Error("REASSIGNMENT_CONFLICT")
+                            }
+                        }
+
+
+
+
+                        // If this appointment has already been checked out, find its sale
+                        // This matters when the Owner corrects a historical technician assignment
+                        const saleAppointment = await tx.saleAppointment.findUnique({
+                            where: {
+                                appointmentId: appointment.id,
+                            },
+                            select: {
+                                saleId: true,
+                            },
+                        });
+
+                        // A completed sale may already have commission and tip records assigned
+                        // to the original technician. Keep those records consistent with the correction
+                        if (saleAppointment) {
+                            await tx.commission.updateMany({
+                                where: {
+                                    saleId: saleAppointment.saleId,
+                                    employeeId: appointment.employeeId,
+                                },
+                                data: {
+                                    employeeId,
+                                },
+                            });
+
+                            await tx.tip.updateMany({
+                                where: {
+                                    saleId: saleAppointment.saleId,
+                                    employeeId: appointment.employeeId,
+                                },
+                                data: {
+                                    employeeId,
+                                },
+                            });
+                        }
+
+                        // Change the technician assigned to the appointment
+                        return tx.appointment.update({
+                            where: {
+                                id: appointment.id,
+                            },
+                            data: {
+                                employeeId,
+                            },
+                            include: {
+                                employee: true,
+                            },
+                        });
+                    },
+                    {
+                        isolationLevel: "Serializable",
+                    }
+                );
+
+                // Transaction Succeeded
+                break;
+            } catch (error) {
+                // A normal schedule conflict should not be retired
+                if (
+                    error instanceof Error &&
+                    error.message === "REASSIGNMENT_CONFLICT"
+                ) {
+                    throw error;
+                }
+
+                // Retry when PostgreSQL detects a concurrent serialization conflict
+                const isSerializableConflict =
+                    typeof error === "object" &&
+                    error !== null &&
+                    "code" in error &&
+                    error.code === "P2034";
+                if (!isSerializableConflict) {
+                    throw error;
+                }
+
+                if (attempt === maxAttempts) {
+                    throw new Error("REASSIGNMENT_CONFLICT");
+                }
+            }
+        }
+
+        if (!result) {
+            throw new Error("Unable to complete technician reassignment");
+        }
+
+        return Response.json(result);
+    
     } catch (error) {
+        if (
+            error instanceof Error &&
+            error.message === "REASSIGNMENT_CONFLICT"
+            ) {
+            return Response.json(
+                {
+                error:
+                    "Employee is not available for the full appointment time",
+                },
+                { status: 409 }
+            );
+        }
+
         console.error("Failed to reassign appointment technician:", error)
 
         return Response.json(
