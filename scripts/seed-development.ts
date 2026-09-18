@@ -601,6 +601,12 @@ const legacyServiceNames: Record<string, string> = {
     "Pedicura Gel": "Pedicure Semipermanente",
 };
 
+// Legacy employee names that should be reused instead of
+// creating duplicate employee records.
+const legacyEmployeeNames: Record<string, string> = {
+    Yenifer: "Yeniffer",
+};
+
 const currentEmployees = [
     "Rocelys",
     "Yenifer",
@@ -718,10 +724,20 @@ async function main() {
     // Ensure all current TEFF service providers exist and are active.
     // Historical employees are preserved rather than deleted.
     for (const employeeName of currentEmployees) {
+        const legacyName = legacyEmployeeNames[employeeName];
+
         const existingEmployee = await prisma.employee.findFirst({
             where: {
-                name: employeeName,
+                name: {
+                    in: legacyName
+                        ? [employeeName, legacyName]
+                        : [employeeName],
+                },
             },
+            orderBy: [
+                { active: "desc" },
+                { id: "asc" },
+            ],
         });
 
         if (existingEmployee) {
@@ -751,9 +767,19 @@ async function main() {
 
     // Synchronize each employee's service qualifications.
     for (const [employeeName, serviceNames] of Object.entries(employeeServiceMap)) {
+        const legacyName = legacyEmployeeNames[employeeName];
+
         const employee = await prisma.employee.findFirst({
             where: {
-                name: employeeName,
+                name: {
+                    in: legacyName
+                        ? [employeeName, legacyName]
+                        : [employeeName],
+                },
+                active: true,
+            },
+            orderBy: {
+                id: "asc",
             },
         });
 

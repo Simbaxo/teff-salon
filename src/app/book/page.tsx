@@ -97,6 +97,45 @@ type Appointment = {
 export default function BookPage() {
     // State
     const { language } = useLanguage();
+    
+    // Customers choose a service category before viewing the full service list
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    // Separates service browsing from appointment configuration
+    const [servicesConfirmed, setServicesConfirmed] = useState(false);
+    const serviceCategories = [
+        {
+        id: "NAILS",
+        emoji: "💅",
+        nameEs: "Uñas",
+        nameEn: "Nails",
+        descriptionEs: "Manicure, Pedicure y Extensiones",
+        descriptionEn: "Manicure, Pedicure and Extensions",
+        },
+        {
+            id: "LASHES",
+            emoji: "👁️",
+            nameEs: "Pestañas",
+            nameEn: "Lashes",
+            descriptionEs: "Sets, Retoques y Lifting",
+            descriptionEn: "Sets, Fills and Lifting",
+        },
+        {
+            id: "BROWS",
+            emoji: "✨",
+            nameEs: "Cejas y Depilación",
+            nameEn: "Brows & Waxing",
+            descriptionEs: "Laminado, Henna y Depilación",
+            descriptionEn: "Lamination, Henna and Waxing",
+        },
+        {
+            id: "ESTHETICS",
+            emoji: "🧖‍♀️",
+            nameEs: "Estética",
+            nameEn: "Esthetics",
+            descriptionEs: "Faciales y Tratamientos",
+            descriptionEn: "Facials and Treatments",
+        },
+    ]
     const [selectedServices, setSelectedServices] = useState<number[]>([]);
     const [selectedAddons, setSelectedAddons] = useState<number[]>([]);
     // "any" lets the salon automatically assign an available qualified technician
@@ -497,32 +536,72 @@ export default function BookPage() {
                             : "Select the services you would like to book."}
                     </p>
                     
-                    {/* Service Cards */}
-                    <div className="mt-8 space-y-4">
-                        {services.map((service) => (
+                    {/* Service Category Selection */}
+                    <div className="mt-8 grid grid-cols-2 gap-3">
+                        {serviceCategories.map((category) => (
                             <button
-                                key={service.id}
-                                onClick={() => toggleService(service.id)}
-                                className={`w-full rounded-xl border p-4 text-left ${
-                                    selectedServices.includes(service.id)
+                                key={category.id}
+                                onClick={() => setSelectedCategory(category.id)}
+                                className={`rounded-xl border p-4 text-left transition ${
+                                    selectedCategory === category.id
                                         ? "border-black bg-neutral-200"
-                                        : "border-neutral-200 bg-white"
-                                    }`}
-                            >
-                                <h2 className="font-semibold text-black">
-                                    {language === "es" ? service.nameEs : service.nameEn}
+                                        : "border-neutral-200 bg-white hover:border-neutral-400"
+                                }`}
+                            > 
+                                <div className="text-2xl">{category.emoji}</div>
+
+                                <h2 className="mt-2 font-semibold text-black">
+                                    {language === "es" ? category.nameEs : category.nameEn}
                                 </h2>
-                                <p className="mt-1 text-sm text-neutral-600">
-                                    ${service.price.toLocaleString("es-CO")} COP
-                                </p>
-                                <p className="text-sm text-neutral-500">
-                                    {service.estimatedDuration} min
-                                </p>
                             </button>
                         ))}
                     </div>
 
-                    {selectedServices.length > 0 && availableAddons.length > 0 && (
+                    {selectedCategory !== null && (
+                        <div className="mt-8">
+                            <h2 className="mb-4 text-xl font-semibold text-black">
+                                {language === "es"
+                                    ? serviceCategories.find(
+                                        (category) => category.id === selectedCategory
+                                    )?.nameEs
+                                    : serviceCategories.find(
+                                        (category) => category.id === selectedCategory
+                                    )?.nameEn}
+                            </h2>
+
+                            <div className="space-y-4">
+                                {services
+                                    .filter((service) => service.category === selectedCategory)
+                                    .map((service) => (
+                                        <button
+                                            key={service.id}
+                                            onClick={() => toggleService(service.id)}
+                                            className={`w-full rounded-xl border p-4 text-left ${
+                                                selectedServices.includes(service.id)
+                                                    ? "border-black bg-neutral-200"
+                                                    : "border-neutral-200 bg-white"
+                                            }`}
+                                        >
+                                            <h3 className="font-semibold text-black">
+                                                {language === "es"
+                                                    ? service.nameEs
+                                                    : service.nameEn}
+                                            </h3>
+
+                                            <p className="mt-1 text-sm text-neutral-600">
+                                                ${service.price.toLocaleString("es-CO")} COP
+                                            </p>
+
+                                            <p className="text-sm text-neutral-500">
+                                                {service.estimatedDuration} min
+                                            </p>
+                                        </button>
+                                    ))}
+                                </div>
+                        </div>
+                    )}
+
+                    {false && selectedServices.length > 0 && availableAddons.length > 0 && (
                         <div className="mt-8">
                             <h2 className="text-xl font-semibold text-black">
                                 {language === "es" ? "Complementos" : "Add-ons"}
@@ -612,7 +691,7 @@ export default function BookPage() {
                     )}
 
                     {/* Date Selector */}
-                    {selectedEmployee !== null && (
+                    {selectedServices.length > 0 && selectedEmployee !== null && (
                         <div className="mt-8">
                             <h2 className="text-xl font-semibold text-black">
                                 {language === "es" ? "Elige una fecha" : "Choose a date"}
@@ -628,7 +707,7 @@ export default function BookPage() {
                     )}
 
                     {/* Temporary Available Time Slots */}
-                    {selectedEmployee && selectedDate && (
+                    {selectedServices.length > 0 && selectedEmployee && selectedDate && (
                         <div className="mt-8">
                             <h2 className="text-xl font-semibold text-black">
                                 {language === "es" ? "Elige una hora" : "Choose a time"}
@@ -859,32 +938,76 @@ export default function BookPage() {
                         </div>
                     )}
 
-                    {/* Summary */}
-                    {selectedServices.length > 0 && ( // Only show this section if at least one service is selected
-                        <div className="mt-8 rounded-xl bg-white p-5">
-                            <h2 className="font-semibold text-black">
-                                {language === "es" ? "Tu selección" : "Your Selection"}
-                            </h2>
+                    {/* Service Selection Summary */}
+                    {selectedServices.length > 0 && !servicesConfirmed && (
+                        <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
+                            <div className="flex items-center justify-between">
+                                <h2 className="font-semibold text-black">
+                                    {language === "es" ? "Tu Selección" : "Your Selection"}
+                                </h2>
 
-                            <div className="mt-4 flex justify-between">
-                                <span className="text-neutral-600">
-                                    {language === "es" ? "Precio estimado" : "Estimated Price"}
-                                </span>
-
-                                <span className="font-semibold text-black">
-                                    ${totalPrice.toLocaleString("es-CO")} COP
-                                </span>
-                            </div>
-
-                            <div className="mt-2 flex justify-between">
-                                <span className="text-neutral-600">
-                                    {language === "es" ? "Duración estimada" : "Estimated Time"}
-                                </span>
-
-                                <span className="font-semibold text-black">
-                                    {totalDuration} min
+                                <span className="text-sm text-neutral-500">
+                                    {selectedServices.length}{" "}
+                                    {language === "es"
+                                        ? selectedServices.length === 1
+                                            ? "servicio"
+                                            : "servicios"
+                                        : selectedServices.length === 1
+                                            ? "service"
+                                            : "services"}
                                 </span>
                             </div>
+
+                            {/* Show every selected service */}
+                            <div className="mt-4 space-y-3">
+                                {selectedServiceDetails.map((service) => (
+                                    <div
+                                        key={service.id}
+                                        className="flex items-center justify-between gap-4"
+                                    >
+                                        <span className="text-sm text-neutral-700">
+                                            {language === "es" ? service.nameEs : service.nameEn}
+                                        </span>
+
+                                        <span className="shrink-0 text-sm font-medium text-black">
+                                            ${service.price.toLocaleString("es-CO")}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="mt-5 border-t border-neutral-200 pt-4">
+                                <div className="flex justify-between">
+                                    <span className="text-neutral-600">
+                                        {language === "es"
+                                            ? "Precio Estimado"
+                                            : "Estimated Price"}
+                                    </span>
+                                        
+                                    <span className="font-semibold text-black">
+                                        ${totalPrice.toLocaleString("es-CO")} COP
+                                    </span>
+                                </div>
+
+                                <div className="mt-2 flex justify-between">
+                                    <span className="text-neutral-600">
+                                        {language === "es"
+                                            ? "Duración Estimada"
+                                            : "Estimated Time"}
+                                    </span>
+                                        
+                                    <span className="font-semibold text-black">
+                                        {totalDuration} min
+                                    </span>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={() => setServicesConfirmed(true)}
+                                className="mt-5 w-full rounded-xl bg-black px-6 py-3 font-semibold text-white"
+                            >
+                                {language === "es" ? "Continuar" : "Continue"}
+                            </button>
                         </div>
                     )}
                 </div>
