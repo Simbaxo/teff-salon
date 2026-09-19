@@ -15,21 +15,31 @@ export async function POST(request: Request) {
       customerPhone,
       customerEmail,
       customerNotes,
-      employeeId,
+      serviceAssignments,
       date,
       startTime,
       serviceIds,
-      addonIds,
+      addonAssignments,
     } = body;
+
+    type ServiceAssignmentInput = {
+      serviceId: number;
+      employeeId: number | "any";
+    };
+
+    type AddonAssignmentInput = {
+      addonId: number;
+      serviceId: number;
+    };
 
     // Validate the basic payload types before using the values
     // employeeId can be a technician ID or "any" for automatic assignment
     const hasInvalidPayloadTypes =
-      (typeof employeeId !== "number" && employeeId !== "any") ||
+      !Array.isArray(serviceAssignments) ||
       typeof date !== "string" ||
       typeof startTime !== "string" ||
       !Array.isArray(serviceIds) ||
-      !Array.isArray(addonIds);
+      !Array.isArray(addonAssignments);
 
     if (hasInvalidPayloadTypes) {
       return Response.json(
@@ -109,12 +119,13 @@ export async function POST(request: Request) {
     if (
       !normalizedCustomerName ||
       !normalizedCustomerPhone ||
-      !employeeId ||
       !date ||
       !startTime ||
       !Array.isArray(serviceIds) ||
       serviceIds.length === 0 ||
-      !Array.isArray(addonIds)
+      !Array.isArray(serviceAssignments) ||
+      serviceAssignments.length === 0 ||
+      !Array.isArray(addonAssignments)
     ) {
       return Response.json(
         { error: "Missing required booking information" },
@@ -122,19 +133,33 @@ export async function POST(request: Request) {
       );
     }
 
-    // A specific technician must have a valid positive ID.
-    // "any" is handled later by automatic technician assignment
-    const hasInvalidEmployeeId = 
-      employeeId !== "any" &&
-      (!Number.isInteger(employeeId) || employeeId <= 0);
+    // Validate each service-to-technician assignment
+    // A technician can be a specific employee ID or "any"
+    const hasInvalidServiceAssignments = serviceAssignments.some(
+      (assignment: ServiceAssignmentInput) =>
+        !assignment ||
+        !Number.isInteger(assignment.serviceId) ||
+        assignment.serviceId <= 0 ||
+        (assignment.employeeId !== "any" &&
+          (!Number.isInteger(assignment.employeeId) ||
+            assignment.employeeId <= 0))
+    );
 
-    // Validate that IDs are positive integers
+    // Validate each add-on-to-service assignment.
+    const hasInvalidAddonAssignments = addonAssignments.some(
+      (assignment: AddonAssignmentInput) =>
+        !assignment ||
+        !Number.isInteger(assignment.addonId) ||
+        assignment.addonId <= 0 ||
+        !Number.isInteger(assignment.serviceId) ||
+        assignment.serviceId <= 0
+    );
+
+    // Validate that service and add-on IDs are positive integers
     const hasInvalidIds =
-      hasInvalidEmployeeId ||
+      hasInvalidServiceAssignments ||
+      hasInvalidAddonAssignments ||
       serviceIds.some(
-        (id: unknown) => !Number.isInteger(id) || (id as number) <= 0
-      ) ||
-      addonIds.some(
         (id: unknown) => !Number.isInteger(id) || (id as number) <= 0
       );
 
@@ -187,7 +212,34 @@ export async function POST(request: Request) {
 
     // Remove duplicate selections before validation
     const uniqueServiceIds = [...new Set<number>(serviceIds)];
-    const uniqueAddonIds = [...new Set<number>(addonIds)];
+    const uniqueAddonIds = [
+      ...new Set<number>(
+        addonAssignments.map(
+          (assignment: AddonAssignmentInput) => assignment.addonId
+        )
+      ),
+    ];
+
+    // Every selected service must have exacty one technician assignment
+    const assignedServiceIds = serviceAssignments.map(
+      (assignment: ServiceAssignmentInput) => assignment.serviceId
+    );
+
+    const uniqueAssignedServiceIds = [...new Set<number>(assignedServiceIds)];
+
+    const assignmentsMatchServices =
+      uniqueAssignedServiceIds.length === uniqueServiceIds.length &&
+      uniqueServiceIds.every((serviceId) =>
+      uniqueAssignedServiceIds.includes(serviceId)
+    ) &&
+    assignedServiceIds.length === uniqueServiceIds.length;
+
+  if (!assignmentsMatchServices) {
+    return Response.json(
+      { error: "Service assignments do not match selected services" },
+      { status: 400 }
+    );
+  }
 
     // Load the active services requested by the customer
     const services = await prisma.service.findMany({
@@ -207,7 +259,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Find every active technician who is qualified for all selected services.
+    //  Load active technicians and the services they are qualified to perform
     const activeEmployees = await prisma.employee.findMany({
       where: {
         active: true,
@@ -222,32 +274,41 @@ export async function POST(request: Request) {
       },
     });
 
-    const qualifiedEmployees = activeEmployees.filter((employee) => {
-      const qualifiedServiceIds = new Set(
-        employee.employeeServices.map((relation) => relation.serviceId)
-      );
+    // Build the qualified technician list separately for each selected service
+    const serviceAssignmentOptions = serviceAssignments.map(
+      (assignment: ServiceAssignmentInput) => {
+        const qualifiedEmployeeIds = activeEmployees
+          .filter((employee) =>
+            employee.employeeServices.some(
+              (relation) => relation.serviceId === assignment.serviceId
+            )
+          )
+          .map((employee) => employee.id)
 
-      return uniqueServiceIds.every((serviceId) =>
-        qualifiedServiceIds.has(serviceId)
-      );
-    });
+        return {
+          serviceId: assignment.serviceId,
+          requestedEmployeeId: assignment.employeeId,
+          qualifiedEmployeeIds,
+        };
+      }
+    );
 
-    // A specific technician must exist and be qualified.
-    // "any" keeps all qualified technicians as possible candidates.
-    const candidateEmployeeIds =
-      employeeId === "any"
-        ? qualifiedEmployees.map((employee) => employee.id)
-        : qualifiedEmployees.some((employee) => employee.id === employeeId)
-          ? [employeeId]
-          : [];
+    // Every service must have at least one active qualified technician
+    // and a specifically requested technician must be qualified for that service
+    const hasInvalidTechnicianAssignment = serviceAssignmentOptions.some(
+      (assignment) =>
+        assignment.qualifiedEmployeeIds.length === 0 ||
+      (assignment.requestedEmployeeId !== "any" &&
+        !assignment.qualifiedEmployeeIds.includes(
+          assignment.requestedEmployeeId
+        ))
+    );
 
-    if (candidateEmployeeIds.length === 0) {
+    if (hasInvalidTechnicianAssignment) {
       return Response.json(
         {
           error:
-            employeeId === "any"
-              ? "No technician is qualified for the selected services"
-              : "Selected technician is not available for the selected services",
+            "One or more technician assignments are invalid for the selected services",
         },
         { status: 400 }
       );
@@ -284,9 +345,14 @@ export async function POST(request: Request) {
       serviceAddonRelations.map((relation) => relation.addonId)
     );
 
-    // Every selected add-on must belong to at least one selected service
-    const hasInvalidAddon = uniqueAddonIds.some(
-      (addonId: number) => !allowedAddonIds.has(addonId)
+    // Every add-on must be valid for the specific service it is assigned to
+    const hasInvalidAddon = addonAssignments.some(
+      (assignment: AddonAssignmentInput) =>
+        !serviceAddonRelations.some(
+          (relation) =>
+            relation.serviceId === assignment.serviceId &&
+            relation.addonId === assignment.addonId
+        )
     );
 
     if (hasInvalidAddon) {
@@ -299,16 +365,53 @@ export async function POST(request: Request) {
       );
     }
 
-    // Calculate how much time the complete appointment requires
-    const totalDuration =
-      services.reduce(
-        (total, service) => total + service.estimatedDuration,
-        0
-      ) +
-      addons.reduce(
-        (total, addon) => total + addon.estimatedDuration,
-        0
+    // Build the duration of each individual service work block.
+    // An add-on extends only the service it was assigned to.
+    const serviceBlocks = services.map((service) => {
+      const assignedAddonIds = addonAssignments
+        .filter(
+          (assignment: AddonAssignmentInput) =>
+            assignment.serviceId === service.id
+        )
+        .map(
+          (assignment: AddonAssignmentInput) =>
+            assignment.addonId
+        );
+
+      const assignedAddons = addons.filter((addon) =>
+        assignedAddonIds.includes(addon.id)
       );
+
+      const duration =
+        service.estimatedDuration +
+        assignedAddons.reduce(
+          (total, addon) => total + addon.estimatedDuration,
+          0
+        );
+
+      const assignmentOption = serviceAssignmentOptions.find(
+        (assignment) => assignment.serviceId === service.id
+      );
+
+      if (!assignmentOption) {
+        throw new Error("Missing technician assignment for service");
+      }
+
+      return {
+        service,
+        addons: assignedAddons,
+        duration,
+        requestedEmployeeId: assignmentOption.requestedEmployeeId,
+        qualifiedEmployeeIds: assignmentOption.qualifiedEmployeeIds,
+      };
+    });
+
+    // The customer-facing visit is currently scheduled sequentially,
+    // so its total duration is the sum of all service work blocks.
+    const totalDuration = serviceBlocks.reduce(
+      (total, block) => total + block.duration,
+      0
+    );
 
     // TEFF business hours depend on the day of the week
     const dayOfWeek = getTeffDayOfWeek(date);
@@ -360,77 +463,147 @@ export async function POST(request: Request) {
 
     let result = null;
 
-    for (let attempt =1; attempt <= maxAttempts; attempt++) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         result = await prisma.$transaction(
           async (tx) => {
-            // Load schedule-blocking appointments for every possible technician
-            // For a specific technician this contains one ID; "any" may contain several
-            const existingAppointments = await tx.appointment.findMany({
+            // Reuse an existing customer when the phone number already exists.
+            const customer = await tx.customer.upsert({
               where: {
-                employeeId: {
-                  in: candidateEmployeeIds,
-                },
-                date: new Date(`${date}T00:00:00.000Z`),
-                status: {
-                  // These appointments still occupy the technician's schedule
-                  in: ["BOOKED", "REQUESTED", "CHECKED_IN", "IN_PROGRESS"],
-                },
+                phone: normalizedCustomerPhone,
+              },
+
+              update: {
+                // Keep customer details current when they book again.
+                name: normalizedCustomerName,
+                email: normalizedCustomerEmail || null,
+              },
+
+              create: {
+                name: normalizedCustomerName,
+                phone: normalizedCustomerPhone,
+                email: normalizedCustomerEmail || null,
               },
             });
 
-            // Convert a time such at "10:30" into minutes
+            // One Booking represents the customer's complete salon visit.
+            const booking = await tx.booking.create({
+              data: {
+                customerId: customer.id,
+                date: new Date(`${date}T00:00:00.000Z`),
+                notes: normalizedCustomerNotes || null,
+              },
+            });
+
+            // Convert a time such as "10:30" into minutes.
             function timeToMinutes(time: string) {
               const [hours, minutes] = time.split(":").map(Number);
 
               return hours * 60 + minutes;
             }
 
-            const requestedStart = timeToMinutes(startTime);
-            const requestedEnd = requestedStart + totalDuration;
+            // Convert minutes back into the HH:MM format stored by Appointment.
+            function minutesToTime(minutes: number) {
+              const hours = Math.floor(minutes / 60);
+              const mins = minutes % 60;
 
-            // Keep only technicians who are free for the entire requested appointment
-            const availableEmployeeIds = candidateEmployeeIds.filter(
-              (candidateEmployeeId) => {
-                // Check whether this appointment overlaps an existing appointment
-                const hasConflict = existingAppointments.some((appointment) => {
-                  if (appointment.employeeId !== candidateEmployeeId) {
-                    return false;
-                  }
-
-                  const existingStart = timeToMinutes(appointment.startTime);
-                  const existingEnd = existingStart + appointment.duration;
-                  
-                  return (
-                    requestedStart < existingEnd &&
-                    requestedEnd > existingStart
-                  );
-                });
-
-                return !hasConflict;
-              }
-            )
-
-            // The requested time is unavailable only when every candidate is busy
-            if (availableEmployeeIds.length === 0) {
-              throw new Error("BOOKING_CONFLICT");
+              return `${hours.toString().padStart(2, "0")}:${mins
+                .toString()
+                .padStart(2, "0")}`;
             }
 
-            // Balance "Any Technician" bookings by scheduled workload for the day
-            // A specifically selected technician always keeps the customer's choice
-            const assignedEmployeeId =
-              employeeId === "any"
-                ? availableEmployeeIds.reduce((bestEmployeeId, currentEmployeeId) => {
-                  const scheduledMinutes = (candidateId: number) =>
-                    existingAppointments
-                      .filter((appointment) => appointment.employeeId === candidateId)
-                      .reduce(
-                        (total, appointment) => total + appointment.duration,
-                        0
+            let blockStart = timeToMinutes(startTime);
+
+            const createdAppointments = [];
+
+            // Each service becomes its own technician work block.
+            // Customer bookings are scheduled sequentially for now.
+            for (const block of serviceBlocks) {
+              const blockEnd = blockStart + block.duration;
+
+              // Only technicians qualified for this specific service
+              // need to be checked for schedule conflicts.
+              const existingAppointments = await tx.appointment.findMany({
+                where: {
+                  employeeId: {
+                    in: block.qualifiedEmployeeIds,
+                  },
+                  date: new Date(`${date}T00:00:00.000Z`),
+                  status: {
+                    in: [
+                      "BOOKED",
+                      "REQUESTED",
+                      "CHECKED_IN",
+                      "IN_PROGRESS",
+                    ],
+                  },
+                },
+              });
+
+              // Keep only technicians who are free during this service block.
+              const availableEmployeeIds =
+                block.qualifiedEmployeeIds.filter((candidateEmployeeId) => {
+                  const hasConflict = existingAppointments.some(
+                    (appointment) => {
+                      if (
+                        appointment.employeeId !== candidateEmployeeId
+                      ) {
+                        return false;
+                      }
+
+                      const existingStart = timeToMinutes(
+                        appointment.startTime
                       );
-                      
-                        const bestMinutes = scheduledMinutes(bestEmployeeId);
-                        const currentMinutes = scheduledMinutes(currentEmployeeId);
+
+                      const existingEnd =
+                        existingStart + appointment.duration;
+
+                      return (
+                        blockStart < existingEnd &&
+                        blockEnd > existingStart
+                      );
+                    }
+                  );
+
+                  return !hasConflict;
+                });
+
+              // Respect a specific technician choice when one was requested.
+              const selectableEmployeeIds =
+                block.requestedEmployeeId === "any"
+                  ? availableEmployeeIds
+                  : availableEmployeeIds.filter(
+                      (employeeId) =>
+                        employeeId === block.requestedEmployeeId
+                    );
+
+              if (selectableEmployeeIds.length === 0) {
+                throw new Error("BOOKING_CONFLICT");
+              }
+
+              // "Any Technician" is balanced by scheduled workload.
+              // A specifically selected technician always keeps that choice.
+              const assignedEmployeeId =
+                block.requestedEmployeeId === "any"
+                  ? selectableEmployeeIds.reduce(
+                      (bestEmployeeId, currentEmployeeId) => {
+                        const scheduledMinutes = (candidateId: number) =>
+                          existingAppointments
+                            .filter(
+                              (appointment) =>
+                                appointment.employeeId === candidateId
+                            )
+                            .reduce(
+                              (total, appointment) =>
+                                total + appointment.duration,
+                              0
+                            );
+
+                        const bestMinutes =
+                          scheduledMinutes(bestEmployeeId);
+
+                        const currentMinutes =
+                          scheduledMinutes(currentEmployeeId);
 
                         if (currentMinutes < bestMinutes) {
                           return currentEmployeeId;
@@ -444,108 +617,106 @@ export async function POST(request: Request) {
                         }
 
                         return bestEmployeeId;
-                })
-                : availableEmployeeIds[0]
+                      }
+                    )
+                  : selectableEmployeeIds[0];
 
-            // Reuse an existing customer when the phone number already exists
-            const customer = await tx.customer.upsert({
-              where: {
-                phone: normalizedCustomerPhone,
-              },
+              // Approval applies to the individual service block.
+              // Example: nails may be BOOKED while lashes are REQUESTED.
+              const blockStatus = block.service.requiresApproval
+                ? "REQUESTED"
+                : "BOOKED";
 
-              update: {
-                // Keep customer details current when they book again
-                name: normalizedCustomerName,
-                email: normalizedCustomerEmail || null,
-              },
+              const appointment = await tx.appointment.create({
+                data: {
+                  bookingId: booking.id,
+                  customerId: customer.id,
+                  employeeId: assignedEmployeeId,
+                  date: new Date(`${date}T00:00:00.000Z`),
+                  startTime: minutesToTime(blockStart),
+                  duration: block.duration,
+                  status: blockStatus,
+                  notes: normalizedCustomerNotes || null,
 
-              create: {
-                name: normalizedCustomerName,
-                phone: normalizedCustomerPhone,
-                email: normalizedCustomerEmail || null,
-              },
-            });
+                  appointmentServices: {
+                    create: {
+                      serviceId: block.service.id,
+                      bookedPrice: block.service.price,
+                      bookedDuration:
+                        block.service.estimatedDuration,
+                    },
+                  },
 
-            // Create the appointment and permanent booking snapshots
-            const appointment = await tx.appointment.create({
-              data: {
-                customerId: customer.id,
-                employeeId: assignedEmployeeId,
-                date: new Date(`${date}T00:00:00.000Z`),
-                startTime,
-                duration: totalDuration,
-                status,
-                notes: normalizedCustomerNotes || null,
-
-                appointmentServices: {
-                  create: services.map((service) => ({
-                    serviceId: service.id,
-                bookedPrice: service.price,
-                bookedDuration: service.estimatedDuration,
-                  }))
+                  appointmentAddons: {
+                    create: block.addons.map((addon) => ({
+                      addonId: addon.id,
+                      bookedPrice: addon.price,
+                      bookedDuration: addon.estimatedDuration,
+                    })),
+                  },
                 },
 
-                appointmentAddons: {
-                  create: addons.map((addon) => ({
-                    addonId: addon.id,
-                    bookedPrice: addon.price,
-                    bookedDuration: addon.estimatedDuration,
-                  })),
+                include: {
+                  employee: true,
+                  appointmentServices: true,
+                  appointmentAddons: true,
                 },
-              },
+              });
 
-              include: {
-                customer: true,
-                employee: true,
-                appointmentServices: true,
-                appointmentAddons: true,
-              },
-            });
+              createdAppointments.push(appointment);
 
-            return appointment;
+              // The next service begins when this one finishes.
+              blockStart = blockEnd;
+            }
+
+            return {
+              booking,
+              customer,
+              appointments: createdAppointments,
+            };
           },
           {
-            // PostgreSQL prevents concurrent transactions from silently conflicting
+            // PostgreSQL prevents concurrent transactions from silently conflicting.
             isolationLevel: "Serializable",
           }
         );
 
-      // Transaction succeeded, so no retry is needed
-      break;
-    } catch (error) {
-      // A normal occupied-slot conflict should not be retired
-      if (
-        error instanceof Error &&
-        error.message === "BOOKING_CONFLICT"
-      ) {
-        throw error;
-      }
+        // Transaction succeeded, so no retry is needed.
+        break;
+      } catch (error) {
+        // A normal occupied-slot conflict should not be retried.
+        if (
+          error instanceof Error &&
+          error.message === "BOOKING_CONFLICT"
+        ) {
+          throw error;
+        }
 
-      // Prisma uses P2034 for transaction write/serialization conflicts
-      const isSerializableConflict =
-        typeof error === "object" &&
-        error !== null &&
-        "code" in error &&
-        error.code === "P2034"
+        // Prisma uses P2034 for transaction write/serialization conflicts.
+        const isSerializableConflict =
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "P2034";
 
         if (!isSerializableConflict) {
           throw error;
         }
 
-        // If all retry attempts were used, treat the slot as unavailable
+        // If all retry attempts were used, treat the slot as unavailable.
         if (attempt === maxAttempts) {
           throw new Error("BOOKING_CONFLICT");
         }
 
-        // Otherwise retry the entire availability check + booking transaction
+        // Otherwise retry the entire availability check + booking transaction.
       }
     }
 
     if (!result) {
-      throw new Error("Unable to complete booking transaction")
+      throw new Error("Unable to complete booking transaction");
     }
 
-    return Response.json(result, { status: 201 });
+    return Response.json(result, { status: 201 });    
 
   } catch (error) {
     // Return the normal booking conflict response to the customer

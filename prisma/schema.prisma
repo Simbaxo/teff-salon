@@ -114,12 +114,28 @@ model Customer {
   createdAt DateTime @default(now())
 
   appointments Appointment[]
+  bookings     Booking[]
+}
+
+// Represents one customer-facing salon visit.
+// A booking may contain multiple technician appointments.
+model Booking {
+  id         Int @id @default(autoincrement())
+  customerId Int
+
+  date      DateTime
+  notes     String?
+  createdAt DateTime @default(now())
+
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  appointments Appointment[]
 }
 
 model Appointment {
-  id         Int @id @default(autoincrement())
+  id         Int  @id @default(autoincrement())
   customerId Int
   employeeId Int
+  bookingId  Int?
 
   date      DateTime
   startTime String
@@ -135,6 +151,7 @@ model Appointment {
 
   customer Customer @relation(fields: [customerId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
+  booking  Booking? @relation(fields: [bookingId], references: [id])
 
   appointmentServices AppointmentService[]
   appointmentAddons   AppointmentAddon[]
