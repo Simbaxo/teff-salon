@@ -104,6 +104,8 @@ export default function BookPage() {
     const [servicesConfirmed, setServicesConfirmed] = useState(false);
     // Tracks when the customer has finished choosing optional add-ons
     const [addonsConfirmed, setAddonsConfirmed] = useState(false);
+    // Controls the separate technician, date, and time scheduling stage.
+    const [scheduleStarted, setScheduleStarted] = useState(false);
     const serviceCategories = [
         {
         id: "NAILS",
@@ -143,6 +145,10 @@ export default function BookPage() {
     // "any" lets the salon automatically assign an available qualified technician
     const [selectedEmployee, setSelectedEmployee] = 
         useState<number | "any" | null>(null);
+    // Stores the technician choice for each selected service
+    // This allows one booking to contain services from different specialists
+    const [selectedEmployeesByService, setSelectedEmployeesByService] =
+        useState<Record<number, number | "any">>({});
     const [selectedDate, setSelectedDate] = useState(
         getTeffToday()
     );
@@ -299,6 +305,68 @@ export default function BookPage() {
         )
     );
 
+    // Find the technicians qualified for each individual selected service
+    // This supports bookings that may require different specialist
+    const serviceAssignments = selectedServiceDetails.map((service) => {
+        const qualifiedForService = employees.filter((employee) => 
+            employeeServices.some(
+                (relation) =>
+                    relation.employeeId === employee.id &&
+                    relation.serviceId === service.id
+            )
+        );
+
+        return {
+            service,
+            qualifiedEmployees: qualifiedForService,
+        };
+    });
+
+    useEffect(() => {
+        setSelectedEmployeesByService((current) => {
+            const next: Record<number, number | "any"> = {};
+
+            for (const assignment of serviceAssignments) {
+                const serviceId = assignment.service.id;
+                const qualified = assignment.qualifiedEmployees;
+
+                // If only one technician can perform this service
+                // assign them automatically
+                if (qualified.length === 1) {
+                    next[serviceId] = qualified[0].id
+                    continue;
+                }
+
+                // Preserve an existing valid technician choice
+                const currentChoice = current[serviceId];
+
+                if (
+                    typeof currentChoice === "number" &&
+                    qualified.some((employee) => employee.id === currentChoice)
+                ) {
+                    next[serviceId] = currentChoice;
+                    continue;
+                }
+
+                // Multiple qualified technicians default to Any Technician
+                if (qualified.length > 1) {
+                    next[serviceId] = "any";
+                }
+            }
+
+            return next;
+        });
+    }, [selectedServices, employees, employeeServices]);
+
+    // Every selected service must have a technician choice before scheduling
+    const allServicesHaveTechnicians =
+        serviceAssignments.length > 0 &&
+        serviceAssignments.every(
+            ({ service, qualifiedEmployees }) =>
+                qualifiedEmployees.length > 0 &&
+                selectedEmployeesByService[service.id] !== undefined
+        );
+
     useEffect(() => {
         // No technician can perform the current service combination
         if (qualifiedEmployees.length === 0) {
@@ -361,6 +429,16 @@ export default function BookPage() {
         return hours * 60 + minutes;
     }
 
+    // Convert stored 24-hour time into a customer-friendly AM/P display
+    function formatTime(time: string) {
+        const [hours, minutes] = time.split(":").map(Number);
+
+        const period = hours >= 12 ? "PM" : "AM";
+        const displayHour = hours % 12 || 12;
+
+        return `${displayHour}:${minutes.toString().padStart(2, "0")} ${period}`;
+    }
+
     const timeSlots = getTimeSlots(selectedDate);
 
     // Get the weekday without depending on the browser's timezone.
@@ -374,55 +452,79 @@ export default function BookPage() {
             : 18 * 60 + 30; // Monday-Saturday: 18:30
 
     const availableTimeSlots = timeSlots.filter((time) => {
-        const startTime = timeToMinutes(time);
-        const endTime = startTime + totalDuration;
+        const bookingStart = timeToMinutes(time);
+        const bookingEnd = bookingStart + totalDuration;
 
-        // Hide time slots that have already passed today in Medellin.
+        // Hide time slots that have already passed today in Medellin
         if (
             selectedDate === getTeffToday() &&
-            startTime <= getTeffCurrentMinutes()
+            bookingStart <= getTeffCurrentMinutes()
         ) {
             return false;
         }
 
-        // Hide slots where the service would run past closing
-        if (endTime > closingTime) {
+        // The complete sequence must finish before the salon closes
+        if (bookingEnd > closingTime) {
             return false;
         }
 
-        // Check whether one technician is free for eht entire requested time
-        const isEmployeeAvailable = (employeeId: number) => {
-            const hasConflict = bookedAppointments.some((appointment) => {
-                if (
-                    appointment.employeeId !== selectedEmployee ||
-                    appointment.date.slice(0, 10) !== selectedDate
-                ) {
-                    return false;
-                }
+        let serviceStart = bookingStart;
 
-                const bookedStart = timeToMinutes(appointment.startTime);
-                const bookedEnd = bookedStart + appointment.duration;
+        // Every service must have an available qualified technician
+        // during its own sequential part of the booking
+        for (const assignment of serviceAssignments) {
+            const service = assignment.service;
+            const serviceEnd =
+                serviceStart + service.estimatedDuration;
 
-                return startTime < bookedEnd && endTime > bookedStart;
-        });
+            const selectedForService =
+                selectedEmployeesByService[service.id];
+            
+            const isEmployeeAvailable = (employeeId: number) => {
+                const hasConflict = bookedAppointments.some((appointment) => {
+                    if (
+                        appointment.employeeId !== employeeId ||
+                        appointment.date.slice(0, 10) !== selectedDate
+                    ) {
+                        return false;
+                    }
 
-        return !hasConflict;
-    };
+                    const bookedStart =
+                        timeToMinutes(appointment.startTime);
+                    const bookedEnd =
+                        bookedStart + appointment.duration;
 
-    // "Any Technician" only needs one qualified technician to be free
-    // A named technician must personally be available
-    if (selectedEmployee === "any") {
-        return qualifiedEmployees.some((employee) =>
-            isEmployeeAvailable(employee.id)
-        );
-    }
+                    return (
+                        serviceStart < bookedEnd &&
+                        serviceEnd > bookedStart
+                    );
+                });
 
-    if (typeof selectedEmployee === "number") {
-        return isEmployeeAvailable(selectedEmployee);
-    }
+                return !hasConflict;
+            }
 
-    return false;
-    });
+            let hasAvailableTechnician = false;
+
+            if (selectedForService === "any") {
+                hasAvailableTechnician =
+                    assignment.qualifiedEmployees.some((employee) =>
+                        isEmployeeAvailable(employee.id)
+                    );
+            } else if (typeof selectedForService === "number") {
+                hasAvailableTechnician =
+                    isEmployeeAvailable(selectedForService);
+            }
+
+            if (!hasAvailableTechnician) {
+                return false;
+            }
+
+            // The next service begins when this service finishes
+            serviceStart = serviceEnd;
+        }
+
+        return true;
+    })
 
     // Find The Selected Technician Details
     const selectedEmployeeDetails = employees.find(
@@ -433,6 +535,12 @@ export default function BookPage() {
     const displayCustomerPhone = customerPhone.trim().startsWith("+")
         ? customerPhone
         : `${countryCode} ${customerPhone}`;
+
+    // The scheduling stage begin after add-on are completed
+    // or immediately when selected services have no add-ons
+    const isScheduleStage =
+        servicesConfirmed &&
+        (scheduleStarted || availableAddons.length === 0);
 
     // Confirm Booking Details
     async function handleConfirmBooking() {
@@ -609,7 +717,7 @@ export default function BookPage() {
                     )}
 
                     {/* Appointment Configuration */}
-                    {servicesConfirmed && (
+                    {servicesConfirmed && !scheduleStarted && (
                         <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
                             <div className="flex items-start justify-between gap-4">
                                 <div>
@@ -635,6 +743,7 @@ export default function BookPage() {
                                     onClick={() => {
                                         setServicesConfirmed(false);
                                         setAddonsConfirmed(false);
+                                        setScheduleStarted(false);
                                     }}
                                     className="text-sm font-semibold text-black underline underline-offset-4"
                                 >
@@ -665,7 +774,9 @@ export default function BookPage() {
                     </div>
                 )}
 
-                    {servicesConfirmed && availableAddons.length > 0 && (
+                    {servicesConfirmed && 
+                        !scheduleStarted &&
+                        availableAddons.length > 0 && (
                         <div className="mt-8">
                             <h2 className="text-xl font-semibold text-black">
                                 {language === "es" ? "Complementos" : "Add-ons"}
@@ -705,7 +816,10 @@ export default function BookPage() {
                             </div>
 
                             <button
-                                onClick={() => setAddonsConfirmed(true)}
+                                onClick={() => {
+                                    setAddonsConfirmed(true);
+                                    setScheduleStarted(true);
+                                }}
                                 className="mt-5 w-full rounded-xl bg-black px-6 py-3 font-semibold text-white"
                             >
                                 {language === "es"
@@ -720,60 +834,136 @@ export default function BookPage() {
                         </div>
                     )}
 
+                    {/* Schedule Stage */}
+                    {isScheduleStage &&
+                        (scheduleStarted || availableAddons.length === 0) && (
+                            <div className="mt-8">
+                                <button
+                                    onClick={() => {
+                                        setScheduleStarted(false);
+                                        setAddonsConfirmed(false)
+                                    }}
+                                    className="text-sm font-medium text-neutral-600 hover:text-black"
+                                >
+                                    ← {language === "es" ? "Volver" : "Back"}
+                                </button>
+
+                                <p className="mt-6 text-sm font-medium uppercase tracking-wide text-neutral-500">
+                                    {language === "es" ? "Agenda" : "Schedule"}
+                                </p>
+
+                                <h2 className="mt-1 text-2xl font-semibold text-black">
+                                    {language === "es"
+                                        ? "Programa Tu Cita"
+                                        : "Schedule Your Appointment"}
+                                </h2>
+                            </div>
+                        )}
+
                     {/* Render Technician Options */}
-                    {servicesConfirmed &&
-                        (availableAddons.length === 0 || addonsConfirmed) &&
-                        qualifiedEmployees.length > 0 && (
+                    {isScheduleStage && (
                         <div className="mt-8">
                             <h2 className="text-xl font-semibold text-black">
-                                {language === "es" ? "Elige tu técnica" : "Choose your technician"}
+                                {language === "es"
+                                ? "Técnicas para tus servicios"
+                                : "Technicians for your services"}
                             </h2>
 
-                            <div className="mt-4 space-y-3">
-                                <button
-                                    onClick={() => setSelectedEmployee("any")}
-                                    className={`w-full rounded-xl border p-4 text-left ${
-                                    selectedEmployee === "any"
-                                        ? "border-black bg-neutral-200"
-                                        : "border-neutral-200 bg-white"
-                                    }`}
-                                >
-                                    <span className="font-semibold text-black">
-                                        {language === "es"
-                                            ? "Cualquier técnica — Recomendado"
-                                            : "Any Technician — Recommended"}
-                                    </span>
+                            <p className="mt-1 text-sm text-neutral-500">
+                                {language === "es"
+                                    ? "Puedes elegir una técnica para cada servicio."
+                                    : "You can choose a technician for each service."}
+                            </p>
 
-                                    <p className="mt-1 text-sm text-neutral-500">
-                                        {language === "es"
-                                            ? "Te asignaremos una técnica disponible para tu cita."
-                                            : "We'll assign an available technician for your appointment."}
-                                    </p>
-                                </button>
-                                
-                                {qualifiedEmployees.map((employee) => (
-                                    <button
-                                        key={employee.id}
-                                        onClick={() => setSelectedEmployee(employee.id)}
-                                        className={`w-full rounded-xl border p-4 text-left ${
-                                            selectedEmployee === employee.id
-                                                ? "border-black bg-neutral-200"
-                                                : "border-neutral-200 bg-white"
-                                        }`}
-                                    >
-                                        <span className="font-semibold text-black">
-                                            {employee.name}
-                                        </span>
-                                    </button>
-                                ))}
+                            <div className="mt-5 space-y-6">
+                                {serviceAssignments.map(({ service, qualifiedEmployees }) => {
+                                    const selectedForService =
+                                        selectedEmployeesByService[service.id]
+
+                                    return (
+                                        <div
+                                            key={service.id}
+                                            className="rounded-xl border border-neutral-200 bg-white p-4"
+                                        >
+                                            <h3 className="font-semibold text-black">
+                                                {language === "es"
+                                                    ? service.nameEs
+                                                    : service.nameEn}
+                                            </h3>
+
+                                            {qualifiedEmployees.length === 0 ? (
+                                                <p className="mt-3 text-sm text-red-600">
+                                                    {language === "es"
+                                                        ? "No hay una técnica disponible para este servicio."
+                                                        : "No technician is available for this service."}
+                                                </p>
+                                            ) : qualifiedEmployees.length === 1 ? (
+                                                <p className="mt-3 text-sm text-neutral-600">
+                                                    {language === "es"
+                                                        ? `Asignada: ${qualifiedEmployees[0].name}`
+                                                        : `Assigned: ${qualifiedEmployees[0].name}`}
+                                                </p>
+                                            ) : (
+                                                <div className="mt-3 space-y-3">
+                                                    <button
+                                                        onClick={() =>
+                                                            setSelectedEmployeesByService(
+                                                                (current) => ({
+                                                                    ...current,
+                                                                    [service.id]: "any",
+                                                                })
+                                                            )
+                                                        }
+                                                        className={`w-full rounded-xl border p-4 text-left ${
+                                                            selectedForService === "any"
+                                                                ? "border-black bg-neutral-200"
+                                                                : "border-neutral-200 bg-white"
+                                                        }`}
+                                                    >
+                                                        <span className="font-semibold text-black">
+                                                            {language === "es"
+                                                            ? "Cualquier Técnica — Recomendado"
+                                                            : "Any Technician — Recommended"}
+                                                        </span>
+                                                    </button>
+
+                                                    {qualifiedEmployees.map((employee) => (
+                                                        <button
+                                                            key={employee.id}
+                                                            onClick={() =>
+                                                               setSelectedEmployeesByService(
+                                                                (current) => ({
+                                                                    ...current,
+                                                                    [service.id]: employee.id,
+                                                                })
+                                                               ) 
+                                                            }
+                                                            className={`w-full rounded-xl border p-4 text-left ${
+                                                                selectedForService === employee.id
+                                                                    ? "border-black bg-neutral-200"
+                                                                    : "border-neutral-200 bg-white"
+                                                            }`}
+                                                        >
+                                                            <span className="font-semibold text-black">
+                                                                {employee.name}
+                                                            </span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )
+                                        }
+                                        </div>
+                                    )
+                                })}
                             </div>
+
                         </div>
                     )}
 
                     {/* Date Selector */}
-                    {servicesConfirmed &&
-                        (availableAddons.length === 0 || addonsConfirmed) &&
-                        selectedEmployee !== null && (
+                    {isScheduleStage &&
+                        (scheduleStarted || availableAddons.length === 0) &&
+                        allServicesHaveTechnicians && (
                         <div className="mt-8">
                             <h2 className="text-xl font-semibold text-black">
                                 {language === "es" ? "Elige una fecha" : "Choose a date"}
@@ -789,9 +979,9 @@ export default function BookPage() {
                     )}
 
                     {/* Temporary Available Time Slots */}
-                    {servicesConfirmed &&
+                    {isScheduleStage &&
                         (availableAddons.length === 0 || addonsConfirmed) &&
-                        selectedEmployee &&
+                        allServicesHaveTechnicians &&
                         selectedDate && (
                         <div className="mt-8">
                             <h2 className="text-xl font-semibold text-black">
@@ -809,7 +999,7 @@ export default function BookPage() {
                                                 : "border-neutral-300 bg-white text-black"
                                         }`}
                                     >
-                                        {time}
+                                        {formatTime(time)}
                                     </button>
                                     ))}
                             </div>
