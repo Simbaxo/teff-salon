@@ -406,6 +406,21 @@ export async function POST(request: Request) {
       };
     });
 
+    // Find technicians who are qualified for every selected nail service.
+    // This keeps "Any Technician" from assigning different nail specialists.
+    const nailBlocks = serviceBlocks.filter(
+      (block) => block.service.category === "NAILS"
+    );
+
+    const commonNailEmployeeIds: number[] =
+      nailBlocks.length > 0
+        ? nailBlocks[0].qualifiedEmployeeIds.filter((employeeId) =>
+            nailBlocks.every((block) =>
+              block.qualifiedEmployeeIds.includes(employeeId)
+            )
+          )
+        : [];
+
     // The customer-facing visit is currently scheduled sequentially,
     // so its total duration is the sum of all service work blocks.
     const totalDuration = serviceBlocks.reduce(
@@ -516,6 +531,11 @@ export async function POST(request: Request) {
 
             const createdAppointments = [];
 
+            // When the customer chooses "Any Technician" for multiple nail services,
+            // resolve the first nail block normally and keep that same technician
+            // for the remaining nail services in this booking.
+            let resolvedNailEmployeeId: number | null = null;
+
             // Each service becomes its own technician work block.
             // Customer bookings are scheduled sequentially for now.
             for (const block of serviceBlocks) {
@@ -568,13 +588,28 @@ export async function POST(request: Request) {
                   return !hasConflict;
                 });
 
+              const isNailService = block.service.category === "NAILS";
+
               // Respect a specific technician choice when one was requested.
-              const selectableEmployeeIds =
+              const selectableEmployeeIds: number[] =
                 block.requestedEmployeeId === "any"
-                  ? availableEmployeeIds
+                  ? isNailService
+                    ? resolvedNailEmployeeId !== null
+                      // After choosing the nail tech, keep that same tech for later nail blocks.
+                      ? availableEmployeeIds.filter(
+                          (candidateEmployeeId: number) =>
+                            candidateEmployeeId === resolvedNailEmployeeId
+                        )
+                      // For the first nail block, only consider techs qualified
+                      // for every nail service in this booking.
+                      : availableEmployeeIds.filter(
+                          (candidateEmployeeId: number) =>
+                            commonNailEmployeeIds.includes(candidateEmployeeId)
+                        )
+                    : availableEmployeeIds
                   : availableEmployeeIds.filter(
-                      (employeeId) =>
-                        employeeId === block.requestedEmployeeId
+                      (candidateEmployeeId: number) =>
+                        candidateEmployeeId === block.requestedEmployeeId
                     );
 
               if (selectableEmployeeIds.length === 0) {
@@ -583,10 +618,10 @@ export async function POST(request: Request) {
 
               // "Any Technician" is balanced by scheduled workload.
               // A specifically selected technician always keeps that choice.
-              const assignedEmployeeId =
+              const assignedEmployeeId: number =
                 block.requestedEmployeeId === "any"
                   ? selectableEmployeeIds.reduce(
-                      (bestEmployeeId, currentEmployeeId) => {
+                      (bestEmployeeId: number, currentEmployeeId: number) => {
                         const scheduledMinutes = (candidateId: number) =>
                           existingAppointments
                             .filter(
@@ -620,6 +655,16 @@ export async function POST(request: Request) {
                       }
                     )
                   : selectableEmployeeIds[0];
+
+              // Once "Any Technician" resolves for the first nail service,
+              // keep that technician for the rest of this booking's nail services
+              if (
+                isNailService &&
+                block.requestedEmployeeId === "any" &&
+                resolvedNailEmployeeId === null
+              ) {
+                resolvedNailEmployeeId = assignedEmployeeId;
+              }
 
               // Approval applies to the individual service block.
               // Example: nails may be BOOKED while lashes are REQUESTED.

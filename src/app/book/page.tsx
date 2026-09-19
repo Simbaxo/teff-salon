@@ -534,6 +534,13 @@ export default function BookPage() {
         return `${displayHour}:${minutes.toString().padStart(2, "0")} ${period}`;
     }
 
+    // Display customer-facing dates in Colombian DD-MM-YYYY format
+    function formatDate(date: string) {
+        const [year, month, day] = date.split("-");
+
+        return `${day}-${month}-${year}`;
+    }
+
     const timeSlots = getTimeSlots(selectedDate);
 
     // Get the weekday without depending on the browser's timezone.
@@ -1208,6 +1215,8 @@ export default function BookPage() {
                                         );
                                     })}
                             </div>
+                        </div>
+                    )}
 
                     {/* Date Selector */}
                     {isScheduleStage &&
@@ -1405,7 +1414,7 @@ export default function BookPage() {
                                     </p>
 
                                     <p className="font-semibold text-black">
-                                        {selectedDate} · {formatTime(selectedTime)}
+                                        {formatDate(selectedDate)} · {formatTime(selectedTime)}
                                     </p>
                                 </div>
 
