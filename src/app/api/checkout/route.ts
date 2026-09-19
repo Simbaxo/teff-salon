@@ -29,6 +29,7 @@ export async function POST(request: Request) {
 
         const {
             appointmentId,
+            appointmentIds,
             serviceIds,
             addonIds,
             discountTotal,
@@ -40,6 +41,8 @@ export async function POST(request: Request) {
         // Make sure the checkout contains the basic required information
         if (
             !appointmentId ||
+            !Array.isArray(appointmentIds) ||
+            appointmentIds.length === 0 ||
             !Array.isArray(serviceIds) ||
             serviceIds.length === 0 ||
             !Array.isArray(addonIds) ||
@@ -47,6 +50,24 @@ export async function POST(request: Request) {
         ) {
             return Response.json(
                 { error: "Invalid checkout information"},
+                { status: 400 }
+            );
+        }
+
+        const uniqueAppointmentIds = [
+            ...new Set<number>(appointmentIds),
+        ];
+
+        const hasInvalidAppointmentIds =
+            uniqueAppointmentIds.some(
+                (id: unknown) =>
+                    !Number.isInteger(id) ||
+                    (id as number) <= 0
+            );
+
+        if (hasInvalidAppointmentIds) {
+            return Response.json(
+                { error: "Invalid appointment IDs" },
                 { status: 400 }
             );
         }
@@ -100,15 +121,17 @@ export async function POST(request: Request) {
             );
         }
 
-        // Load the appointment and the technician assigned to it
-        const appointment = await prisma.appointment.findUnique({
+        // Load every appointment block submitted for this customer visit.
+        // Technician ownership is read from the database, never trusted from the browser.
+        const visitAppointments = await prisma.appointment.findMany({
             where: {
-                id: Number(appointmentId),
+                id: {
+                    in: uniqueAppointmentIds,
+                },
             },
             include: {
                 employee: true,
 
-                // Load the original booking snapshots so we can honor booked prices
                 appointmentServices: {
                     select: {
                         serviceId: true,
@@ -125,28 +148,68 @@ export async function POST(request: Request) {
             },
         });
 
-        // Stop checkout if the appointment does not exist
-        if (!appointment) {
+        // Every submitted appointment ID must exist.
+        if (visitAppointments.length !== uniqueAppointmentIds.length) {
             return Response.json(
-                { error: "Appointment not found" },
+                { error: "One or more appointments were not found" },
                 { status: 404 }
             );
         }
 
-        // Remember the prices the customer was originally quoted
-        const bookedServicePrices = new Map(
-            appointment.appointmentServices.map((item) => [
-                item.serviceId,
-                item.bookedPrice,
-            ])
+        // Use the appointment that opened checkout as the visit anchor.
+        const appointment = visitAppointments.find(
+            (item) => item.id === Number(appointmentId)
         );
 
-        const bookedAddonPrices = new Map(
-            appointment.appointmentAddons.map((item) => [
-                item.addonId,
-                item.bookedPrice,
-            ])
-        )
+        if (!appointment) {
+            return Response.json(
+                { error: "Checkout appointment is not part of this visit" },
+                { status: 400 }
+            );
+        }
+
+        // New multi-service bookings must all belong to the same Booking.
+        // Legacy appointments without a booking may only checkout individually.
+        const submittedBookingIds = new Set(
+            visitAppointments.map((item) => item.bookingId)
+        );
+
+        const appointmentsBelongToSameVisit =
+            appointment.bookingId !== null
+                ? submittedBookingIds.size === 1 &&
+                submittedBookingIds.has(appointment.bookingId)
+                : visitAppointments.length === 1;
+
+        if (!appointmentsBelongToSameVisit) {
+            return Response.json(
+                { error: "Appointments do not belong to the same customer visit" },
+                { status: 400 }
+            );
+        }
+
+        // Remember the original booked service prices across the complete visit.
+        const bookedServicePrices = new Map<number, number>();
+
+        for (const visitAppointment of visitAppointments) {
+            for (const item of visitAppointment.appointmentServices) {
+                bookedServicePrices.set(
+                    item.serviceId,
+                    item.bookedPrice
+                );
+            }
+        }
+
+        // Remember the original booked add-on prices across the complete visit.
+        const bookedAddonPrices = new Map<number, number>();
+
+        for (const visitAppointment of visitAppointments) {
+            for (const item of visitAppointment.appointmentAddons) {
+                bookedAddonPrices.set(
+                    item.addonId,
+                    item.bookedPrice
+                );
+            }
+        }
 
         // Load all selected services, including inactive ones.
         // Previously booked services must still be honored at checkout
@@ -221,30 +284,44 @@ export async function POST(request: Request) {
             );
         }
 
-        // Load the services this technician is qualified to perform
-        const employeeServices = await prisma.employeeService.findMany({
-            where: {
-                employeeId: appointment.employeeId,
-            },
-        });
+        // Services added during checkout must be performable by at least one
+        // technician already working on this customer visit.
+        const visitEmployeeIds = [
+            ...new Set(
+                visitAppointments.map(
+                    (visitAppointment) => visitAppointment.employeeId
+                )
+            ),
+        ];
 
-        const employeeServiceIds = new Set(
-            employeeServices.map((item) => item.serviceId)
-        );
+        const visitEmployeeServices =
+            await prisma.employeeService.findMany({
+                where: {
+                    employeeId: {
+                        in: visitEmployeeIds,
+                    },
+                },
+            });
 
-        // Only newly added services must match the technician's current qualifications
+        // Only newly added services need current qualification validation.
+        // Originally booked services already belong to their appointment block.
         const newServiceIds = uniqueServiceIds.filter(
             (serviceId) => !bookedServicePrices.has(serviceId)
-        )
+        );
 
-        // Make sure the assigned technician can perform every selected service
         const hasUnsupportedService = newServiceIds.some(
-            (serviceId: number) => !employeeServiceIds.has(serviceId)
+            (serviceId: number) =>
+                !visitEmployeeServices.some(
+                    (relation) => relation.serviceId === serviceId
+                )
         );
 
         if (hasUnsupportedService) {
             return Response.json(
-                { error: "Technician is not qualified for one or more services" },
+                {
+                    error:
+                        "No technician on this visit is qualified for one or more added services",
+                },
                 { status: 400 }
             );
         }
@@ -310,6 +387,88 @@ export async function POST(request: Request) {
             );
         }
 
+        // Calculate the booked revenue belonging to each appointment block.
+        // This preserves which technician actually performed each service.
+        const appointmentRevenue = visitAppointments.map(
+            (visitAppointment) => {
+                const serviceRevenue =
+                    visitAppointment.appointmentServices.reduce(
+                        (total, item) => {
+                            // Only include services that remain in the final checkout.
+                            if (!uniqueServiceIds.includes(item.serviceId)) {
+                                return total;
+                            }
+
+                            return total + item.bookedPrice;
+                        },
+                        0
+                    );
+
+                const addonRevenue =
+                    visitAppointment.appointmentAddons.reduce(
+                        (total, item) => {
+                            // Only include add-ons that remain in the final checkout.
+                            if (!uniqueAddonIds.includes(item.addonId)) {
+                                return total;
+                            }
+
+                            return total + item.bookedPrice;
+                        },
+                        0
+                    );
+
+                return {
+                    appointmentId: visitAppointment.id,
+                    employeeId: visitAppointment.employeeId,
+                    revenue: serviceRevenue + addonRevenue,
+                };
+            }
+        );
+
+        // Revenue already attached to appointment blocks.
+        // Newly added checkout items are handled separately before production use.
+        const attributedRevenueTotal = appointmentRevenue.reduce(
+            (total, item) => total + item.revenue,
+            0
+        );
+
+        // Allocate the sale-level discount proportionally across appointment blocks.
+        // The final block receives any rounding remainder so totals stay exact.
+        let remainingDiscount = discountTotal;
+
+        const appointmentCommissionBases = appointmentRevenue.map(
+            (item, index) => {
+                let allocatedDiscount = 0;
+
+                if (discountTotal > 0 && attributedRevenueTotal > 0) {
+                    const isLastItem =
+                        index === appointmentRevenue.length - 1;
+
+                    allocatedDiscount = isLastItem
+                        ? remainingDiscount
+                        : Math.round(
+                            discountTotal *
+                                (item.revenue / attributedRevenueTotal)
+                        );
+
+                    allocatedDiscount = Math.min(
+                        allocatedDiscount,
+                        remainingDiscount,
+                        item.revenue
+                    );
+
+                    remainingDiscount -= allocatedDiscount;
+                }
+
+                return {
+                    appointmentId: item.appointmentId,
+                    employeeId: item.employeeId,
+                    commissionBase:
+                        item.revenue - allocatedDiscount,
+                };
+            }
+        );
+
         // Add all submitted payment amounts together
         const paymentTotal = payments.reduce(
             (
@@ -341,32 +500,65 @@ export async function POST(request: Request) {
                 payment.amount > 0
         );
 
-        // The technician's commission is based on the final discounted amount
-        const commissionBase = finalTotal;
-
-        // Temporary default until commission rates are stored per employee
+        // Temporary default until commission rates are stored per employee.
         const commissionRate = 50;
 
-        // Calculate the technician's commission in whole COP
-        const commissionAmount = Math.round(
-            commissionBase * (commissionRate /100)
+        // Combine appointment-level commission bases when the same technician
+        // performed more than one service block in the customer visit.
+        const commissionByEmployee = new Map<number, number>();
+
+        for (const item of appointmentCommissionBases) {
+            if (item.commissionBase <= 0) {
+                continue;
+            }
+
+            const currentBase =
+                commissionByEmployee.get(item.employeeId) ?? 0;
+
+            commissionByEmployee.set(
+                item.employeeId,
+                currentBase + item.commissionBase
+            );
+        }
+
+        const commissionsToCreate = Array.from(
+            commissionByEmployee.entries()
+        ).map(([employeeId, commissionBase]) => ({
+            employeeId,
+            commissionBase,
+            commissionRate,
+            commissionAmount: Math.round(
+                commissionBase * (commissionRate / 100)
+            ),
+        }));
+
+        // Prevent any appointment block in this visit from being sold twice.
+        const hasCompletedAppointment = visitAppointments.some(
+            (visitAppointment) =>
+                visitAppointment.status === "COMPLETED"
         );
 
-        // Prevent a completed appointment from being sold again
-        if (appointment.status === "COMPLETED") {
+        if (hasCompletedAppointment) {
             return Response.json(
-                { error: "Appointment has already been completed" },
+                { error: "Customer visit has already been completed" },
                 { status: 409 }
             );
         }
 
-        // Only active appointments can continue to checkout
-        if (
-            appointment.status !== "IN_PROGRESS" &&
-            appointment.status !== "CHECKED_IN"
-        ) {
+        // Every appointment block in the visit must be ready for checkout.
+        // This prevents charging services that have not yet been performed.
+        const allAppointmentsReady = visitAppointments.every(
+            (visitAppointment) =>
+                visitAppointment.status === "IN_PROGRESS" ||
+                visitAppointment.status === "CHECKED_IN"
+        );
+
+        if (!allAppointmentsReady) {
             return Response.json(
-                { error: "Appointment is not ready for checkout" },
+                {
+                    error:
+                        "All services in this customer visit must be ready before checkout",
+                },
                 { status: 400 }
             );
         }
@@ -406,12 +598,12 @@ export async function POST(request: Request) {
                 ],
             });
 
-            // Connect this appointment to the sale
-            await tx.saleAppointment.create({
-                data: {
+            // Connect every appointment block in this customer visit to the sale.
+            await tx.saleAppointment.createMany({
+                data: visitAppointments.map((visitAppointment) => ({
                     saleId: newSale.id,
-                    appointmentId: appointment.id,
-                },
+                    appointmentId: visitAppointment.id,
+                })),
             });
 
             // Save each payment method that actually received money
@@ -426,17 +618,19 @@ export async function POST(request: Request) {
                 ),
             });
 
-            // Record what TEFF owes the technician for this sale
-            await tx.commission.create({
-                data: {
-                    saleId: newSale.id,
-                    employeeId: appointment.employeeId,
-                    commissionBase,
-                    commissionRate,
-                    commissionAmount,
-                    status: "PENDING",
-                },
-            });
+            // Record what TEFF owes each technician who worked on this visit.
+            if (commissionsToCreate.length > 0) {
+                await tx.commission.createMany({
+                    data: commissionsToCreate.map((commission) => ({
+                        saleId: newSale.id,
+                        employeeId: commission.employeeId,
+                        commissionBase: commission.commissionBase,
+                        commissionRate: commission.commissionRate,
+                        commissionAmount: commission.commissionAmount,
+                        status: "PENDING",
+                    })),
+                });
+            }
 
             // Save the tip only when the customer actually leaves one
             if (tipAmount > 0) {
@@ -456,10 +650,13 @@ export async function POST(request: Request) {
                 });
             }
 
-            // Only mark the appointment complete after the sale is recorded
-            await tx.appointment.update({
+            // Only complete the entire customer visit after the sale,
+            // payments, and commissions have been recorded successfully.
+            await tx.appointment.updateMany({
                 where: {
-                    id: appointment.id,
+                    id: {
+                        in: uniqueAppointmentIds,
+                    },
                 },
                 data: {
                     status: "COMPLETED",
@@ -476,7 +673,11 @@ export async function POST(request: Request) {
                 success: true,
                 saleId: sale.id,
                 finalTotal: sale.finalTotal,
-                commissionAmount,
+                commissionAmount: commissionsToCreate.reduce(
+                    (total, commission) =>
+                        total + commission.commissionAmount,
+                    0
+                ),
             },
             { status: 201 }
         );

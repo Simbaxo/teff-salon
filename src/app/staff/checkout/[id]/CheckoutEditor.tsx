@@ -40,11 +40,23 @@ type CheckoutAddon = {
     };
 };
 
+type CheckoutVisitAppointment = {
+    id: number;
+    employeeId: number;
+
+    employee: {
+        id: number;
+        name: string;
+    };
+
+    appointmentServices: CheckoutService[];
+    appointmentAddons: CheckoutAddon[];
+};
+
 type CheckoutEditorProps = {
     appointmentId: number;
-    services: CheckoutService[];
-    addons: CheckoutAddon[];
-}
+    visitAppointments: CheckoutVisitAppointment[];
+};
 
 // Payment methods currently accepted by TEFF
 type PaymentMethod = "CASH" | "BOLD" | "TRANSFER";
@@ -58,14 +70,26 @@ type CompletedSale = {
 
 export default function CheckoutEditor({
     appointmentId,
-    services,
-    addons,
+    visitAppointments,
 }: CheckoutEditorProps) {
     const [isEditing, setIsEditing] = useState(false);
-    // Keep track of the services that will actually be charged
-    const [selectedServices, setSelectedServices] = useState(services);
-    // Keep track of the add-ons that will actually be charged
-    const [selectedAddons, setSelectedAddons] = useState(addons);
+    // Start checkout with every service from the complete customer visit.
+    const [selectedServices, setSelectedServices] =
+        useState<CheckoutService[]>(
+            visitAppointments.flatMap(
+                (visitAppointment) =>
+                    visitAppointment.appointmentServices
+            )
+        );
+
+    // Start checkout with every add-on from the complete customer visit.
+    const [selectedAddons, setSelectedAddons] =
+        useState<CheckoutAddon[]>(
+            visitAppointments.flatMap(
+                (visitAppointment) =>
+                    visitAppointment.appointmentAddons
+            )
+        );
     // Full active service menu used when staff needs to add something
     const [availableServices, setAvailableServices] = useState<AvailableService[]>(
         []
@@ -277,6 +301,11 @@ export default function CheckoutEditor({
                     },
                     body: JSON.stringify({
                         appointmentId,
+
+                        // Every appointment block belonging to this customer visit
+                        appointmentIds: visitAppointments.map(
+                            (visitAppointment) => visitAppointment.id
+                        ),
                         serviceIds: selectedServices.map(
                             (item) => item.service.id    
                         ),

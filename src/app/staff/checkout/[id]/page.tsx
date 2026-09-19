@@ -43,6 +43,31 @@ export default async function CheckoutPage({
                     addon: true,
                 },
             },
+
+            // When this appointment belongs to a multi-service booking,
+            // load every appointment block from the same customer visit.
+            booking: {
+                include: {
+                    appointments: {
+                        include: {
+                            employee: true,
+                            appointmentServices: {
+                                include: {
+                                    service: true,
+                                },
+                            },
+                            appointmentAddons: {
+                                include: {
+                                    addon: true,
+                                },
+                            },
+                        },
+                        orderBy: {
+                            startTime: "asc",
+                        },
+                    },
+                },
+            },
         },
     });
 
@@ -59,8 +84,17 @@ export default async function CheckoutPage({
         )
     }
 
+    // New bookings may contain multiple technician appointment blocks.
+    // Legacy appointments without a Booking continue to checkout normally.
+    const visitAppointments =
+        appointment.booking?.appointments ?? [appointment];
+
+    const visitAlreadyCompleted = visitAppointments.some(
+        (visitAppointment) =>
+            visitAppointment.status ==="COMPLETED"
+    );
     // Prevent staff from opening an editable checkout for a finished appointment
-    if (appointment.status === "COMPLETED") {
+    if (visitAlreadyCompleted) {
         return (
             <main className="mx-auto max-w-2xl p-6">
                 <div className="rounded-xl border border-neutral-200 p-6 text-center">
@@ -99,69 +133,78 @@ export default async function CheckoutPage({
                         {appointment.customer.phone}
                     </p>
 
-                    <div className="mt-4 text-sm text-neutral-700">
-                        <p>
-                            <strong>Manicurista:</strong>{" "}
-                            {appointment.employee.name}
-                        </p>
-
-                        <p>
-                            <strong>Hora:</strong>{" "}
-                            {appointment.startTime}
-                        </p>
-
-                        <p>
-                            <strong>Duración Estimada:</strong>{" "}
-                            {appointment.duration} min
-                        </p>
-                    </div>
-
                     <div className="mt-6">
                         <p className="font-semibold text-black">
-                            Servicios
+                            Servicios realizados
                         </p>
 
-                        {appointment.appointmentServices.map(
-                            (item) => (
-                                <p
-                                    key={item.service.nameEs}
-                                    className="mt-2 text-neutral-600"
+                        <div className="mt-4 space-y-4">
+                            {visitAppointments.map((visitAppointment) => (
+                                <div
+                                    key={visitAppointment.id}
+                                    className="rounded-xl border border-neutral-200 p-4"
                                 >
-                                    {item.service.nameEs} - $
-                                    {item.bookedPrice.toLocaleString(
-                                        "es-CO"
-                                    )}
-                                </p>
-                            )
-                        )}
-                    </div>
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                            <p className="font-semibold text-black">
+                                                {visitAppointment.employee.name}
+                                            </p>
 
-                    {appointment.appointmentAddons.length > 0 && (
-                        <div className="mt-6">
-                            <p className="font-semibold text-black">
-                                Adicionales
-                            </p>
+                                            <p className="mt-1 text-sm text-neutral-500">
+                                                {visitAppointment.startTime}
+                                            </p>
+                                        </div>
 
-                            {appointment.appointmentAddons.map(
-                                (item) => (
-                                    <p
-                                        key={item.addon.nameEs}
-                                        className="mt-2 text-neutral-600"
-                                    >
-                                        {item.addon.nameEs} - $
-                                        {item.bookedPrice.toLocaleString(
-                                            "es-CO"
+                                        <span className="text-sm text-neutral-500">
+                                            {visitAppointment.duration} min
+                                        </span>
+                                    </div>
+
+                                    <div className="mt-4">
+                                        {visitAppointment.appointmentServices.map(
+                                            (item) => (
+                                                <p
+                                                    key={`${visitAppointment.id}-${item.service.id}`}
+                                                    className="mt-1 text-sm text-neutral-700"
+                                                >
+                                                    {item.service.nameEs} — $
+                                                    {item.bookedPrice.toLocaleString(
+                                                        "es-CO"
+                                                    )}
+                                                </p>
+                                            )
                                         )}
-                                    </p>
-                                )
-                            )}
+                                    </div>
+
+                                    {visitAppointment.appointmentAddons.length > 0 && (
+                                        <div className="mt-3 border-t border-neutral-200 pt-3">
+                                            <p className="text-sm font-semibold text-black">
+                                                Adicionales
+                                            </p>
+
+                                            {visitAppointment.appointmentAddons.map(
+                                                (item) => (
+                                                    <p
+                                                        key={`${visitAppointment.id}-${item.addon.id}`}
+                                                        className="mt-1 text-sm text-neutral-600"
+                                                    >
+                                                        {item.addon.nameEs} — $
+                                                        {item.bookedPrice.toLocaleString(
+                                                            "es-CO"
+                                                        )}
+                                                    </p>
+                                                )
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
-                    )}
+                    </div>
                     
                     <CheckoutEditor
-                        appointmentId={appointment.id} 
-                        services={appointment.appointmentServices}
-                        addons={appointment.appointmentAddons}
+                        appointmentId={appointment.id}
+                        visitAppointments={visitAppointments}
                     />
                 </div>
             </div>
