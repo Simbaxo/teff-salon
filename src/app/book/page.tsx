@@ -142,6 +142,9 @@ export default function BookPage() {
     ]
     const [selectedServices, setSelectedServices] = useState<number[]>([]);
     const [selectedAddons, setSelectedAddons] = useState<number[]>([]);
+    // Tracks which service each selected add-on belongs to.
+    const [addonServiceAssignments, setAddonServiceAssignments] =
+        useState<Record<number, number>>({});
     // "any" lets the salon automatically assign an available qualified technician
     const [selectedEmployee, setSelectedEmployee] = 
         useState<number | "any" | null>(null);
@@ -251,17 +254,41 @@ export default function BookPage() {
         )
         .map((relation) => relation.addonId);
 
-    // Remove invalid add-ons automatically
+    // Remove add-ons and assignments that are no longer valid
+    // when the customer changes their selected services.
     useEffect(() => {
         const validAddonIds = serviceAddons
-            .filter((relation) => 
+            .filter((relation) =>
                 selectedServices.includes(relation.serviceId)
             )
-            .map((relation) => relation.addonId)
+            .map((relation) => relation.addonId);
 
         setSelectedAddons((current) =>
-            current.filter((addonId) => validAddonIds.includes(addonId))
+            current.filter((addonId) =>
+                validAddonIds.includes(addonId)
+            )
         );
+
+        setAddonServiceAssignments((current) => {
+            const updated: Record<number, number> = {};
+
+            for (const [addonIdText, serviceId] of Object.entries(current)) {
+                const addonId = Number(addonIdText);
+
+                const relationshipStillValid = serviceAddons.some(
+                    (relation) =>
+                        relation.addonId === addonId &&
+                        relation.serviceId === serviceId &&
+                        selectedServices.includes(serviceId)
+                );
+
+                if (relationshipStillValid) {
+                    updated[addonId] = serviceId;
+                }
+            }
+
+            return updated;
+        });
     }, [selectedServices, serviceAddons]);
 
     const availableAddons = addons.filter((addon) => 
@@ -280,13 +307,43 @@ export default function BookPage() {
         );
     }
 
-    // Add-on Selection State
+    // Select or remove an add-on and remember which service it belongs to.
     function toggleAddon(addonId: number) {
-        setSelectedAddons((current) =>
-            current.includes(addonId)
-                ? current.filter((id) => id !== addonId)
-                : [...current, addonId]
-        );
+        const isSelected = selectedAddons.includes(addonId);
+
+        // Deselect the add-on and remove its service assignment.
+        if (isSelected) {
+            setSelectedAddons((current) =>
+                current.filter((id) => id !== addonId)
+            );
+
+            setAddonServiceAssignments((current) => {
+                const updated = { ...current };
+                delete updated[addonId];
+                return updated;
+            });
+
+            return;
+        }
+
+        // Find selected services that support this add-on.
+        const compatibleServiceIds = serviceAddons
+            .filter(
+                (relation) =>
+                    relation.addonId === addonId &&
+                    selectedServices.includes(relation.serviceId)
+            )
+            .map((relation) => relation.serviceId);
+
+        // If there is exactly one possible service, assign it automatically.
+        if (compatibleServiceIds.length === 1) {
+            setSelectedAddons((current) => [...current, addonId]);
+
+            setAddonServiceAssignments((current) => ({
+                ...current,
+                [addonId]: compatibleServiceIds[0],
+            }));
+        }
     }
 
     // Find Selected Services Data
@@ -321,6 +378,44 @@ export default function BookPage() {
             qualifiedEmployees: qualifiedForService,
         };
     });
+
+    // Nail services share one customer-facing technician choice.
+    // Staff can split the individual appointments later if needed.
+    function selectNailTechnician(employeeId: number | "any") {
+        const nailServiceIds = selectedServiceDetails
+            .filter((service) => service.category === "NAILS")
+            .map((service) => service.id);
+
+        setSelectedEmployeesByService((current) => {
+            const updated = { ...current };
+
+            for (const serviceId of nailServiceIds) {
+                updated[serviceId] = employeeId;
+            }
+
+            return updated;
+        });
+
+        // Changing technician availability can change valid time slots.
+        setSelectedTime("");
+    }
+
+    const selectedNailAssignments = serviceAssignments.filter(
+        ({ service }) => service.category === "NAILS"
+    );
+
+    const qualifiedNailEmployees =
+        selectedNailAssignments.length > 0
+            ? selectedNailAssignments[0].qualifiedEmployees.filter(
+                (employee) =>
+                    selectedNailAssignments.every(({ qualifiedEmployees }) =>
+                        qualifiedEmployees.some(
+                            (qualifiedEmployee) =>
+                                qualifiedEmployee.id === employee.id
+                        )
+                    )
+            )
+            : [];
 
     useEffect(() => {
         setSelectedEmployeesByService((current) => {
@@ -564,11 +659,19 @@ export default function BookPage() {
                     customerPhone: fullCustomerPhone,
                     customerEmail,
                     customerNotes,
-                    employeeId: selectedEmployee,
+                    // Send one technician choice for each selected service.
+                    serviceAssignments: serviceAssignments.map(({ service }) => ({
+                        serviceId: service.id,
+                        employeeId: selectedEmployeesByService[service.id],
+                    })),
                     date: selectedDate,
                     startTime: selectedTime,
                     serviceIds: selectedServices,
-                    addonIds: selectedAddons,
+                    // Tell the API which service each selected add-on belongs to.
+                    addonAssignments: selectedAddons.map((addonId) => ({
+                        addonId,
+                        serviceId: addonServiceAssignments[addonId],
+                    })),
                 }),
             });
 
@@ -789,30 +892,92 @@ export default function BookPage() {
                             </p>
 
                             <div className="mt-4 space-y-3">
-                                {availableAddons.map((addon) => (
-                                    <button
-                                        key={addon.id}
-                                        onClick={() => toggleAddon(addon.id)}
-                                        className={`w-full rounded-xl border p-4 text-left ${
-                                            selectedAddons.includes(addon.id)
-                                            ? "border-black bg-neutral-200"
-                                            : "border-neutral-200 bg-white"
-                                        }`}
-                                    >
+                                {availableAddons.map((addon) => {
+                                    const compatibleServices = selectedServiceDetails.filter(
+                                        (service) =>
+                                            serviceAddons.some(
+                                                (relation) =>
+                                                    relation.addonId === addon.id &&
+                                                    relation.serviceId === service.id
+                                            )
+                                    );
 
-                                        <h3 className="font-semibold text-black">
-                                            {language === "es" ? addon.nameEs : addon.nameEn}
-                                        </h3>
+                                    const isSelected = selectedAddons.includes(addon.id);
 
-                                        <p className="mt-1 text-sm text-neutral-600">
-                                            +${addon.price.toLocaleString("es-CO")} COP
-                                        </p>
+                                    return (
+                                        <div
+                                            key={addon.id}
+                                            className={`rounded-xl border p-4 ${
+                                                isSelected
+                                                    ? "border-black bg-neutral-200"
+                                                    : "border-neutral-200 bg-white"
+                                            }`}
+                                        >
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleAddon(addon.id)}
+                                                className="w-full text-left"
+                                            >
+                                                <h3 className="font-semibold text-black">
+                                                    {language === "es"
+                                                        ? addon.nameEs
+                                                        : addon.nameEn}
+                                                </h3>
 
-                                        <p className="text-sm text-neutral-500">
-                                            +{addon.estimatedDuration} min
-                                        </p>
-                                    </button>
-                                ))}
+                                                <p className="mt-1 text-sm text-neutral-600">
+                                                    +${addon.price.toLocaleString("es-CO")} COP
+                                                </p>
+
+                                                <p className="text-sm text-neutral-500">
+                                                    +{addon.estimatedDuration} min
+                                                </p>
+                                            </button>
+
+                                            {compatibleServices.length > 1 && (
+                                                <div className="mt-3 border-t border-neutral-300 pt-3">
+                                                    <p className="mb-2 text-sm font-medium text-neutral-700">
+                                                        {language === "es"
+                                                            ? "¿Para cuál servicio?"
+                                                            : "Which service is this for?"}
+                                                    </p>
+
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {compatibleServices.map((service) => (
+                                                            <button
+                                                                key={service.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedAddons((current) =>
+                                                                        current.includes(addon.id)
+                                                                            ? current
+                                                                            : [...current, addon.id]
+                                                                    );
+
+                                                                    setAddonServiceAssignments(
+                                                                        (current) => ({
+                                                                            ...current,
+                                                                            [addon.id]: service.id,
+                                                                        })
+                                                                    );
+                                                                }}
+                                                                className={`rounded-lg border px-3 py-2 text-sm ${
+                                                                    addonServiceAssignments[addon.id] ===
+                                                                    service.id
+                                                                        ? "border-black bg-black text-white"
+                                                                        : "border-neutral-300 bg-white text-black"
+                                                                }`}
+                                                            >
+                                                                {language === "es"
+                                                                    ? service.nameEs
+                                                                    : service.nameEn}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
 
                             <button
@@ -876,89 +1041,173 @@ export default function BookPage() {
                             </p>
 
                             <div className="mt-5 space-y-6">
-                                {serviceAssignments.map(({ service, qualifiedEmployees }) => {
-                                    const selectedForService =
-                                        selectedEmployeesByService[service.id]
+                                {/* All selected nail services share one customer-facing technician choice. */}
+                                {selectedNailAssignments.length > 0 && (
+                                    <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                                        <h3 className="font-semibold text-black">
+                                            {language === "es"
+                                                ? "Servicios de uñas"
+                                                : "Nail services"}
+                                        </h3>
 
-                                    return (
-                                        <div
-                                            key={service.id}
-                                            className="rounded-xl border border-neutral-200 bg-white p-4"
-                                        >
-                                            <h3 className="font-semibold text-black">
+                                        <p className="mt-1 text-sm text-neutral-500">
+                                            {selectedNailAssignments
+                                                .map(({ service }) =>
+                                                    language === "es"
+                                                        ? service.nameEs
+                                                        : service.nameEn
+                                                )
+                                                .join(" + ")}
+                                        </p>
+
+                                        {qualifiedNailEmployees.length === 0 ? (
+                                            <p className="mt-3 text-sm text-red-600">
                                                 {language === "es"
-                                                    ? service.nameEs
-                                                    : service.nameEn}
-                                            </h3>
+                                                    ? "No hay una técnica que realice todos los servicios de uñas seleccionados."
+                                                    : "No technician performs all of the selected nail services."}
+                                            </p>
+                                        ) : qualifiedNailEmployees.length === 1 ? (
+                                            <p className="mt-3 text-sm text-neutral-600">
+                                                {language === "es"
+                                                    ? `Asignada: ${qualifiedNailEmployees[0].name}`
+                                                    : `Assigned: ${qualifiedNailEmployees[0].name}`}
+                                            </p>
+                                        ) : (
+                                            <div className="mt-3 space-y-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => selectNailTechnician("any")}
+                                                    className={`w-full rounded-xl border p-4 text-left ${
+                                                        selectedNailAssignments.every(
+                                                            ({ service }) =>
+                                                                selectedEmployeesByService[service.id] ===
+                                                                "any"
+                                                        )
+                                                            ? "border-black bg-neutral-200"
+                                                            : "border-neutral-200 bg-white"
+                                                    }`}
+                                                >
+                                                    <span className="font-semibold text-black">
+                                                        {language === "es"
+                                                            ? "Cualquier Técnica — Recomendado"
+                                                            : "Any Technician — Recommended"}
+                                                    </span>
+                                                </button>
 
-                                            {qualifiedEmployees.length === 0 ? (
-                                                <p className="mt-3 text-sm text-red-600">
-                                                    {language === "es"
-                                                        ? "No hay una técnica disponible para este servicio."
-                                                        : "No technician is available for this service."}
-                                                </p>
-                                            ) : qualifiedEmployees.length === 1 ? (
-                                                <p className="mt-3 text-sm text-neutral-600">
-                                                    {language === "es"
-                                                        ? `Asignada: ${qualifiedEmployees[0].name}`
-                                                        : `Assigned: ${qualifiedEmployees[0].name}`}
-                                                </p>
-                                            ) : (
-                                                <div className="mt-3 space-y-3">
+                                                {qualifiedNailEmployees.map((employee) => (
                                                     <button
+                                                        key={employee.id}
+                                                        type="button"
                                                         onClick={() =>
-                                                            setSelectedEmployeesByService(
-                                                                (current) => ({
-                                                                    ...current,
-                                                                    [service.id]: "any",
-                                                                })
-                                                            )
+                                                            selectNailTechnician(employee.id)
                                                         }
                                                         className={`w-full rounded-xl border p-4 text-left ${
-                                                            selectedForService === "any"
+                                                            selectedNailAssignments.every(
+                                                                ({ service }) =>
+                                                                    selectedEmployeesByService[
+                                                                        service.id
+                                                                    ] === employee.id
+                                                            )
                                                                 ? "border-black bg-neutral-200"
                                                                 : "border-neutral-200 bg-white"
                                                         }`}
                                                     >
                                                         <span className="font-semibold text-black">
-                                                            {language === "es"
-                                                            ? "Cualquier Técnica — Recomendado"
-                                                            : "Any Technician — Recommended"}
+                                                            {employee.name}
                                                         </span>
                                                     </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
-                                                    {qualifiedEmployees.map((employee) => (
+                                {/* Non-nail specialties keep their own technician assignment. */}
+                                {serviceAssignments
+                                    .filter(({ service }) => service.category !== "NAILS")
+                                    .map(({ service, qualifiedEmployees }) => {
+                                        const selectedForService =
+                                            selectedEmployeesByService[service.id];
+
+                                        return (
+                                            <div
+                                                key={service.id}
+                                                className="rounded-xl border border-neutral-200 bg-white p-4"
+                                            >
+                                                <h3 className="font-semibold text-black">
+                                                    {language === "es"
+                                                        ? service.nameEs
+                                                        : service.nameEn}
+                                                </h3>
+
+                                                {qualifiedEmployees.length === 0 ? (
+                                                    <p className="mt-3 text-sm text-red-600">
+                                                        {language === "es"
+                                                            ? "No hay una técnica disponible para este servicio."
+                                                            : "No technician is available for this service."}
+                                                    </p>
+                                                ) : qualifiedEmployees.length === 1 ? (
+                                                    <p className="mt-3 text-sm text-neutral-600">
+                                                        {language === "es"
+                                                            ? `Asignada: ${qualifiedEmployees[0].name}`
+                                                            : `Assigned: ${qualifiedEmployees[0].name}`}
+                                                    </p>
+                                                ) : (
+                                                    <div className="mt-3 space-y-3">
                                                         <button
-                                                            key={employee.id}
-                                                            onClick={() =>
-                                                               setSelectedEmployeesByService(
-                                                                (current) => ({
-                                                                    ...current,
-                                                                    [service.id]: employee.id,
-                                                                })
-                                                               ) 
-                                                            }
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedEmployeesByService(
+                                                                    (current) => ({
+                                                                        ...current,
+                                                                        [service.id]: "any",
+                                                                    })
+                                                                );
+                                                                setSelectedTime("");
+                                                            }}
                                                             className={`w-full rounded-xl border p-4 text-left ${
-                                                                selectedForService === employee.id
+                                                                selectedForService === "any"
                                                                     ? "border-black bg-neutral-200"
                                                                     : "border-neutral-200 bg-white"
                                                             }`}
                                                         >
                                                             <span className="font-semibold text-black">
-                                                                {employee.name}
+                                                                {language === "es"
+                                                                    ? "Cualquier Técnica — Recomendado"
+                                                                    : "Any Technician — Recommended"}
                                                             </span>
                                                         </button>
-                                                    ))}
-                                                </div>
-                                            )
-                                        }
-                                        </div>
-                                    )
-                                })}
-                            </div>
 
-                        </div>
-                    )}
+                                                        {qualifiedEmployees.map((employee) => (
+                                                            <button
+                                                                key={employee.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedEmployeesByService(
+                                                                        (current) => ({
+                                                                            ...current,
+                                                                            [service.id]: employee.id,
+                                                                        })
+                                                                    );
+                                                                    setSelectedTime("");
+                                                                }}
+                                                                className={`w-full rounded-xl border p-4 text-left ${
+                                                                    selectedForService === employee.id
+                                                                        ? "border-black bg-neutral-200"
+                                                                        : "border-neutral-200 bg-white"
+                                                                }`}
+                                                            >
+                                                                <span className="font-semibold text-black">
+                                                                    {employee.name}
+                                                                </span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                            </div>
 
                     {/* Date Selector */}
                     {isScheduleStage &&
@@ -1156,7 +1405,7 @@ export default function BookPage() {
                                     </p>
 
                                     <p className="font-semibold text-black">
-                                        {selectedDate} · {selectedTime}
+                                        {selectedDate} · {formatTime(selectedTime)}
                                     </p>
                                 </div>
 
