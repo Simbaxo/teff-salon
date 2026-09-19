@@ -18,11 +18,13 @@ export async function GET(request: Request) {
 
         select: {
           id: true,
+          bookingId: true,
           employeeId: true,
           date: true,
           startTime: true,
           duration: true,
           status: true,
+          notes: true,
         },
 
         orderBy: {

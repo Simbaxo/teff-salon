@@ -10,6 +10,7 @@ import {
 
 type Appointment = {
     id: number;
+    bookingId: number | null;
     employeeId: number;
     date: string;
     startTime: string;
@@ -88,6 +89,37 @@ function canMarkNoShow(date: string, startTime: string) {
     return hasTeffAppointmentStarted(date, startTime)
 }
 
+// Display appointment times in customer/staff-friendly AM/PM format
+function formatTime(time: string) {
+    const [hours, minutes] = time.split(":").map(Number);
+
+    const period = hours >= 12 ? "PM" : "AM";
+    const displayHour = hours % 12 || 12;
+
+    return `${displayHour}:${minutes.toString().padStart(2, "0")} ${period}`;
+
+}
+
+function getStaffTimeOptions() {
+    const options: string[] = [];
+
+    // Covers the full TEFF operating window.
+    for (let minutes = 9 * 60 + 30; minutes <= 18 * 60; minutes += 30) {
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+
+        options.push(
+            `${hours.toString().padStart(2, "0")}:${mins
+                .toString()
+                .padStart(2, "0")}`
+        );
+    }
+
+    return options;
+}
+
+const staffTimeOptions = getStaffTimeOptions();
+
 export default  function StaffPage({
     userName,
     userRole,
@@ -98,6 +130,9 @@ export default  function StaffPage({
     // Track which appointment is currently being reassigned
     const [reassigningAppointmentId, setReassigningAppointmentId] =
         useState<number | null>(null);
+    // Track which individual service block is being rescheduled.
+    const [reschedulingAppointmentId, setReschedulingAppointmentId] =
+    useState<number | null>(null);
     // Track whether the staff appointment data is still loading.
     const [isLoading, setIsLoading] = useState(true);
     // Show a useful message if appointment data cannot be loaded.
@@ -155,6 +190,17 @@ export default  function StaffPage({
         (appointment) =>
             appointment.date.slice(0, 10) === selectedDate
     );
+
+    // Count how many appointment blocks belong to the same customer booking
+    function getBookingAppointmentCount(bookingId: number | null) {
+        if (bookingId === null) {
+            return 1;
+        }
+
+        return appointmentsForDate.filter(
+            (appointment) => appointment.bookingId === bookingId
+        ).length;
+    }
 
     // Group Appointments by Technician
     const appointmentsByEmployee = appointmentsForDate.reduce(
@@ -240,6 +286,47 @@ export default  function StaffPage({
             setReassigningAppointmentId(null);
         }
     }
+
+    // Change the schedule of one appointment block without changing
+    // the other services that belong to the same customer booking.
+    async function rescheduleAppointment(
+        appointmentId: number,
+        date: string,
+        startTime: string
+    ) {
+        try {
+            setReschedulingAppointmentId(appointmentId);
+
+            const response = await fetch(
+                `/api/appointments/${appointmentId}/schedule`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        date,
+                        startTime,
+                    }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                alert(data.error || "No se pudo cambiar el horario");
+                return;
+            }
+
+            // Reload so technician columns and appointment times stay synchronized.
+            await loadAppointments();
+        } catch (error) {
+            console.error(error);
+            alert("No se pudo cambiar el horario");
+        } finally {
+            setReschedulingAppointmentId(null);
+        }
+    }    
 
     return (
         <main className="min-h-screen bg-neutral-100 p-6">
@@ -334,6 +421,13 @@ export default  function StaffPage({
                                                     <p className="text-sm text-neutral-500">
                                                         {appointment.customer.phone}
                                                     </p>
+                                                    {appointment.bookingId !== null &&
+                                                        getBookingAppointmentCount(appointment.bookingId) > 1 && (
+                                                            <p className="mt-2 text-xs font-semibold text-neutral-500">
+                                                                Misma reserva ·{" "}
+                                                                {getBookingAppointmentCount(appointment.bookingId)} servicios
+                                                            </p>
+                                                        )}
                                                 </div>
 
                                                 <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-black">
@@ -343,12 +437,63 @@ export default  function StaffPage({
 
                                             <div className="mt-4 text-sm text-neutral-700">
                                                 <p>
-                                                    <strong>Hora:</strong> {appointment.startTime}
+                                                    <strong>Hora:</strong> {formatTime(appointment.startTime)}
                                                 </p>
 
                                                 <p>
                                                     <strong>Duración:</strong> {appointment.duration} min
                                                 </p>
+                                                
+                                                {(
+                                                    userRole === "OWNER" ||
+                                                    (
+                                                        userRole === "RECEPTIONIST" &&
+                                                        ["REQUESTED", "BOOKED", "CHECKED_IN"].includes(
+                                                            appointment.status
+                                                        )
+                                                    )
+                                                ) && (
+                                                    <div className="mt-4">
+                                                        <label
+                                                            htmlFor={`time-${appointment.id}`}
+                                                            className="block text-sm font-semibold text-black"
+                                                        >
+                                                            Hora del servicio
+                                                        </label>
+
+                                                        <select
+                                                            id={`time-${appointment.id}`}
+                                                            value={appointment.startTime}
+                                                            disabled={
+                                                                reschedulingAppointmentId === appointment.id
+                                                            }
+                                                            onChange={(event) => {
+                                                                const newStartTime = event.target.value;
+
+                                                                if (newStartTime !== appointment.startTime) {
+                                                                    rescheduleAppointment(
+                                                                        appointment.id,
+                                                                        appointment.date.slice(0, 10),
+                                                                        newStartTime
+                                                                    );
+                                                                }
+                                                            }}
+                                                            className="mt-2 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm text-black"
+                                                        >
+                                                            {staffTimeOptions.map((time) => (
+                                                                <option key={time} value={time}>
+                                                                    {formatTime(time)}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+
+                                                        {reschedulingAppointmentId === appointment.id && (
+                                                            <p className="mt-2 text-sm text-neutral-500">
+                                                                Cambiando horario...
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <div className="mt-4">
