@@ -34,8 +34,7 @@ export async function POST(request: Request) {
             addonIds,
             discountTotal,
             payments,
-            tipAmount,
-            tipPaymentMethod,
+            tips,
         } = body;
 
         // Make sure the checkout contains the basic required information
@@ -46,7 +45,8 @@ export async function POST(request: Request) {
             !Array.isArray(serviceIds) ||
             serviceIds.length === 0 ||
             !Array.isArray(addonIds) ||
-            !Array.isArray(payments)
+            !Array.isArray(payments) ||
+            !Array.isArray(tips)
         ) {
             return Response.json(
                 { error: "Invalid checkout information"},
@@ -102,21 +102,23 @@ export async function POST(request: Request) {
             );
         }
 
-        // Tip must be a whole, non-negative COP amount
-        if (!Number.isInteger(tipAmount) || tipAmount < 0) {
-            return Response.json(
-                { error: "Invalid tip amount" },
-                { status: 400 }
-            );
-        }
+        // Validate each technician-specific tip.
+        const tipsAreValid = tips.every(
+            (tip: {
+                employeeId: number;
+                amount: number;
+                paymentMethod: string;
+            }) =>
+                Number.isInteger(tip.employeeId) &&
+                tip.employeeId > 0 &&
+                Number.isInteger(tip.amount) &&
+                tip.amount > 0 &&
+                allowedPaymentMethods.includes(tip.paymentMethod)
+        );
 
-        // A payment method is only required when there is a tip
-        if (
-            tipAmount > 0 &&
-            !allowedPaymentMethods.includes(tipPaymentMethod)
-        ) {
+        if (!tipsAreValid) {
             return Response.json(
-                { error: "Invalid tip payment method" },
+                { error: "Invalid tip information" },
                 { status: 400 }
             );
         }
@@ -478,10 +480,22 @@ export async function POST(request: Request) {
             0
         );
 
-        // Cash tips go directly to the technician
-        // Electronic tips are collected by TEFF
-        const electronicTip =
-            tipPaymentMethod === "CASH" ? 0 : tipAmount;
+        // Cash tips go directly to technicians.
+        // Electronic tips are collected by TEFF and must be included in payment.
+        const electronicTip = tips.reduce(
+            (
+                total: number,
+                tip: {
+                    employeeId: number;
+                    amount: number;
+                    paymentMethod: string;
+                }
+            ) =>
+                tip.paymentMethod === "CASH"
+                    ? total
+                    : total + tip.amount,
+            0
+        );
         
         const expectedPaymentTotal = finalTotal + electronicTip;
 
@@ -632,21 +646,51 @@ export async function POST(request: Request) {
                 });
             }
 
-            // Save the tip only when the customer actually leaves one
-            if (tipAmount > 0) {
-                await tx.tip.create({
-                    data: {
-                        saleId: newSale.id,
-                        employeeId: appointment.employeeId,
-                        amount: tipAmount,
-                        paymentMethod: tipPaymentMethod,
+            // Only technicians who actually worked on this visit may receive tips.
+            const visitEmployeeIds = new Set(
+                visitAppointments.map(
+                    (visitAppointment) => visitAppointment.employeeId
+                )
+            );
 
-                        // Cash tips are assumed to be handed directly to the technician
-                        status: tipPaymentMethod === "CASH" ? "PAID" : "PENDING",
+            const hasInvalidTipEmployee = tips.some(
+                (tip: {
+                    employeeId: number;
+                    amount: number;
+                    paymentMethod: string;
+                }) => !visitEmployeeIds.has(tip.employeeId)
+            );
 
-                        // Record when a cash tip was already received
-                        paidAt: tipPaymentMethod === "CASH" ? new Date() : null
-                    },
+            if (hasInvalidTipEmployee) {
+                throw new Error("INVALID_TIP_EMPLOYEE");
+            }
+
+            // Record each technician's tip separately.
+            if (tips.length > 0) {
+                await tx.tip.createMany({
+                    data: tips.map(
+                        (tip: {
+                            employeeId: number;
+                            amount: number;
+                            paymentMethod: string;
+                        }) => ({
+                            saleId: newSale.id,
+                            employeeId: tip.employeeId,
+                            amount: tip.amount,
+                            paymentMethod: tip.paymentMethod,
+
+                            // Cash tips are already in the technician's hands.
+                            status:
+                                tip.paymentMethod === "CASH"
+                                    ? "PAID"
+                                    : "PENDING",
+
+                            paidAt:
+                                tip.paymentMethod === "CASH"
+                                    ? new Date()
+                                    : null,
+                        })
+                    ),
                 });
             }
 
@@ -683,11 +727,21 @@ export async function POST(request: Request) {
         );
 
     } catch (error) {
-        console.error("Check validation failed:", error)
-
+    if (
+        error instanceof Error &&
+        error.message === "INVALID_TIP_EMPLOYEE"
+    ) {
         return Response.json(
-            { error: "Unable to validate checkout" },
-            { status: 500 }
+            { error: "Tip recipient did not work on this customer visit" },
+            { status: 400 }
         );
     }
+
+    console.error("Check validation failed:", error);
+
+    return Response.json(
+        { error: "Unable to validate checkout" },
+        { status: 500 }
+    );
+}
 }

@@ -5,6 +5,16 @@ import { canCheckout } from "@/lib/auth-roles";
 
 import CheckoutEditor from "./CheckoutEditor";
 
+// Display appointment times in AM/PM format.
+function formatTime(time: string) {
+    const [hours, minutes] = time.split(":").map(Number);
+
+    const period = hours >= 12 ? "PM" : "AM";
+    const displayHour = hours % 12 || 12;
+
+    return `${displayHour}:${minutes.toString().padStart(2, "0")} ${period}`;
+}
+
 export default async function CheckoutPage({
     params,
 }: {
@@ -151,7 +161,7 @@ export default async function CheckoutPage({
                                             </p>
 
                                             <p className="mt-1 text-sm text-neutral-500">
-                                                {visitAppointment.startTime}
+                                                {formatTime(visitAppointment.startTime)}
                                             </p>
                                         </div>
 

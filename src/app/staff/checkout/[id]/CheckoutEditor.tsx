@@ -108,11 +108,28 @@ export default function CheckoutEditor({
         BOLD: 0,
         TRANSFER: 0,
     });
-    //Tips belongs directly to the technician
-    const [tipAmount, setTipAmount] = useState(0)
-    // Cash tips are treated differently because the technician may receive them immediately
-    const [tipPaymentMethod, setTipPaymentMethod] =
-        useState<PaymentMethod>("CASH");
+    type TechnicianTip = {
+    amount: number;
+    paymentMethod: PaymentMethod;
+};
+
+    // Each technician working on the visit can receive their own tip.
+    const [tipsByEmployee, setTipsByEmployee] = useState<
+        Record<number, TechnicianTip>
+    >(() => {
+        const initialTips: Record<number, TechnicianTip> = {};
+
+        for (const visitAppointment of visitAppointments) {
+            if (!initialTips[visitAppointment.employeeId]) {
+                initialTips[visitAppointment.employeeId] = {
+                    amount: 0,
+                    paymentMethod: "CASH",
+                };
+            }
+        }
+
+        return initialTips;
+    });
     // Prevents duplicate checkout submissions while the sale is saving
     const [isSubmitting, setIsSubmitting] = useState(false);
     // Displays a checkout error without losing the entered information
@@ -139,10 +156,21 @@ export default function CheckoutEditor({
     // Never allow a discount to make the final total negative
     const finalTotal = Math.max(checkoutSubtotal - discount, 0);
 
-    // Electronic tips are collected by TEFF
-    // Cash tips are assumed to go directly to the technician
-    const electronicTip =
-        tipPaymentMethod === "CASH" ? 0 : tipAmount;
+    // Cash tips go directly to technicians.
+    // Electronic tips are collected by TEFF and must be included in checkout.
+    const electronicTip = Object.values(tipsByEmployee).reduce(
+        (total, tip) =>
+            tip.paymentMethod === "CASH"
+                ? total
+                : total + tip.amount,
+        0
+    );
+
+    // Total tips across every technician working on this visit.
+    const totalTips = Object.values(tipsByEmployee).reduce(
+        (total, tip) => total + tip.amount,
+        0
+    );
 
     // Total amount TEFF must actually collect
     const amountDue = finalTotal + electronicTip;
@@ -316,8 +344,13 @@ export default function CheckoutEditor({
                         payments: paymentsToSubmit,
                         
                         // Send tip details separately from service revenue
-                        tipAmount,
-                        tipPaymentMethod,
+                        tips: Object.entries(tipsByEmployee)
+                            .filter(([, tip]) => tip.amount > 0)
+                            .map(([employeeId, tip]) => ({
+                                employeeId: Number(employeeId),
+                                amount: tip.amount,
+                                paymentMethod: tip.paymentMethod,
+                            })),
                     }),
                 });
 
@@ -575,37 +608,117 @@ export default function CheckoutEditor({
                 />
             </div>
 
-            {/* Propina */}
+            {/* Tips are assigned directly to the technicians who worked on the visit. */}
             <div className="mt-6">
-                <label className="block font-semibold text-black">
-                    Propina
-                </label>
+                <p className="font-semibold text-black">
+                    Propinas
+                </p>
 
-                <input 
-                    type="number"
-                    min="0"
-                    value={tipAmount}
-                    onChange={(event) =>
-                        setTipAmount(Number(event.target.value))
-                    }
-                    className="mt-2 w-full rounded-lg border border-neutral-300 p-3 text-black"
-                />
+                <p className="mt-1 text-sm text-neutral-500">
+                    Registra la propina correspondiente a cada técnica.
+                </p>
 
-                <label className="mt-4 block font-semibold text-black">
-                    Método de la propina
-                </label>
+                <div className="mt-4 space-y-4">
+                    {Object.entries(tipsByEmployee).map(
+                        ([employeeIdText, tip]) => {
+                            const employeeId = Number(employeeIdText);
 
-                <select
-                    value={tipPaymentMethod}
-                    onChange={(event) =>
-                        setTipPaymentMethod(event.target.value as PaymentMethod)
-                    }
-                    className="mt-2 w-full rounded-lg border border-neutral-300 p-3 text-black"
-                >
-                    <option value="CASH">Efectivo</option>
-                    <option value="BOLD">Bold / Tarjeta</option>
-                    <option value="TRANSFER">Transferencia</option>
-                </select>
+                            const employeeName =
+                                visitAppointments.find(
+                                    (visitAppointment) =>
+                                        visitAppointment.employeeId === employeeId
+                                )?.employee.name ?? "Técnica";
+
+                            return (
+                                <div
+                                    key={employeeId}
+                                    className="rounded-xl border border-neutral-200 p-4"
+                                >
+                                    <p className="font-semibold text-black">
+                                        {employeeName}
+                                    </p>
+
+                                    <label
+                                        htmlFor={`tip-${employeeId}`}
+                                        className="mt-3 block text-sm font-medium text-black"
+                                    >
+                                        Propina
+                                    </label>
+
+                                    <input
+                                        id={`tip-${employeeId}`}
+                                        type="number"
+                                        min="0"
+                                        value={tip.amount}
+                                        onChange={(event) => {
+                                            const amount = Number(
+                                                event.target.value
+                                            );
+
+                                            setTipsByEmployee((current) => ({
+                                                ...current,
+                                                [employeeId]: {
+                                                    ...current[employeeId],
+                                                    amount,
+                                                },
+                                            }));
+                                        }}
+                                        className="mt-1 w-full rounded-lg border border-neutral-300 p-3 text-black"
+                                    />
+
+                                    <label
+                                        htmlFor={`tip-method-${employeeId}`}
+                                        className="mt-3 block text-sm font-medium text-black"
+                                    >
+                                        Método de la propina
+                                    </label>
+
+                                    <select
+                                        id={`tip-method-${employeeId}`}
+                                        value={tip.paymentMethod}
+                                        onChange={(event) => {
+                                            const paymentMethod =
+                                                event.target.value as PaymentMethod;
+
+                                            setTipsByEmployee((current) => ({
+                                                ...current,
+                                                [employeeId]: {
+                                                    ...current[employeeId],
+                                                    paymentMethod,
+                                                },
+                                            }));
+                                        }}
+                                        className="mt-1 w-full rounded-lg border border-neutral-300 p-3 text-black"
+                                    >
+                                        <option value="CASH">
+                                            Efectivo
+                                        </option>
+
+                                        <option value="BOLD">
+                                            Bold / Tarjeta
+                                        </option>
+
+                                        <option value="TRANSFER">
+                                            Transferencia
+                                        </option>
+                                    </select>
+                                </div>
+                            );
+                        }
+                    )}
+                </div>
+
+                {totalTips > 0 && (
+                    <div className="mt-4 flex justify-between text-sm">
+                        <span className="text-neutral-600">
+                            Total propinas
+                        </span>
+
+                        <span className="font-semibold text-black">
+                            ${totalTips.toLocaleString("es-CO")}
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* Amount that will actually be charged to the customer */}
