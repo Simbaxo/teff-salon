@@ -175,6 +175,23 @@ export default function CheckoutEditor({
     // Total amount TEFF must actually collect
     const amountDue = finalTotal + electronicTip;
 
+    // payments.BOLD represents the sale/tip amount allocated to Bold
+    // before the customer-paid processing fee.
+    const boldBase = payments.BOLD;
+
+    // Bold charges the customer a flat $5,000 up to $100,000.
+    // Above $100,000, the customer pays 5% of the Bold amount.
+    const boldProcessingFee =
+        boldBase <= 0
+            ? 0
+            : boldBase <= 100000
+                ? 5000
+                : Math.round(boldBase * 0.05);
+
+    // Actual amount charged to the customer's card.
+    const boldCustomerCharge =
+        boldBase + boldProcessingFee;
+
     const amountPaid = Object.values(payments).reduce(
         (total, amount) => total + amount,
         0
@@ -779,6 +796,30 @@ export default function CheckoutEditor({
                         } 
                         className="mt-1 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
                     />
+                    
+                    {payments.BOLD > 0 && (
+                        <div className="mt-2 rounded-lg bg-neutral-100 p-3 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-neutral-600">
+                                    Cargo Bold
+                                </span>
+
+                                <span className="font-semibold text-black">
+                                    +${boldProcessingFee.toLocaleString("es-CO")}
+                                </span>
+                            </div>
+
+                            <div className="mt-2 flex justify-between border-t border-neutral-200 pt-2">
+                                <span className="font-semibold text-black">
+                                    Total en tarjeta
+                                </span>
+
+                                <span className="font-semibold text-black">
+                                    ${boldCustomerCharge.toLocaleString("es-CO")}
+                                </span>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div>
@@ -809,7 +850,7 @@ export default function CheckoutEditor({
                     </span>
 
                     <span className="font-semibold text-black">
-                        ${finalTotal.toLocaleString("es-CO")}
+                        ${amountDue.toLocaleString("es-CO")}
                     </span>
                 </div>
 

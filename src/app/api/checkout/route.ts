@@ -496,6 +496,24 @@ export async function POST(request: Request) {
                     : total + tip.amount,
             0
         );
+
+        // Calculate the customer-paid Bold processing fee on the server.
+        // The Bold payment amount already includes any tips paid through Bold.
+        const boldPayment = payments.find(
+            (payment: {
+                paymentMethod: string;
+                amount: number;
+            }) => payment.paymentMethod === "BOLD"
+        );
+
+        const boldBase = boldPayment?.amount ?? 0;
+
+        const boldProcessingFee =
+            boldBase <= 0
+                ? 0
+                : boldBase <= 100000
+                    ? 5000
+                    : Math.round(boldBase * 0.05);
         
         const expectedPaymentTotal = finalTotal + electronicTip;
 
@@ -627,7 +645,10 @@ export async function POST(request: Request) {
                         saleId: newSale.id,
                         paymentMethod: payment.paymentMethod,
                         amount: payment.amount,
-                        processingFee: 0,
+                        processingFee:
+                            payment.paymentMethod === "BOLD"
+                                ? boldProcessingFee
+                                : 0,
                     })
                 ),
             });

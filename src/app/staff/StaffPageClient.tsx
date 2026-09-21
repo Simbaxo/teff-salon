@@ -578,6 +578,22 @@ export default  function StaffPage({
                                                 </div>
                                             )}
 
+                                            {appointment.status === "REQUESTED" && (
+                                                <div className="mt-5">
+                                                    <button
+                                                        onClick={() =>
+                                                            updateAppointmentStatus(
+                                                                appointment.id,
+                                                                "BOOKED"
+                                                            )
+                                                        }
+                                                        className="rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white"
+                                                    >
+                                                        Confirmar Cita
+                                                    </button>
+                                                </div>
+                                            )}
+
                                             {appointment.status === "BOOKED" && (
                                                 <div className="mt-5 flex gap-3">
                                                     <button
