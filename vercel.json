@@ -1,6 +1,17 @@
 {
   "redirects": [
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.teffbeauty.com"
+        }
+      ],
+      "destination": "https://teffbeauty.com",
+      "permanent": true
+    },
+    {
       "source": "/:path*",
       "has": [
         {
