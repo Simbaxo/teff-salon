@@ -259,6 +259,7 @@ export default async function AdminPage() {
                     commissionBase: true,
                     commissionAmount: true,
                     status: true,
+                    createdAt: true,
                 },
             },
         },
@@ -274,10 +275,16 @@ export default async function AdminPage() {
         let paid = 0;
 
         for (const commission of employee.commissions) {
-            // commissionBase represents the final sale amount attributed
-            // to this technician before their commission is calculated
-            sales += commission.commissionBase;
-
+            // Only count production from the current Monday - Sunday week
+            if (
+                commission.createdAt >= weekStart &&
+                commission.createdAt < weekEnd
+            ) {
+                // commissionBase represents the final sale amount attributed
+                // to this technician before their commission is calculated
+                sales += commission.commissionBase;
+            }
+            
             total += commission.commissionAmount;
 
             if (commission.status === "PENDING") {
@@ -482,7 +489,7 @@ export default async function AdminPage() {
 
                     <div className="mt-8">
                         <h2 className="text-xl font-bold text-black">
-                            Ventas por Técnica
+                            Ventas por Técnica - Esta Semana
                         </h2>
 
                         <div className="mt-4 grid gap-4 md:grid-cols-2">
