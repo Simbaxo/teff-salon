@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getTeffToday } from "@/lib/datetime";
 
 export default async function AdminPage() {
     const session = await auth();
@@ -10,6 +11,75 @@ export default async function AdminPage() {
     if (!session?.user || session.user.role !== "OWNER") {
         redirect("/login");
     }
+
+    // Medellín-local date used for today's dashboard metrics.
+    const today = getTeffToday();
+
+    const todayStart = new Date(`${today}T00:00:00.000Z`);
+
+    const tomorrow = new Date(todayStart);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+    const todaysSales = await prisma.sale.findMany({
+        where: {
+            createdAt: {
+                gte: todayStart,
+                lt: tomorrow,
+            },
+        },
+        select: {
+            finalTotal: true,
+            saleAppointments: {
+                select: {
+                    appointment: {
+                        select: {
+                            customerId: true,
+                        },
+                    },
+                },
+            },
+        },
+    });
+
+    const todaysSalesTotal = todaysSales.reduce(
+        (total, sale) => total + sale.finalTotal,
+        0
+    );
+
+    const todaysSaleCount = todaysSales.length;
+
+    // Count unique customers associated with today's sales.
+    // This avoids counting appointments that did not produce a sale.
+    const todaysCustomerIds = new Set(
+        todaysSales.flatMap((sale) =>
+            sale.saleAppointments.map(
+                (saleAppointment) =>
+                    saleAppointment.appointment.customerId
+            )
+        )
+    );
+
+    const todaysCustomers = todaysCustomerIds.size;
+
+    const todaysAverageTicket =
+        todaysSaleCount > 0
+            ? Math.round(todaysSalesTotal / todaysSaleCount)
+            : 0;
+
+    const todaysAppointments = await prisma.appointment.count({
+        where: {
+            date: todayStart,
+            status: {
+                in: [
+                    "BOOKED",
+                    "REQUESTED",
+                    "CHECKED_IN",
+                    "IN_PROGRESS",
+                    "COMPLETED",
+                ],
+            },
+        },
+    });
 
     // Every sale record represents a completed checkout
     // so summing finalTotal gives the owner's total recorded revenue
@@ -38,7 +108,7 @@ export default async function AdminPage() {
     const totalCustomers = customerSummary;
 
     // Count completed checkouts so we can calculate the average ticket
-    const totalSalesCount = await prisma.sale.count()
+    const totalSalesCount = await prisma.sale.count();
 
     // Average amount spent per completed sale
     const averageTicket =
@@ -56,7 +126,7 @@ export default async function AdminPage() {
     const paymentByMethod = Object.fromEntries(
         paymentTotals.map((payment) => [
             payment.paymentMethod,
-            payment._sum.amount ?? 0.
+            payment._sum.amount ?? 0,
         ])
     );
 
@@ -171,37 +241,54 @@ export default async function AdminPage() {
                     Resumen financiero básico de TEFF Beauty Salon.
                 </p>
 
-                <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-xl bg-white p-5 shadow-sm">
-                        <p className="text-sm font-medium text-neutral-500">
-                            Ventas Totales
-                        </p>
+                    {/* Today's operating snapshot */}
+                    <div className="mt-8">
+                        <h2 className="text-xl font-bold text-black">
+                            Hoy
+                        </h2>
 
-                        <p className="mt-2 text-2xl font-bold text-black">
-                            {formatCOP(totalSales)}
-                        </p>
+                        <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                            <div className="rounded-xl bg-white p-5 shadow-sm">
+                                <p className="text-sm font-medium text-neutral-500">
+                                    Ventas de Hoy
+                                </p>
+
+                                <p className="mt-2 text-2xl font-bold text-black">
+                                    {formatCOP(todaysSalesTotal)}
+                                </p>
+                            </div>
+
+                            <div className="rounded-xl bg-white p-5 shadow-sm">
+                                <p className="text-sm font-medium text-neutral-500">
+                                    Clientes de Hoy
+                                </p>
+
+                                <p className="mt-2 text-2xl font-bold text-black">
+                                    {todaysCustomers}
+                                </p>
+                            </div>
+
+                            <div className="rounded-xl bg-white p-5 shadow-sm">
+                                <p className="text-sm font-medium text-neutral-500">
+                                    Citas de Hoy
+                                </p>
+
+                                <p className="mt-2 text-2xl font-bold text-black">
+                                    {todaysAppointments}
+                                </p>
+                            </div>
+
+                            <div className="rounded-xl bg-white p-5 shadow-sm">
+                                <p className="text-sm font-medium text-neutral-500">
+                                    Ticket Promedio
+                                </p>
+
+                                <p className="mt-2 text-2xl font-bold text-black">
+                                    {formatCOP(todaysAverageTicket)}
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                </div>
-
-                <div className="rounded-xl bg-white p-5 shadow-sm">
-                    <p className="text-sm font-medium text-neutral-500">
-                        Clientes
-                    </p>
-
-                    <p className="mt-2 text-2xl font-bold text-black">
-                        {totalCustomers}
-                    </p>
-                </div>
-
-                <div className="rounded-xl bg-white p-5 shadow-sm">
-                    <p className="text-sm font-medium text-neutral-500">
-                        Ticket Promedio
-                    </p>
-
-                    <p className="mt-2 text-2xl font-bold text-black">
-                        {formatCOP(averageTicket)}
-                    </p>
-                </div>
             </div>
 
             <div className="mt-8">
