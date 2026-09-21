@@ -283,16 +283,15 @@ export default async function AdminPage() {
                 // commissionBase represents the final sale amount attributed
                 // to this technician before their commission is calculated
                 sales += commission.commissionBase;
-            }
-            
-            total += commission.commissionAmount;
+                total += commission.commissionAmount;
 
-            if (commission.status === "PENDING") {
-                pending += commission.commissionAmount;
-            }
-
-            if (commission.status === "PAID") {
-                paid += commission.commissionAmount;
+                if (commission.status === "PENDING") {
+                    pending += commission.commissionAmount;
+                }
+    
+                if (commission.status === "PAID") {
+                    paid += commission.commissionAmount;
+                }
             }
         }
         
@@ -515,7 +514,7 @@ export default async function AdminPage() {
                     
                     <div className="mt-8">
                         <h2 className="text-xl font-bold text-black">
-                            Comisiones por Técnica
+                            Comisiones por Técnica - Esta Semana
                         </h2>
 
                         <div className="mt-4 grid gap-4 md:grid-cols-2">
