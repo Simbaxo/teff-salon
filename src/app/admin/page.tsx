@@ -157,43 +157,16 @@ export default async function AdminPage() {
         }
     })
 
-    // Every sale record represents a completed checkout
-    // so summing finalTotal gives the owner's total recorded revenue
-    const salesSummary = await prisma.sale.aggregate({
-        _sum: {
-            finalTotal: true,
-        },
-    });
-
-    const totalSales = salesSummary._sum.finalTotal ?? 0;
-
-    // Count customers who have actually completed a purchase.
-    // This avoids counting cancelled, no-show, or unfinished appointments.
-    const customerSummary = await prisma.customer.count({
-        where: {
-            appointments: {
-                some: {
-                    saleAppointments: {
-                        some: {},
-                    },
-                },
-            },
-        },
-    });
-
-    const totalCustomers = customerSummary;
-
-    // Count completed checkouts so we can calculate the average ticket
-    const totalSalesCount = await prisma.sale.count();
-
-    // Average amount spent per completed sale
-    const averageTicket =
-        totalSalesCount > 0 ? Math.round(totalSales / totalSalesCount) : 0;
-
     // Group recorded payments by method so the owner can reconcile
     // cash, Bold, and bank transfers against the real-world balances
     const paymentTotals = await prisma.payment.groupBy({
         by: ["paymentMethod"],
+        where: {
+            createdAt: {
+                gte: weekStart,
+                lt: weekEnd,
+            },
+        },
         _sum: {
             amount: true,
         },
@@ -213,6 +186,12 @@ export default async function AdminPage() {
     // Tips are tracked separately because they belong directly to technicians,
     // even when the salon receives the money through Bold or bank transfer
     const tipSummary = await prisma.tip.aggregate({
+        where: {
+            createdAt: {
+                gte: weekStart,
+                lt: weekEnd,
+            },
+        },
         _sum: {
             amount: true,
         },
@@ -225,6 +204,10 @@ export default async function AdminPage() {
     // be marked PAID without changing the original payment received by the salon
     const salonCollectedTipSummary = await prisma.tip.aggregate({
         where: {
+            createdAt: {
+                gte: weekStart,
+                lt: weekEnd,
+            },
             paymentMethod: {
                 in: ["BOLD", "TRANSFER"],
             },
@@ -240,10 +223,9 @@ export default async function AdminPage() {
     // Total money recorded as received by the salon across every payment method
     const totalPayments = cashTotal + boldTotal + transferTotal;
 
-    // Payments should equal salon revenue plus tips currently held
-    // by TEFF on behalf of technicians
+    // Compare this week's payments against this week's salon revenue and tips
     const reconciliationDifference =
-        totalPayments - totalSales - salonCollectedTips;
+        totalPayments - weeklySalesTotal - salonCollectedTips;
 
     // Start from active technicians so employees with zero commissions
     // still appear on the owner dashboard
@@ -424,7 +406,7 @@ export default async function AdminPage() {
 
             <div className="mt-8">
                 <h2 className="text-xl font-bold text-black">
-                    Pagos
+                    Pagos - Esta Semana
                 </h2>
 
                 <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -460,7 +442,7 @@ export default async function AdminPage() {
 
                     <div className="mt-8">
                         <h2 className="text-xl font-bold text-black">
-                            Reconciliación
+                            Reconciliación - Esta Semana
                         </h2>
 
                         <div className="mt-4 grid gap-4 md:grid-cols-2">
