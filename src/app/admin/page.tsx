@@ -81,6 +81,82 @@ export default async function AdminPage() {
         },
     });
 
+    // Calculate the current TEFF week from Monday through Sunday
+    const weekStart = new Date(todayStart);
+    const dayOfWeek = weekStart.getUTCDay();
+
+    // Javascript uses Sunday = 0, so convert it to Monday-based weeks
+    const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek -1;
+
+    weekStart.setUTCDate(weekStart.getUTCDate() - daysSinceMonday);
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 7);
+
+    // Get all sales recorded during the current week
+    const weeklySales = await prisma.sale.findMany({
+        where: {
+            createdAt: {
+                gte: weekStart,
+                lt: weekEnd,
+            },
+        },
+        select: {
+            finalTotal: true,
+            saleAppointments: {
+                select: {
+                    appointment: {
+                        select: {
+                            customerId: true,
+                        },
+                    },
+                },
+            },
+        },
+    });
+
+    const weeklySalesTotal = weeklySales.reduce(
+        (total, sale) => total + sale.finalTotal,
+        0
+    );
+
+    const weeklySaleCount = weeklySales.length;
+
+    // Count each customer only once during the week
+    const weeklyCustomerIds = new Set(
+        weeklySales.flatMap((sale) =>
+            sale.saleAppointments.map(
+                (saleAppointment) =>
+                    saleAppointment.appointment.customerId
+            )
+        )
+    );
+
+    const weeklyCustomers = weeklyCustomerIds.size;
+
+    const weeklyAverageTicket =
+        weeklySaleCount > 0
+            ? Math.round(weeklySalesTotal / weeklySaleCount)
+            : 0;
+    
+    const weeklyAppointments = await prisma.appointment.count({
+        where: {
+            date: {
+                gte: weekStart,
+                lt: weekEnd,
+            },
+            status: {
+                in: [
+                    "BOOKED",
+                    "REQUESTED",
+                    "CHECKED_IN",
+                    "IN_PROGRESS",
+                    "COMPLETED",
+                ]
+            }
+        }
+    })
+
     // Every sale record represents a completed checkout
     // so summing finalTotal gives the owner's total recorded revenue
     const salesSummary = await prisma.sale.aggregate({
@@ -285,6 +361,55 @@ export default async function AdminPage() {
 
                                 <p className="mt-2 text-2xl font-bold text-black">
                                     {formatCOP(todaysAverageTicket)}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Current week's operating snapshot */}
+                    <div className="mt-8">
+                        <h2 className="text-xl font-bold text-black">
+                            Esta Semana
+                        </h2>
+
+                        <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                            <div className="rounded-xl bg-white p-5 shadow-sm">
+                                <p className="text-sm font-medium text-neutral-500">
+                                    Ventas esta Semana
+                                </p>
+
+                                <p className="mt-2 text-2xl font-bold text-black">
+                                    {formatCOP(weeklySalesTotal)}
+                                </p>
+                            </div>
+
+                            <div className="rounded-xl bg-white p-5 shadow-sm">
+                                <p className="text-sm font-medium text-neutral-500">
+                                    Clientes esta Semana
+                                </p>
+
+                                <p className="mt-2 text-2xl font-bold text-black">
+                                    {weeklyCustomers}
+                                </p>
+                            </div>
+
+                            <div className="rounded-xl bg-white p-5 shadow-sm">
+                                <p className="text-sm font-medium text-neutral-500">
+                                    Citas esta Semana
+                                </p>
+
+                                <p className="mt-2 text-2xl font-bold text-black">
+                                    {weeklyAppointments}
+                                </p>
+                            </div>
+
+                            <div className="rounded-xl bg-white p-5 shadow-sm">
+                                <p className="text-sm font-medium text-neutral-500">
+                                    Ticket Promedio
+                                </p>
+
+                                <p className="mt-2 text-2xl font-bold text-black">
+                                    {formatCOP(weeklyAverageTicket)}
                                 </p>
                             </div>
                         </div>
