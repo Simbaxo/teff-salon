@@ -765,6 +765,25 @@ async function main() {
 
     console.log("Current employees synchronized.");
 
+    // Preserve former employees for historical appointments and payroll,
+    // but prevent them from appearing in new bookings.
+    const formerEmployees = [
+        "Diana",
+    ];
+
+    await prisma.employee.updateMany({
+        where: {
+            name: {
+                in: formerEmployees,
+            },
+        },
+        data: {
+            active: false,
+        },
+    });
+
+    console.log("Former employees deactivated.");
+
     // Synchronize each employee's service qualifications.
     for (const [employeeName, serviceNames] of Object.entries(employeeServiceMap)) {
         const legacyName = legacyEmployeeNames[employeeName];
