@@ -62,6 +62,12 @@ type ReceptionistPageClientProps = {
     weeklyTechnicianSummary: WeeklyTechnicianSummary[];
 };
 
+type Employee = {
+    id: number;
+    name: string;
+    active: boolean;
+};
+
 function getStatusLabel(status: string) {
     switch (status) {
         case "BOOKED":
@@ -112,34 +118,90 @@ export default function ReceptionistPageClient({
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
+    const [employees, setEmployees] = useState<Employee[]>([]);
+
+    const [reassigningAppointmentId, setReassigningAppointmentId] =
+        useState<number | null>(null);
 
     const today = getTeffToday();
 
-    useEffect(() => {
-        async function loadAppointments() {
-            try {
-                setIsLoading(true);
-                setLoadError(false);
+    // Load appointments so they can also be refreshed after reception changes.
+    async function loadAppointments() {
+        try {
+            setIsLoading(true);
+            setLoadError(false);
 
-                const response = await fetch("/api/appointments");
+            const response = await fetch("/api/appointments");
 
-                if (!response.ok) {
-                    throw new Error("No se pudieron cargar las citas");
-                }
-
-                const data = await response.json();
-
-                setAppointments(data);
-            } catch (error) {
-                console.error(error);
-                setLoadError(true);
-            } finally {
-                setIsLoading(false);
+            if (!response.ok) {
+                throw new Error("No se pudieron cargar las citas");
             }
-        }
 
+            const data = await response.json();
+            setAppointments(data);
+        } catch (error) {
+            console.error(error);
+            setLoadError(true);
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    async function loadEmployees() {
+        try {
+            const response = await fetch("/api/employees");
+
+            if (!response.ok) {
+                throw new Error("No se pudieron cargar las técnicas");
+            }
+
+            const data = await response.json();
+            setEmployees(data);
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    useEffect(() => {
         loadAppointments();
+        loadEmployees();
     }, []);
+
+    // Reassign an appointment to another qualified technician.
+    async function reassignEmployee(
+        appointmentId: number,
+        employeeId: number
+    ) {
+        try {
+            setReassigningAppointmentId(appointmentId);
+
+            const response = await fetch(
+                `/api/appointments/${appointmentId}/employee`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ employeeId }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                alert(data.error || "No se pudo cambiar la técnica");
+                return;
+            }
+
+            // Reload appointments so reception immediately sees the new technician.
+            await loadAppointments();
+        } catch (error) {
+            console.error(error);
+            alert("No se pudo cambiar la técnica");
+        } finally {
+            setReassigningAppointmentId(null);
+        }
+    }
 
     const todaysAppointments = appointments
         .filter(
@@ -279,13 +341,41 @@ export default function ReceptionistPageClient({
                                         </p>
                                     </div>
 
-                                    <div className="md:text-right">
-                                        <p className="font-semibold text-black">
-                                            {appointment.employee.name}
+                                    <div className="md:min-w-48 md:text-right">
+                                        <p className="text-sm text-neutral-500">
+                                            Técnica
                                         </p>
 
-                                        <p className="mt-1 text-sm text-neutral-500">
-                                            {getStatusLabel(appointment.status)}
+                                        <select
+                                            value={appointment.employee.id}
+                                            disabled={
+                                                reassigningAppointmentId === appointment.id ||
+                                                ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(
+                                                    appointment.status
+                                                )
+                                            }
+                                            onChange={(event) =>
+                                                reassignEmployee(
+                                                    appointment.id,
+                                                    Number(event.target.value)
+                                                )
+                                            }
+                                            className="mt-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-black disabled:opacity-50"
+                                        >
+                                            {employees.map((employee) => (
+                                                <option
+                                                    key={employee.id}
+                                                    value={employee.id}
+                                                >
+                                                    {employee.name}
+                                                </option>
+                                            ))}
+                                        </select>
+
+                                        <p className="mt-2 text-sm text-neutral-500">
+                                            {reassigningAppointmentId === appointment.id
+                                                ? "Actualizando..."
+                                                : getStatusLabel(appointment.status)}
                                         </p>
                                     </div>
                                 </div>
