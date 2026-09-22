@@ -74,6 +74,7 @@ The goal of the MVP is to manage the complete salon workflow:
 - Payment
 - Commission
 - Tip
+- SalonSettings
 
 ### Implemented Relationships
 
@@ -356,33 +357,80 @@ Technician Tip            $20.000
 Payment Collected        $120.000
 ```
 
-# ✅ Phase 7 — Basic Owner Reporting
+# ✅ Phase 7 — Owner Dashboard & Reporting
 
-**Provide the owner with the essential financial information needed to verify salon operations before launch.**
+**Provide the owner with live operational and financial reporting across daily, weekly, and monthly periods.**
 
-### MVP Scope
-
-- [x] Total sales
-- [x] Sales by technician
-- [x] Customer count
-- [x] Average ticket
-- [x] Payment totals by Cash / Bold / Transfer
-- [x] Commission totals by technician
-- [x] Tip totals
-- [x] Basic payment reconciliation
-
-### Current Implementation
+### Owner Access
 
 - Owner-only `/admin` dashboard
-- Financial values formatted in COP
-- Active technicians remain visible even when they have zero commissions
-- Commission totals separated into pending and paid amounts
-- Tips tracked separately from salon revenue
-- Payment reconciliation accounts for salon-collected tips
+- Server-side OWNER role protection
+- Financial values formatted consistently in COP
 
-*Phase 7 was completed and pushed before the production deployment.*
+### Today
 
-Advanced dashboards, sales goals, payroll management, expense tracking, trends, and performance analytics are planned for Post-MVP.
+- [x] Sales
+- [x] Unique purchasing customers
+- [x] Appointment count
+- [x] Average ticket
+
+### This Week
+
+The TEFF reporting week runs Monday through Sunday.
+
+- [x] Weekly sales
+- [x] Unique weekly purchasing customers
+- [x] Weekly appointment count
+- [x] Weekly average ticket
+- [x] Sales by active technician
+- [x] Technician commissions
+- [x] Pending and paid commission totals
+- [x] Cash / Bold / transfer payment totals
+- [x] Tip totals
+- [x] Payment reconciliation
+
+Active technicians remain visible with $0 production when they have no sales during the current week.
+
+### This Month
+
+- [x] Monthly sales
+- [x] Unique monthly purchasing customers
+- [x] Monthly appointment count
+- [x] Monthly average ticket
+
+### Sales Goals
+
+Business targets are stored in `SalonSettings` rather than hard-coded into the dashboard.
+
+Current initial targets:
+
+- Weekly sales goal: $5.000.000 COP
+- Monthly sales goal: $20.000.000 COP
+
+Implemented goal reporting:
+
+- [x] Configurable weekly sales goal
+- [x] Configurable monthly sales goal
+- [x] Weekly goal progress percentage
+- [x] Monthly goal progress percentage
+- [x] Weekly progress bar
+- [x] Monthly progress bar
+- [x] Amount sold toward each goal
+- [x] Remaining amount required to reach each goal
+
+### Financial Reconciliation
+
+Weekly reconciliation compares:
+
+`Payments received - Salon sales - Salon-collected technician tips`
+
+A zero difference indicates that recorded payments reconcile with salon revenue and electronic tips collected on behalf of technicians.
+
+### Current Status
+
+**Owner Dashboard v1 core reporting is complete.**
+
+Remaining owner-dashboard work is primarily UI polish and future advanced reporting rather than core operational reporting.
 
 # ✅ Phase 8 — Production Readiness & Deployment
 
@@ -394,7 +442,7 @@ Advanced dashboards, sales goals, payroll management, expense tracking, trends, 
 - [x] Configure production `DATABASE_URL`
 - [x] Configure production `AUTH_SECRET`
 - [x] Use `sslmode=verify-full` for PostgreSQL connections
-- [x] Verify all 11 Prisma migrations are applied
+- [x] Verify all required Prisma migrations are applied
 - [x] Separate Neon production and development branches
 - [x] Keep local development connected to the `development` branch
 - [x] Keep Vercel connected to the `production` branch
@@ -468,8 +516,12 @@ The following features are intentionally planned for after the first production 
 
 ### Operations & Reception
 
-- Receptionist dashboard with weekly and monthly salon performance
+- 🚧 Receptionist Dashboard v1 — next active development phase
+- Today / live appointment operational view
+- Weekly and monthly salon performance
 - Technician production totals and progress toward sales goals
+- Client counts by technician
+- Receptionist appointment management tools
 - Alerts when new appointments are created
 - Family / group appointment checkout
 - ✅ Customer defaults to "Any Technician" when booking
@@ -483,16 +535,19 @@ The following features are intentionally planned for after the first production 
 
 ### Advanced Owner Dashboard & Reporting
 
-- ✅ Total sales dashboard
-- ✅ Sales by technician
-- ✅ Customer count
-- ✅ Average ticket
-- ✅ Technician commissions
-- ✅ Tip totals and separation from salon revenue
+- ✅ Daily sales, customers, appointments, and average ticket
+- ✅ Weekly sales, customers, appointments, and average ticket
+- ✅ Monthly sales, customers, appointments, and average ticket
+- ✅ Weekly sales by technician
+- ✅ Weekly technician commissions
+- ✅ Weekly tip totals and separation from salon revenue
+- ✅ Weekly Cash / Bold / transfer reconciliation
+- ✅ Configurable weekly sales goal
+- ✅ Configurable monthly sales goal
+- ✅ Weekly and monthly goal progress tracking
 - Supply purchases and operating expenses
-- ✅ Cash / Bold / transfer reconciliation
-- Weekly and monthly sales goals
 - Historical performance reports
+- Date-range reporting
 - Generate TEFF-branded weekly salon summary images
 - Generate individual weekly technician commission/pay images
 - Generate TEFF-branded monthly summary images
