@@ -157,16 +157,110 @@ export default async function AdminPage() {
         }
     })
 
+    // Calculate the current calendar month
+    // monthStart = first day of this month
+    // monthEnd = first day of next month
+    const monthStart = new Date(
+        Date.UTC(
+            todayStart.getUTCFullYear(),
+            todayStart.getUTCMonth(),
+            1
+        )
+    );
+
+    const monthEnd = new Date(
+        Date.UTC(
+            todayStart.getUTCFullYear(),
+            todayStart.getUTCMonth() + 1,
+            1
+        )
+    );
+
+    // Get all sales recorded durning the current month
+    const monthlySales = await prisma.sale.findMany({
+        where: {
+            createdAt: {
+                gte: monthStart,
+                lt: monthEnd,
+            },
+        },
+        select: {
+            finalTotal: true,
+            saleAppointments: {
+                select: {
+                    appointment: {
+                        select: {
+                            customerId: true,
+                        },
+                    },
+                },
+            },
+        },
+    });
+
+    const monthlySalesTotal = monthlySales.reduce(
+        (total, sale) => total + sale.finalTotal,
+        0
+    );
+
+    const monthlySaleCount = monthlySales.length;
+
+    // Count each purchasing customer only once durning the month
+    const monthlyCustomerIds = new Set(
+        monthlySales.flatMap((sale) =>
+            sale.saleAppointments.map(
+                (saleAppointment) =>
+                    saleAppointment.appointment.customerId
+            )
+        )
+    );
+
+    const monthlyCustomers = monthlyCustomerIds.size
+
+    const monthlyAverageTicket =
+        monthlySaleCount > 0
+            ? Math.round(monthlySalesTotal / monthlySaleCount)
+            : 0;
+    
+    const monthlyAppointments = await prisma.appointment.count({
+        where: {
+            date: {
+                gte: monthStart,
+                lt: monthEnd,
+            },
+            status: {
+                in: [
+                    "BOOKED",
+                    "REQUESTED",
+                    "CHECKED_IN",
+                    "IN_PROGRESS",
+                    "COMPLETED",
+                ],
+            },
+        },
+    });
+
     // Load TEFF's configurable business goals
     const salonSettings = await prisma.salonSettings.findFirst();
 
     const weeklySalesGoal = salonSettings?.weeklySalesGoal ?? 0;
+
+    const monthlySalesGoal = salonSettings?.monthlySalesGoal ?? 0;
 
     // Calculate progress toward this week's sales goal
     const weeklyGoalProgress =
         weeklySalesGoal > 0
             ? Math.min(
                 Math.round((weeklySalesTotal / weeklySalesGoal) * 100),
+                100
+            )
+            : 0;
+
+    // Calculate progress toward this month's sales goal
+    const monthlyGoalProgress =
+        monthlySalesGoal > 0
+            ? Math.min(
+                Math.round((monthlySalesTotal / monthlySalesGoal) * 100),
                 100
             )
             : 0;
@@ -459,6 +553,100 @@ export default async function AdminPage() {
                                     )}
                                 </span>
                             </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Current month's operating snapshot */}
+            <div className="mt-8">
+                <h2 className="text-xl font-bold text-black">
+                    Este Mes
+                </h2>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-xl bg-white p-5 shadow-sm">
+                        <p className="text-sm font-medium text-neutral-500">
+                            Ventas este Mes
+                        </p>
+
+                        <p className="mt-2 text-2xl font-bold text-black">
+                            {formatCOP(monthlySalesTotal)}
+                        </p>
+                    </div>
+
+                    <div className="rounded-xl bg-white p-5 shadow-sm">
+                        <p className="text-sm font-medium text-neutral-500">
+                            Clientes este Mes
+                        </p>
+
+                        <p className="mt-2 text-2xl font-bold text-black">
+                            {monthlyCustomers}
+                        </p>
+                    </div>
+
+                    <div className="rounded-xl bg-white p-5 shadow-sm">
+                        <p className="text-sm font-medium text-neutral-500">
+                            Citas este Mes
+                        </p>
+
+                        <p className="mt-2 text-2xl font-bold text-black">
+                            {monthlyAppointments}
+                        </p>
+                    </div>
+
+                    <div className="rounded-xl bg-white p-5 shadow-sm">
+                        <p className="text-sm font-medium text-neutral-500">
+                            Ticket Promedio
+                        </p>
+
+                        <p className="mt-2 text-2xl font-bold text-black">
+                            {formatCOP(monthlyAverageTicket)}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Monthly sales goal */}
+                <div className="mt-4 rounded-xl bg-white p-5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-neutral-500">
+                                Meta Mensual
+                            </p>
+
+                            <p className="mt-1 text-xl font-bold text-black">
+                                {formatCOP(monthlySalesGoal)}
+                            </p>
+                        </div>
+
+                        <div className="text-right">
+                            <p className="text-sm font-medium text-neutral-500">
+                                Progreso
+                            </p>
+
+                            <p className="mt-1 text-xl font-bold text-black">
+                                {monthlyGoalProgress}%
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 h-3 overflow-hidden rounded-full bg-neutral-200">
+                        <div
+                            className="h-full rounded-full bg-black transition-all"
+                            style={{ width: `${monthlyGoalProgress}%` }}
+                        />
+                    </div>
+
+                    <div className="mt-3 flex justify-between text-sm text-neutral-500">
+                        <span>
+                            {formatCOP(monthlySalesTotal)} vendidos
+                        </span>
+
+                        <span>
+                            Faltan{" "}
+                            {formatCOP(
+                                Math.max(monthlySalesGoal - monthlySalesTotal, 0)
+                            )}
+                        </span>
                     </div>
                 </div>
             </div>
