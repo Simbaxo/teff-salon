@@ -123,6 +123,9 @@ export default function ReceptionistPageClient({
     const [reassigningAppointmentId, setReassigningAppointmentId] =
         useState<number | null>(null);
 
+    const [reschedulingAppointmentId, setReschedulingAppointmentId] =
+        useState<number | null>(null);
+
     const today = getTeffToday();
 
     // Load appointments so they can also be refreshed after reception changes.
@@ -203,6 +206,46 @@ export default function ReceptionistPageClient({
         }
     }
 
+    // Change the date/time of one appointment block.
+    async function rescheduleAppointment(
+        appointmentId: number,
+        date: string,
+        startTime: string
+    ) {
+        try {
+            setReschedulingAppointmentId(appointmentId);
+
+            const response = await fetch(
+                `/api/appointments/${appointmentId}/schedule`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        date,
+                        startTime,
+                    }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                alert(data.error || "No se pudo cambiar el horario");
+                return;
+            }
+
+            // Reload so reception immediately sees the updated schedule.
+            await loadAppointments();
+        } catch (error) {
+            console.error(error);
+            alert("No se pudo cambiar el horario");
+        } finally {
+            setReschedulingAppointmentId(null);
+        }
+    }
+
     const todaysAppointments = appointments
         .filter(
             (appointment) =>
@@ -247,6 +290,26 @@ export default function ReceptionistPageClient({
             </p>
         );
     }
+
+    function getReceptionTimeOptions() {
+        const options: string[] = [];
+
+        // Covers TEFF's appointment start-time window.
+        for (let minutes = 9 * 60 + 30; minutes <= 18 * 60; minutes += 30) {
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+
+            options.push(
+                `${hours.toString().padStart(2, "0")}:${mins
+                    .toString()
+                    .padStart(2, "0")}`
+            );
+        }
+
+        return options;
+    }
+
+    const receptionTimeOptions = getReceptionTimeOptions();
 
     return (
         <div className="mt-8">
@@ -377,6 +440,83 @@ export default function ReceptionistPageClient({
                                                 ? "Actualizando..."
                                                 : getStatusLabel(appointment.status)}
                                         </p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 border-t border-neutral-200 pt-4">
+                                    <p className="text-sm font-medium text-neutral-500">
+                                        Cambiar horario
+                                    </p>
+
+                                    <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                                        <input
+                                            type="date"
+                                            defaultValue={appointment.date.slice(0, 10)}
+                                            disabled={
+                                                reschedulingAppointmentId === appointment.id ||
+                                                ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(
+                                                    appointment.status
+                                                )
+                                            }
+                                            id={`date-${appointment.id}`}
+                                            className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-black disabled:opacity-50"
+                                        />
+
+                                        <select
+                                            defaultValue={appointment.startTime.slice(0, 5)}
+                                            disabled={
+                                                reschedulingAppointmentId === appointment.id ||
+                                                ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(
+                                                    appointment.status
+                                                )
+                                            }
+                                            id={`time-${appointment.id}`}
+                                            className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-black disabled:opacity-50"
+                                        >
+                                            {!receptionTimeOptions.includes(
+                                                appointment.startTime.slice(0, 5)
+                                            ) && (
+                                                <option value={appointment.startTime.slice(0, 5)}>
+                                                    {formatTime(appointment.startTime)}
+                                                </option>
+                                            )}
+                                            
+                                            {receptionTimeOptions.map((time) => (
+                                                <option key={time} value={time}>
+                                                    {formatTime(time)}
+                                                </option>
+                                            ))}
+                                        </select>
+
+                                        <button
+                                            type="button"
+                                            disabled={
+                                                reschedulingAppointmentId === appointment.id ||
+                                                ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(
+                                                    appointment.status
+                                                )
+                                            }
+                                            onClick={() => {
+                                                const dateInput = document.getElementById(
+                                                    `date-${appointment.id}`
+                                                ) as HTMLInputElement;
+
+                                                const timeInput = document.getElementById(
+                                                    `time-${appointment.id}`
+                                                ) as HTMLSelectElement;
+
+                                                rescheduleAppointment(
+                                                    appointment.id,
+                                                    dateInput.value,
+                                                    timeInput.value
+                                                );
+                                            }}
+                                            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                                        >
+                                            {reschedulingAppointmentId === appointment.id
+                                                ? "Actualizando..."
+                                                : "Guardar horario"}
+                                        </button>
                                     </div>
                                 </div>
                             </div>
