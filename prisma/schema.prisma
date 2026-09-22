@@ -267,3 +267,13 @@ model Tip {
   sale     Sale     @relation(fields: [saleId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
 }
+
+// Stores configurable business targets and operational settings.
+// A single settings row is used for TEFF today and can later expand per location.
+model SalonSettings {
+  id               Int      @id @default(autoincrement())
+  weeklySalesGoal  Int      @default(0)
+  monthlySalesGoal Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}

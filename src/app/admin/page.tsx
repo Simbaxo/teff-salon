@@ -157,6 +157,20 @@ export default async function AdminPage() {
         }
     })
 
+    // Load TEFF's configurable business goals
+    const salonSettings = await prisma.salonSettings.findFirst();
+
+    const weeklySalesGoal = salonSettings?.weeklySalesGoal ?? 0;
+
+    // Calculate progress toward this week's sales goal
+    const weeklyGoalProgress =
+        weeklySalesGoal > 0
+            ? Math.min(
+                Math.round((weeklySalesTotal / weeklySalesGoal) * 100),
+                100
+            )
+            : 0;
+
     // Group recorded payments by method so the owner can reconcile
     // cash, Bold, and bank transfers against the real-world balances
     const paymentTotals = await prisma.payment.groupBy({
@@ -401,7 +415,52 @@ export default async function AdminPage() {
                                 </p>
                             </div>
                         </div>
+
+                        {/* Weekly Sales Goal */}
+                        <div className="mt-4 rounded-xl bg-white p-5 shadow-sm">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-medium text-neutral-500">
+                                        Meta Semanal
+                                    </p>
+
+                                    <p className="mt-1 text-xl font-bold text-black">
+                                        {formatCOP(weeklySalesGoal)}
+                                    </p>
+                                </div>
+
+                                <div className="text-right">
+                                    <p className="text-sm font-medium text-neutral-500"> 
+                                        Progreso
+                                    </p>
+
+                                    <p className="mt-1 text-xl font-bold text-black">
+                                        {weeklyGoalProgress}%
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 h-3 overflow-hidden rounded-full bg-neutral-200">
+                                <div
+                                    className="h-full rounded-full bg-black transition-all"
+                                    style={{ width: `${weeklyGoalProgress}%` }}
+                                />
+                            </div>
+
+                            <div className="mt-3 flex justify-between text-sm text-neutral-500">
+                                <span>
+                                    {formatCOP(weeklySalesTotal)} vendidos
+                                </span>
+
+                                <span>
+                                    Faltan{" "}
+                                    {formatCOP(
+                                        Math.max(weeklySalesGoal - weeklySalesTotal, 0)
+                                    )}
+                                </span>
+                            </div>
                     </div>
+                </div>
             </div>
 
             <div className="mt-8">
