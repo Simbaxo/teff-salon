@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getTeffToday } from "@/lib/datetime";
+import {
+    getTeffToday,
+    hasTeffAppointmentStarted,
+} from "@/lib/datetime";
 
 type Appointment = {
     id: number;
@@ -206,6 +209,38 @@ export default function ReceptionistPageClient({
         }
     }
 
+    // Update the operational status of an appointment.
+    async function updateAppointmentStatus(
+        appointmentId: number,
+        status: string
+    ) {
+        try {
+            const response = await fetch(
+                `/api/appointments/${appointmentId}/status`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ status }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                alert(data.error || "No se pudo actualizar la cita");
+                return;
+            }
+
+            // Reload so KPIs and appointment cards stay synchronized.
+            await loadAppointments();
+        } catch (error) {
+            console.error(error);
+            alert("No se pudo actualizar la cita");
+        }
+    }
+
     // Change the date/time of one appointment block.
     async function rescheduleAppointment(
         appointmentId: number,
@@ -310,6 +345,11 @@ export default function ReceptionistPageClient({
     }
 
     const receptionTimeOptions = getReceptionTimeOptions();
+
+    // A client can only be marked as a no-show after the appointment starts.
+    function canMarkNoShow(date: string, startTime: string) {
+        return hasTeffAppointmentStarted(date, startTime);
+    }
 
     return (
         <div className="mt-8">
@@ -480,7 +520,7 @@ export default function ReceptionistPageClient({
                                                     {formatTime(appointment.startTime)}
                                                 </option>
                                             )}
-                                            
+
                                             {receptionTimeOptions.map((time) => (
                                                 <option key={time} value={time}>
                                                     {formatTime(time)}
@@ -518,6 +558,108 @@ export default function ReceptionistPageClient({
                                                 : "Guardar horario"}
                                         </button>
                                     </div>
+                                </div>
+
+                                {/* Appointment workflow actions */}
+                                <div className="mt-4 border-t border-neutral-200 pt-4">
+                                    {appointment.status === "REQUESTED" && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                updateAppointmentStatus(
+                                                    appointment.id,
+                                                    "BOOKED"
+                                                )
+                                            }
+                                            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
+                                        >
+                                            Confirmar Cita
+                                        </button>
+                                    )}
+
+                                    {appointment.status === "BOOKED" && (
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    updateAppointmentStatus(
+                                                        appointment.id,
+                                                        "CHECKED_IN"
+                                                    )
+                                                }
+                                                className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
+                                            >
+                                                Cliente Llegó
+                                            </button>
+
+                                            {canMarkNoShow(
+                                                appointment.date,
+                                                appointment.startTime
+                                            ) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const confirmed = window.confirm(
+                                                            "¿Marcar esta cita como No Asistió?"
+                                                        );
+
+                                                        if (confirmed) {
+                                                            updateAppointmentStatus(
+                                                                appointment.id,
+                                                                "NO_SHOW"
+                                                            );
+                                                        }
+                                                    }}
+                                                    className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black"
+                                                >
+                                                    No Asistió
+                                                </button>
+                                            )}
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const confirmed = window.confirm(
+                                                        "¿Seguro que deseas cancelar esta cita?"
+                                                    );
+
+                                                    if (confirmed) {
+                                                        updateAppointmentStatus(
+                                                            appointment.id,
+                                                            "CANCELLED"
+                                                        );
+                                                    }
+                                                }}
+                                                className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black"
+                                            >
+                                                Cancelar Cita
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {appointment.status === "CHECKED_IN" && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                updateAppointmentStatus(
+                                                    appointment.id,
+                                                    "IN_PROGRESS"
+                                                )
+                                            }
+                                            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
+                                        >
+                                            Iniciar Servicio
+                                        </button>
+                                    )}
+
+                                    {appointment.status === "IN_PROGRESS" && (
+                                        <Link
+                                            href={`/staff/checkout/${appointment.id}`}
+                                            className="inline-block rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
+                                        >
+                                            Finalizar Servicio
+                                        </Link>
+                                    )}
                                 </div>
                             </div>
                         ))}
