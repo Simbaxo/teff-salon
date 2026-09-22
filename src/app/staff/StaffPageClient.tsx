@@ -7,6 +7,7 @@ import {
   getTeffToday,
   hasTeffAppointmentStarted,
 } from "@/lib/datetime";
+import InternalNav from "@/components/InternalNav";
 
 type Appointment = {
     id: number;
@@ -345,6 +346,10 @@ export default  function StaffPage({
                         <p className="mt-1 text-sm text-neutral-500">
                             {userName} · {userRole}
                         </p>
+
+                        <div className="mt-4">
+                            <InternalNav userRole={userRole} />
+                        </div>
                     </div>
 
                     <button

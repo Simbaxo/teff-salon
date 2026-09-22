@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getTeffToday } from "@/lib/datetime";
+import InternalNav from "@/components/InternalNav";
 
 export default async function AdminPage() {
     const session = await auth();
@@ -412,6 +413,10 @@ export default async function AdminPage() {
                 <p className="mt-2 text-neutral-600">
                     Resumen financiero básico de TEFF Beauty Salon.
                 </p>
+
+                <div className="mt-4">
+                    <InternalNav userRole={session.user.role} />
+                </div>
 
                     {/* Today's operating snapshot */}
                     <div className="mt-8">

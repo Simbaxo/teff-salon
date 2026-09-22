@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getTeffToday } from "@/lib/datetime";
 import ReceptionistPageClient from "./ReceptionistPageClient";
 import { prisma } from "@/lib/prisma";
+import InternalNav from "@/components/InternalNav";
 
 
 export default async function ReceptionistPage() {
@@ -165,6 +166,10 @@ export default async function ReceptionistPage() {
                     <p className="mt-1 text-sm text-neutral-500">
                         {today}
                     </p>
+
+                    <div className="mt-4">
+                        <InternalNav userRole={session.user.role} />
+                    </div>
                 </div>
 
                <ReceptionistPageClient 
