@@ -20,6 +20,119 @@ export default async function ReceptionistPage() {
 
     const todayStart = new Date(`${today}T00:00:00.000Z`);
 
+    // Current TEFF week: Monday through Sunday.
+    const weekStart = new Date(todayStart);
+    const dayOfWeek = weekStart.getUTCDay();
+
+    const daysSinceMonday =
+        dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+    weekStart.setUTCDate(
+        weekStart.getUTCDate() - daysSinceMonday
+    );
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 7);
+
+    // Current week's salon sales.
+    const weeklySales = await prisma.sale.aggregate({
+        where: {
+            createdAt: {
+                gte: weekStart,
+                lt: weekEnd,
+            },
+        },
+        _sum: {
+            finalTotal: true,
+        },
+    });
+
+    const weeklySalesTotal =
+        weeklySales._sum.finalTotal ?? 0;
+
+    // Load the configurable weekly sales goal.
+    const salonSettings =
+        await prisma.salonSettings.findFirst();
+
+    const weeklySalesGoal =
+        salonSettings?.weeklySalesGoal ?? 0;
+
+    const weeklyGoalProgress =
+        weeklySalesGoal > 0
+            ? Math.min(
+                Math.round(
+                    (weeklySalesTotal / weeklySalesGoal) * 100
+                ),
+                100
+            )
+            : 0;
+
+    // Reception only needs production/client counts.
+    // Commission payout amounts remain owner-only.
+    const weeklyTechnicianData =
+        await prisma.employee.findMany({
+            where: {
+                active: true,
+            },
+            select: {
+                id: true,
+                name: true,
+                commissions: {
+                    where: {
+                        createdAt: {
+                            gte: weekStart,
+                            lt: weekEnd,
+                        },
+                    },
+                    select: {
+                        commissionBase: true,
+                        sale: {
+                            select: {
+                                saleAppointments: {
+                                    select: {
+                                        appointment: {
+                                            select: {
+                                                customerId: true,
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            orderBy: {
+                name: "asc",
+            },
+        });
+
+    const weeklyTechnicianSummary =
+        weeklyTechnicianData.map((employee) => {
+            const sales = employee.commissions.reduce(
+                (total, commission) =>
+                    total + commission.commissionBase,
+                0
+            );
+
+            const customerIds = new Set(
+                employee.commissions.flatMap(
+                    (commission) =>
+                        commission.sale.saleAppointments.map(
+                            (saleAppointment) =>
+                                saleAppointment.appointment.customerId
+                        )
+                )
+            );
+
+            return {
+                id: employee.id,
+                name: employee.name,
+                sales,
+                customers: customerIds.size,
+            };
+        });
+
     const tomorrow = new Date(todayStart);
     tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
@@ -56,6 +169,10 @@ export default async function ReceptionistPage() {
 
                <ReceptionistPageClient 
                 todaysSalesTotal={todaysSalesTotal}
+                weeklySalesTotal={weeklySalesTotal}
+                weeklySalesGoal={weeklySalesGoal}
+                weeklyGoalProgress={weeklyGoalProgress}
+                weeklyTechnicianSummary={weeklyTechnicianSummary}
                />
             </div>
         </main>

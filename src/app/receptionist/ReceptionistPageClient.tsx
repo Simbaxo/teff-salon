@@ -47,8 +47,19 @@ type Appointment = {
     }[];
 };
 
+type WeeklyTechnicianSummary = {
+    id: number;
+    name: string;
+    sales: number;
+    customers: number;
+};
+
 type ReceptionistPageClientProps = {
     todaysSalesTotal: number;
+    weeklySalesTotal: number;
+    weeklySalesGoal: number;
+    weeklyGoalProgress: number;
+    weeklyTechnicianSummary: WeeklyTechnicianSummary[];
 };
 
 function getStatusLabel(status: string) {
@@ -93,6 +104,10 @@ function formatCOP(value: number) {
 
 export default function ReceptionistPageClient({
     todaysSalesTotal,
+    weeklySalesTotal,
+    weeklySalesGoal,
+    weeklyGoalProgress,
+    weeklyTechnicianSummary,
 }: ReceptionistPageClientProps) {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -278,6 +293,94 @@ export default function ReceptionistPageClient({
                         ))}
                     </div>
                 )}
+            </div>
+
+            {/* Weekly salon performance */}
+            <div className="mt-8">
+                <h2 className="text-xl font-bold text-black">
+                    Esta Semana
+                </h2>
+
+                {/* Weekly goal */}
+                <div className="mt-4 rounded-xl bg-white p-5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-neutral-500">
+                                Ventas
+                            </p>
+
+                            <p className="mt-1 text-xl font-bold text-black">
+                                {formatCOP(weeklySalesTotal)}
+                            </p>
+                        </div>
+
+                        <div className="text-right">
+                            <p className="text-sm font-medium text-neutral-500">
+                                Meta Semanal
+                            </p>
+
+                            <p className="mt-1 text-xl font-bold text-black">
+                                {formatCOP(weeklySalesGoal)}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 h-3 overflow-hidden rounded-full bg-neutral-200">
+                        <div
+                            className="h-full rounded-full bg-black transition-all"
+                            style={{ width: `${weeklyGoalProgress}%` }}
+                        />
+                    </div>
+
+                    <div className="mt-3 flex justify-between text-sm text-neutral-500">
+                        <span>
+                            {weeklyGoalProgress}% completado
+                        </span>
+
+                        <span>
+                            Faltan{" "}
+                            {formatCOP(
+                                Math.max(
+                                    weeklySalesGoal - weeklySalesTotal,
+                                    0
+                                )
+                            )}
+                        </span>
+                    </div>
+                </div>
+
+                {/* Technician production */}
+                <div className="mt-6">
+                    <h3 className="text-lg font-bold text-black">
+                        Producción por Técnica
+                    </h3>
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        {weeklyTechnicianSummary.map((employee) => (
+                            <div
+                                key={employee.id}
+                                className="rounded-xl bg-white p-5 shadow-sm"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <p className="font-bold text-black">
+                                        {employee.name}
+                                    </p>
+
+                                    <p className="font-bold text-black">
+                                        {formatCOP(employee.sales)}
+                                    </p>
+                                </div>
+
+                                <p className="mt-2 text-sm text-neutral-500">
+                                    {employee.customers}{" "}
+                                    {employee.customers === 1
+                                        ? "cliente"
+                                        : "clientes"}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         </div>
     );
