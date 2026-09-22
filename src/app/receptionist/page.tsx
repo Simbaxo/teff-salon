@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { getTeffToday } from "@/lib/datetime";
 import ReceptionistPageClient from "./ReceptionistPageClient";
+import { prisma } from "@/lib/prisma";
 
 
 export default async function ReceptionistPage() {
@@ -16,6 +17,25 @@ export default async function ReceptionistPage() {
     }
 
     const today = getTeffToday();
+
+    const todayStart = new Date(`${today}T00:00:00.000Z`);
+
+    const tomorrow = new Date(todayStart);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+    const todaysSales = await prisma.sale.aggregate({
+        where: {
+            createdAt: {
+                gte: todayStart,
+                lt: tomorrow,
+            },
+        },
+        _sum: {
+            finalTotal: true,
+        },
+    });
+
+    const todaysSalesTotal = todaysSales._sum.finalTotal ?? 0;
 
     return (
         <main className="min-h-screen bg-neutral-100 p-6">
@@ -34,7 +54,9 @@ export default async function ReceptionistPage() {
                     </p>
                 </div>
 
-               <ReceptionistPageClient />
+               <ReceptionistPageClient 
+                todaysSalesTotal={todaysSalesTotal}
+               />
             </div>
         </main>
     );

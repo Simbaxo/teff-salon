@@ -47,6 +47,10 @@ type Appointment = {
     }[];
 };
 
+type ReceptionistPageClientProps = {
+    todaysSalesTotal: number;
+};
+
 function getStatusLabel(status: string) {
     switch (status) {
         case "BOOKED":
@@ -79,7 +83,17 @@ function formatTime(time: string) {
         .padStart(2, "0")} ${period}`;
 }
 
-export default function ReceptionistPageClient() {
+function formatCOP(value: number) {
+    return new Intl.NumberFormat("es-CO", {
+        style: "currency",
+        currency: "COP",
+        maximumFractionDigits: 0,
+    }).format(value);
+}
+
+export default function ReceptionistPageClient({
+    todaysSalesTotal,
+}: ReceptionistPageClientProps) {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
@@ -120,6 +134,26 @@ export default function ReceptionistPageClient() {
         .sort((a, b) =>
             a.startTime.localeCompare(b.startTime)
         );
+    
+    // Reception snapshot for today's salon activity.
+    const todaysAppointmentCount = todaysAppointments.filter(
+        (appointment) =>
+            !["CANCELLED", "NO_SHOW"].includes(appointment.status)
+    ).length;
+
+    const todaysCompletedCustomers = new Set(
+        todaysAppointments
+            .filter(
+                (appointment) =>
+                    appointment.status === "COMPLETED"
+            )
+            .map((appointment) => appointment.customer.id)
+    ).size;
+
+    const todaysInService = todaysAppointments.filter(
+        (appointment) =>
+            appointment.status === "IN_PROGRESS"
+    ).length;
 
     if (isLoading) {
         return (
@@ -137,73 +171,113 @@ export default function ReceptionistPageClient() {
         );
     }
 
-    if (todaysAppointments.length === 0) {
-        return (
-            <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
-                <h2 className="text-xl font-bold text-black">
-                    Citas de Hoy
-                </h2>
-
-                <p className="mt-2 text-neutral-500">
-                    No hay citas programadas para hoy.
-                </p>
-            </div>
-        );
-    }
-
     return (
         <div className="mt-8">
-            <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-black">
-                    Citas de Hoy
-                </h2>
 
-                <span className="text-sm text-neutral-500">
-                    {todaysAppointments.length} citas
-                </span>
+            {/* Today's reception snapshot */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-xl bg-white p-5 shadow-sm">
+                    <p className="text-sm font-medium text-neutral-500">
+                        Citas de Hoy
+                    </p>
+
+                    <p className="mt-2 text-2xl font-bold text-black">
+                        {todaysAppointmentCount}
+                    </p>
+                </div>
+
+                <div className="rounded-xl bg-white p-5 shadow-sm">
+                    <p className="text-sm font-medium text-neutral-500">
+                        Clientes Atendidos
+                    </p>
+
+                    <p className="mt-2 text-2xl font-bold text-black">
+                        {todaysCompletedCustomers}
+                    </p>
+                </div>
+
+                <div className="rounded-xl bg-white p-5 shadow-sm">
+                    <p className="text-sm font-medium text-neutral-500">
+                        En Servicio
+                    </p>
+
+                    <p className="mt-2 text-2xl font-bold text-black">
+                        {todaysInService}
+                    </p>
+                </div>
+
+                <div className="rounded-xl bg-white p-5 shadow-sm">
+                    <p className="text-sm font-medium text-neutral-500">
+                        Ventas de Hoy
+                    </p>
+
+                    <p className="mt-2 text-2xl font-bold text-black">
+                        {formatCOP(todaysSalesTotal)}
+                    </p>
+                </div>
             </div>
 
-            <div className="mt-4 space-y-3">
-                {todaysAppointments.map((appointment) => (
-                    <div
-                        key={appointment.id}
-                        className="rounded-xl bg-white p-5 shadow-sm"
-                    >
-                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                            <div>
-                                <p className="text-lg font-bold text-black">
-                                    {formatTime(appointment.startTime)}
-                                </p>
+            <div className="mt-8">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-black">
+                        Citas de Hoy
+                    </h2>
 
-                                <Link
-                                    href={`/staff/customers/${appointment.customer.id}`}
-                                    className="mt-1 inline-block font-semibold text-black hover:underline"
-                                >
-                                    {appointment.customer.name}
-                                </Link>
+                    <span className="text-sm text-neutral-500">
+                        {todaysAppointments.length} citas
+                    </span>
+                </div>
 
-                                <p className="mt-1 text-sm text-neutral-500">
-                                    {appointment.appointmentServices
-                                        .map(
-                                            (item) =>
-                                                item.service.nameEs
-                                        )
-                                        .join(", ")}
-                                </p>
-                            </div>
-
-                            <div className="md:text-right">
-                                <p className="font-semibold text-black">
-                                    {appointment.employee.name}
-                                </p>
-
-                                <p className="mt-1 text-sm text-neutral-500">
-                                    {getStatusLabel(appointment.status)}
-                                </p>
-                            </div>
-                        </div>
+                {todaysAppointments.length === 0 ? (
+                    <div className="mt-4 rounded-xl bg-white p-5 shadow-sm">
+                        <p className="text-neutral-500">
+                            No hay citas programadas para hoy.
+                        </p>
                     </div>
-                ))}
+                ) : (
+                    <div className="mt-4 space-y-3">
+                        {todaysAppointments.map((appointment) => (
+                            <div
+                                key={appointment.id}
+                                className="rounded-xl bg-white p-5 shadow-sm"
+                            >
+                                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                    <div>
+                                        <p className="text-lg font-bold text-black">
+                                            {formatTime(appointment.startTime)}
+                                        </p>
+
+                                        <Link
+                                            href={`/staff/customers/${appointment.customer.id}`}
+                                            className="mt-1 inline-block font-semibold text-black hover:underline"
+                                        >
+                                            {appointment.customer.name}
+                                        </Link>
+
+                                        <p className="mt-1 text-sm text-neutral-500">
+                                            {appointment.appointmentServices
+                                                .map(
+                                                    (item) =>
+                                                        item.service.nameEs
+                                                )
+                                                .join(", ")}
+                                        </p>
+                                    </div>
+
+                                    <div className="md:text-right">
+                                        <p className="font-semibold text-black">
+                                            {appointment.employee.name}
+                                        </p>
+
+                                        <p className="mt-1 text-sm text-neutral-500">
+                                            {getStatusLabel(appointment.status)}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
