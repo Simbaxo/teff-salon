@@ -51,12 +51,57 @@ export default async function ReceptionistPage() {
     const weeklySalesTotal =
         weeklySales._sum.finalTotal ?? 0;
 
+    // Current Calendar Month
+    const monthStart = new Date(
+        Date.UTC(
+            todayStart.getUTCFullYear(),
+            todayStart.getUTCMonth(),
+            1
+        )
+    );
+
+    const monthEnd = new Date(
+        Date.UTC(
+            todayStart.getUTCFullYear(),
+            todayStart.getUTCMonth() + 1,
+            1
+        )
+    );
+
+    const monthlySales = await prisma.sale.aggregate({
+        where: {
+            createdAt: {
+                gte: monthStart,
+                lt: monthEnd,
+            },
+        },
+        _sum: {
+            finalTotal: true,
+        },
+    });
+
+    const monthlySalesTotal =
+        monthlySales._sum.finalTotal ?? 0;
+
     // Load the configurable weekly sales goal.
     const salonSettings =
         await prisma.salonSettings.findFirst();
 
     const weeklySalesGoal =
         salonSettings?.weeklySalesGoal ?? 0;
+
+    const monthlySalesGoal =
+    salonSettings?.monthlySalesGoal ?? 0;
+
+    const monthlyGoalProgress =
+        monthlySalesGoal > 0
+            ? Math.min(
+                Math.round(
+                    (monthlySalesTotal / monthlySalesGoal) * 100
+                ),
+                100
+            )
+            : 0;
 
     const weeklyGoalProgress =
         weeklySalesGoal > 0
@@ -134,6 +179,72 @@ export default async function ReceptionistPage() {
             };
         });
 
+    // Monthly technician production for reception.
+    // Commission payout amounts remain owner-only.
+    const monthlyTechnicianData =
+        await prisma.employee.findMany({
+            where: {
+                active: true,
+            },
+            select: {
+                id: true,
+                name: true,
+                commissions: {
+                    where: {
+                        createdAt: {
+                            gte: monthStart,
+                            lt: monthEnd,
+                        },
+                    },
+                    select: {
+                        commissionBase: true,
+                        sale: {
+                            select: {
+                                saleAppointments: {
+                                    select: {
+                                        appointment: {
+                                            select: {
+                                                customerId: true,
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            orderBy: {
+                name: "asc",
+            },
+        });
+
+    const monthlyTechnicianSummary =
+        monthlyTechnicianData.map((employee) => {
+            const sales = employee.commissions.reduce(
+                (total, commission) =>
+                    total + commission.commissionBase,
+                0
+            );
+
+            const customerIds = new Set(
+                employee.commissions.flatMap(
+                    (commission) =>
+                        commission.sale.saleAppointments.map(
+                            (saleAppointment) =>
+                                saleAppointment.appointment.customerId
+                        )
+                )
+            );
+
+            return {
+                id: employee.id,
+                name: employee.name,
+                sales,
+                customers: customerIds.size,
+            };
+        });
+
     const tomorrow = new Date(todayStart);
     tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
@@ -178,6 +289,10 @@ export default async function ReceptionistPage() {
                 weeklySalesGoal={weeklySalesGoal}
                 weeklyGoalProgress={weeklyGoalProgress}
                 weeklyTechnicianSummary={weeklyTechnicianSummary}
+                monthlySalesTotal={monthlySalesTotal}
+                monthlySalesGoal={monthlySalesGoal}
+                monthlyGoalProgress={monthlyGoalProgress}
+                monthlyTechnicianSummary={monthlyTechnicianSummary}
                />
             </div>
         </main>
