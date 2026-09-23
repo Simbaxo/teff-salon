@@ -328,6 +328,22 @@ export async function POST(request: Request) {
             );
         }
 
+        // Newly added checkout items need explicit technician attribution.
+        // A single-technician visit is unambiguous. For multi-technician visits,
+        // do not guess which technician performed an item added during checkout.
+        const hasNewCheckoutItems =
+            newServiceIds.length > 0 || newAddonIds.length > 0;
+
+        if (hasNewCheckoutItems && visitEmployeeIds.length > 1) {
+            return Response.json(
+                {
+                    error:
+                        "Added checkout items cannot be assigned automatically when multiple technicians worked on the visit",
+                },
+                { status: 400 }
+            );
+        }
+
         // Make sure every requested add-on actually exists
         if (addons.length !== uniqueAddonIds.length) {
             return Response.json(
@@ -427,12 +443,63 @@ export async function POST(request: Request) {
             }
         );
 
-        // Revenue already attached to appointment blocks.
-        // Newly added checkout items are handled separately before production use.
+        // If only one technician worked on the visit, any service or add-on
+        // added during checkout belongs to that technician.
+        if (hasNewCheckoutItems && visitEmployeeIds.length === 1) {
+            const addedServiceRevenue = services
+                .filter((service) => newServiceIds.includes(service.id))
+                .reduce(
+                    (total, service) => total + service.price,
+                    0
+                );
+
+            const addedAddonRevenue = addons
+                .filter((addon) => newAddonIds.includes(addon.id))
+                .reduce(
+                    (total, addon) => total + addon.price,
+                    0
+                );
+
+            const addedRevenue =
+                addedServiceRevenue + addedAddonRevenue;
+
+            if (addedRevenue > 0) {
+                const singleEmployeeId = visitEmployeeIds[0];
+
+                const revenueTarget = appointmentRevenue.find(
+                    (item) => item.employeeId === singleEmployeeId
+                );
+
+                if (!revenueTarget) {
+                    return Response.json(
+                        {
+                            error:
+                                "Unable to attribute added checkout items to technician",
+                        },
+                        { status: 400 }
+                    );
+                }
+
+                revenueTarget.revenue += addedRevenue;
+            }
+        }
+
+        // Confirm that all sale revenue has been attributed to appointment technicians.
         const attributedRevenueTotal = appointmentRevenue.reduce(
             (total, item) => total + item.revenue,
             0
         );
+
+        // Every peso of service revenue must be attributed before checkout.
+        if (attributedRevenueTotal !== subtotal) {
+            return Response.json(
+                {
+                    error:
+                        "Checkout revenue could not be fully attributed to technicians",
+                },
+                { status: 400 }
+            );
+        }
 
         // Allocate the sale-level discount proportionally across appointment blocks.
         // The final block receives any rounding remainder so totals stay exact.
