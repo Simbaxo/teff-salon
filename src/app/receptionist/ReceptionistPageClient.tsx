@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";import Link from "next/link";
 import {
     getTeffToday,
     hasTeffAppointmentStarted,
@@ -16,6 +15,7 @@ type Appointment = {
     duration: number;
     status: string;
     notes: string | null;
+    createdAt: string;
 
     customer: {
         id: number;
@@ -139,27 +139,83 @@ export default function ReceptionistPageClient({
     const [reschedulingAppointmentId, setReschedulingAppointmentId] =
         useState<number | null>(null);
 
+    // Track customer bookings already known to reception.
+    // Multiple appointment blocks from the same booking count as one reservation.
+    const knownBookingKeys = useRef<Set<string>>(new Set());
+    const initialAppointmentsLoaded = useRef(false);
+
+    const [newBookingCount, setNewBookingCount] = useState(0);
+
     const today = getTeffToday();
 
-    // Load appointments so they can also be refreshed after reception changes.
-    async function loadAppointments() {
+    // Load appointments and detect new customer reservations.
+    async function loadAppointments(options?: {
+        background?: boolean;
+    }) {
+        const background = options?.background ?? false;
+
         try {
-            setIsLoading(true);
-            setLoadError(false);
+            // Background polling should not replace the dashboard with a loading state.
+            if (!background) {
+                setIsLoading(true);
+                setLoadError(false);
+            }
 
             const response = await fetch("/api/appointments");
+
+            // An expired session during background polling should fail quietly.
+            // Normal page navigation/auth protection will handle access.
+            if (response.status === 401) {
+                return;
+            }
 
             if (!response.ok) {
                 throw new Error("No se pudieron cargar las citas");
             }
 
-            const data = await response.json();
+            const data: Appointment[] = await response.json();
+
+            // One Booking may contain multiple appointment/service blocks.
+            // Legacy appointments without a booking use their appointment ID.
+            const bookingKeys = new Set(
+                data.map((appointment) =>
+                    appointment.bookingId !== null
+                        ? `booking-${appointment.bookingId}`
+                        : `appointment-${appointment.id}`
+                )
+            );
+
+            // Existing bookings should not trigger alerts when reception first opens.
+            if (!initialAppointmentsLoaded.current) {
+                knownBookingKeys.current = bookingKeys;
+                initialAppointmentsLoaded.current = true;
+            } else {
+                const newBookingKeys = [...bookingKeys].filter(
+                    (key) => !knownBookingKeys.current.has(key)
+                );
+
+                if (newBookingKeys.length > 0) {
+                    setNewBookingCount(
+                        (current) =>
+                            current + newBookingKeys.length
+                    );
+                }
+
+                knownBookingKeys.current = bookingKeys;
+            }
+
             setAppointments(data);
         } catch (error) {
             console.error(error);
-            setLoadError(true);
+
+            // A background refresh failure should not wipe out already-loaded data.
+            if (!background) {
+                setLoadError(true);
+            }
         } finally {
-            setIsLoading(false);
+            if (!background) {
+                setIsLoading(false);
+            }
         }
     }
 
@@ -181,6 +237,15 @@ export default function ReceptionistPageClient({
     useEffect(() => {
         loadAppointments();
         loadEmployees();
+
+        // Refresh reception periodically so new customer bookings appear automatically.
+        const interval = window.setInterval(() => {
+            loadAppointments({ background: true });
+        }, 30_000);
+
+        return () => {
+            window.clearInterval(interval);
+        };
     }, []);
 
     // Reassign an appointment to another qualified technician.
@@ -363,6 +428,30 @@ export default function ReceptionistPageClient({
 
     return (
         <div className="mt-8">
+
+            {newBookingCount > 0 && (
+                <div className="mb-6 flex flex-col gap-3 rounded-xl border border-neutral-300 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p className="font-bold text-black">
+                            🔔 Nueva reserva
+                        </p>
+
+                        <p className="mt-1 text-sm text-neutral-600">
+                            {newBookingCount === 1
+                                ? "Se recibió una nueva cita."
+                                : `Se recibieron ${newBookingCount} nuevas citas.`}
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() => setNewBookingCount(0)}
+                        className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
+                    >
+                        Marcar como visto
+                    </button>
+                </div>
+            )}
 
             {/* Today's reception snapshot */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

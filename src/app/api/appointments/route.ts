@@ -67,7 +67,9 @@ export async function GET(request: Request) {
       },
 
       select: {
+        createdAt: true,
         id: true,
+        bookingId: true,
         employeeId: true,
         date: true,
         startTime: true,
