@@ -98,6 +98,32 @@ function getStatusLabel(status: string) {
     }
 }
 
+function getStatusClasses(status: string) {
+    switch (status) {
+        case "BOOKED":
+            return "bg-neutral-100 text-neutral-700";
+
+        case "REQUESTED":
+            return "bg-yellow-100 text-yellow-800";
+
+        case "CHECKED_IN":
+            return "bg-blue-100 text-blue-800";
+
+        case "IN_PROGRESS":
+            return "bg-purple-100 text-purple-800";
+
+        case "COMPLETED":
+            return "bg-green-100 text-green-800";
+
+        case "CANCELLED":
+        case "NO_SHOW":
+            return "bg-red-100 text-red-800";
+
+        default:
+            return "bg-neutral-100 text-neutral-700";
+    }
+}
+
 function formatTime(time: string) {
     const [hours, minutes] = time.split(":").map(Number);
 
@@ -387,17 +413,37 @@ export default function ReceptionistPageClient({
 
     if (isLoading) {
         return (
-            <p className="mt-8 text-neutral-500">
-                Cargando citas...
-            </p>
+            <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
+                <p className="font-semibold text-black">
+                    Cargando citas...
+                </p>
+
+                <p className="mt-1 text-sm text-neutral-500">
+                    Estamos actualizando la información de recepción.
+                </p>
+            </div>
         );
     }
 
     if (loadError) {
         return (
-            <p className="mt-8 text-red-600">
-                No se pudieron cargar las citas.
-            </p>
+            <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
+                <p className="font-semibold text-red-700">
+                    No se pudieron cargar las citas.
+                </p>
+
+                <p className="mt-1 text-sm text-neutral-500">
+                    Verifica la conexión e intenta nuevamente.
+                </p>
+
+                <button
+                    type="button"
+                    onClick={() => loadAppointments()}
+                    className="mt-4 rounded-lg bg-black px-4 py-3 text-sm font-semibold text-white"
+                >
+                    Reintentar
+                </button>
+            </div>
         );
     }
 
@@ -438,8 +484,8 @@ export default function ReceptionistPageClient({
 
                         <p className="mt-1 text-sm text-neutral-600">
                             {newBookingCount === 1
-                                ? "Se recibió una nueva cita."
-                                : `Se recibieron ${newBookingCount} nuevas citas.`}
+                                ? "Se recibió una nueva reserva."
+                                : `Se recibieron ${newBookingCount} nuevas reservas.`}
                         </p>
                     </div>
 
@@ -503,7 +549,8 @@ export default function ReceptionistPageClient({
                     </h2>
 
                     <span className="text-sm text-neutral-500">
-                        {todaysAppointments.length} citas
+                        {todaysAppointments.length}{" "}
+                        {todaysAppointments.length === 1 ? "cita" : "citas"}
                     </span>
                 </div>
 
@@ -574,11 +621,21 @@ export default function ReceptionistPageClient({
                                             ))}
                                         </select>
 
-                                        <p className="mt-2 text-sm text-neutral-500">
-                                            {reassigningAppointmentId === appointment.id
-                                                ? "Actualizando..."
-                                                : getStatusLabel(appointment.status)}
-                                        </p>
+                                        <div className="mt-2">
+                                            {reassigningAppointmentId === appointment.id ? (
+                                                <span className="text-sm text-neutral-500">
+                                                    Actualizando...
+                                                </span>
+                                            ) : (
+                                                <span
+                                                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(
+                                                        appointment.status
+                                                    )}`}
+                                                >
+                                                    {getStatusLabel(appointment.status)}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -598,7 +655,7 @@ export default function ReceptionistPageClient({
                                                 )
                                             }
                                             id={`date-${appointment.id}`}
-                                            className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-black disabled:opacity-50"
+                                            className="rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-black disabled:opacity-50"
                                         />
 
                                         <select
@@ -610,7 +667,7 @@ export default function ReceptionistPageClient({
                                                 )
                                             }
                                             id={`time-${appointment.id}`}
-                                            className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-black disabled:opacity-50"
+                                            className="rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-black disabled:opacity-50"
                                         >
                                             {!receptionTimeOptions.includes(
                                                 appointment.startTime.slice(0, 5)
@@ -650,7 +707,7 @@ export default function ReceptionistPageClient({
                                                     timeInput.value
                                                 );
                                             }}
-                                            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                                            className="rounded-lg bg-black px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
                                         >
                                             {reschedulingAppointmentId === appointment.id
                                                 ? "Actualizando..."

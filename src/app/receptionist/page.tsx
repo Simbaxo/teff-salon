@@ -19,6 +19,14 @@ export default async function ReceptionistPage() {
 
     const today = getTeffToday();
 
+    const formattedToday = new Intl.DateTimeFormat("es-CO", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        timeZone: "America/Bogota",
+    }).format(new Date(`${today}T12:00:00-05:00`));
+
     const todayStart = new Date(`${today}T00:00:00.000Z`);
 
     // Current TEFF week: Monday through Sunday.
@@ -274,8 +282,8 @@ export default async function ReceptionistPage() {
                         Operación diaria de TEFF Beauty Salon.
                     </p>
 
-                    <p className="mt-1 text-sm text-neutral-500">
-                        {today}
+                    <p className="mt-1 capitalize text-sm text-neutral-500">
+                        {formattedToday}
                     </p>
 
                     <div className="mt-4">

@@ -85,6 +85,32 @@ function getStatusLabel(status: string){
     }
 }
 
+function getStatusClasses(status: string) {
+    switch (status) {
+        case "BOOKED":
+            return "bg-neutral-100 text-neutral-700";
+
+        case "REQUESTED":
+            return "bg-yellow-100 text-yellow-800";
+
+        case "CHECKED_IN":
+            return "bg-blue-100 text-blue-800";
+
+        case "IN_PROGRESS":
+            return "bg-purple-100 text-purple-800";
+
+        case "COMPLETED":
+            return "bg-green-100 text-green-800";
+
+        case "CANCELLED":
+        case "NO_SHOW":
+            return "bg-red-100 text-red-800";
+
+        default:
+            return "bg-neutral-100 text-neutral-700";
+    }
+}
+
 // A client can only be marked as a no-show after the appointment starts.
 function canMarkNoShow(date: string, startTime: string) {
     return hasTeffAppointmentStarted(date, startTime)
@@ -435,7 +461,11 @@ export default  function StaffPage({
                                                         )}
                                                 </div>
 
-                                                <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-black">
+                                                <span
+                                                    className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(
+                                                        appointment.status
+                                                    )}`}
+                                                >
                                                     {getStatusLabel(appointment.status)}
                                                 </span>
                                             </div>
@@ -608,7 +638,7 @@ export default  function StaffPage({
                                                                 "CHECKED_IN"
                                                             )
                                                         }
-                                                        className="rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white"
+                                                        className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
                                                     >
                                                         Cliente Llegó
                                                     </button>
@@ -665,7 +695,7 @@ export default  function StaffPage({
                                                             "IN_PROGRESS"
                                                         )
                                                     }
-                                                    className="mt-5 rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white"
+                                                    className="mt-5 rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold text-white hover:bg-purple-700"
                                                 >
                                                     Iniciar Servicio
                                                 </button>
@@ -674,7 +704,7 @@ export default  function StaffPage({
                                             {appointment.status === "IN_PROGRESS" && (
                                                 <Link
                                                     href={`/staff/checkout/${appointment.id}`}
-                                                    className="mt-5 inline-block rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white"
+                                                    className="mt-5 inline-block rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white hover:bg-green-700"
                                                 >
                                                     Finalizar Servicio
                                                 </Link>
