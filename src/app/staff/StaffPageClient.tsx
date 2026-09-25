@@ -401,6 +401,16 @@ export default  function StaffPage({
                         className="mt-2 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
                     />
                 </div>
+
+                <div className="mt-4">
+                    <Link
+                        href="/staff/historical"
+                        className="inline-flex rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white hover:bg-neutral-800"
+                    >
+                        + Registrar servicio anterior
+                    </Link>
+                </div>
+
                 <div className="mt-8 space-y-4">
                     {isLoading && (
                         <p className="text-sm text-neutral-600">
