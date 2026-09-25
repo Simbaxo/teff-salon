@@ -18,8 +18,10 @@ The goal of the MVP is to manage the complete salon workflow:
 | 4 | Scheduling & Availability | ✅ Core Complete |
 | 5 | Staff Operations & Authentication | ✅ MVP Complete |
 | 6 | Checkout, Payments & Commissions | ✅ MVP Complete |
-| 7 | Basic Owner Reporting | ✅ Complete |
+| 7 | Owner Dashboard & Reporting | ✅ v1 Complete |
 | 8 | Production Readiness & Deployment | ✅ Complete |
+| 9 | Receptionist Dashboard | ✅ v1 Complete |
+| 10 | Inventory Management | 🚧 Next |
 
 **MVP completion: 100% — deployed and production smoke-tested September 15, 2026.**
 
@@ -187,6 +189,11 @@ Appointment services and add-ons store price and duration snapshots so historica
 - Appointment history shows technician, services, add-ons, duration, Spanish status labels, and actual checkout totals when available.
 - Customer names in the staff appointment view link directly to their customer profiles.
 - Customer profiles include navigation back to the staff appointment view.
+- Shared role-aware navigation between Staff, Reception, and Admin.
+- OWNER navigation includes Staff, Reception, and Admin.
+- RECEPTIONIST navigation includes Staff and Reception without exposing Admin.
+- Appointment status badges use distinct colors for faster operational scanning.
+- Workflow actions use distinct colors for check-in, service start, and service completion.
 
 ### Appointment Workflow
 
@@ -298,6 +305,10 @@ Technicians remain Employee records for scheduling, commissions, and tips withou
 - Originally booked add-ons remain valid if service/add-on relationships later change
 - Newly added services must satisfy current technician qualifications
 - Newly added add-ons must satisfy current compatibility rules
+- Checkout-added revenue must be fully attributed to technicians before a sale can complete.
+- Single-technician visits automatically attribute newly added checkout items to that technician.
+- Multi-technician visits reject ambiguous checkout-added items instead of guessing technician ownership.
+- Checkout verifies that attributed pre-discount revenue equals the sale subtotal before commission calculation.
 
 ### Discounts
 
@@ -492,16 +503,18 @@ Salon configuration, employees, services, add-ons, relationships, and authorized
 
 **MVP production deployment completed September 15, 2026.**
 
-Live production application: `https://teff-salon.vercel.app`
+Live production application: `https://teffbeauty.com`
 
 ### Current Production Configuration
 
-- 4 employees
-- 3 services
-- 3 add-ons
-- 11 employee/service qualification mappings
-- 8 service/add-on compatibility mappings
-- 2 authorized application users
+Production contains the active TEFF employee roster, complete service catalog, add-on catalog, employee/service qualifications, service/add-on compatibility mappings, authorized application users, and salon business settings.
+
+Recent catalog updates include:
+
+- Decorado Premium / Premium Design
+- $30.000 COP
+- +15 minutes
+- Available across active nail services
 
 ### Next Operational Setup
 
@@ -514,24 +527,106 @@ Live production application: `https://teff-salon.vercel.app`
 
 The following features are intentionally planned for after the first production release of the TEFF Salon app.
 
-### Operations & Reception
+### ✅ Receptionist Dashboard v1
 
-- 🚧 Receptionist Dashboard v1 — next active development phase
-- Today / live appointment operational view
-- Weekly and monthly salon performance
-- Technician production totals and progress toward sales goals
-- Client counts by technician
-- Receptionist appointment management tools
-- Alerts when new appointments are created
+Receptionist Dashboard v1 is complete and deployed to production.
+
+#### Access & Navigation
+
+- [x] Protected `/receptionist` route
+- [x] OWNER and RECEPTIONIST access
+- [x] Spanish-only receptionist interface
+- [x] Shared Staff / Reception / Admin navigation
+- [x] Role-aware navigation hides Admin from RECEPTIONIST accounts
+
+#### Daily Operations
+
+- [x] Today's appointment count
+- [x] Clients attended
+- [x] Clients currently in service
+- [x] Today's sales
+- [x] Chronological daily appointment view
+- [x] Customer profile links
+- [x] Technician, service, time, and appointment status visibility
+- [x] Spanish-friendly current-date display
+
+#### Appointment Management
+
+- [x] Confirm requested appointments
+- [x] Customer check-in
+- [x] Start service
+- [x] Send in-progress appointments to checkout
+- [x] Cancel appointments with confirmation
+- [x] Mark no-shows after the appointment start time
+- [x] Reassign appointments between qualified technicians
+- [x] Change appointment date and time
+- [x] Preserve conflict and technician-qualification validation
+- [x] Support existing appointment times outside standard 30-minute options
+
+#### Performance Reporting
+
+- [x] Weekly salon sales
+- [x] Weekly $5.000.000 sales goal
+- [x] Weekly goal progress
+- [x] Weekly production by technician
+- [x] Weekly customer count by technician
+- [x] Monthly salon sales
+- [x] Monthly $20.000.000 sales goal
+- [x] Monthly goal progress
+- [x] Monthly production by technician
+- [x] Monthly customer count by technician
+- [x] Commission/payroll information remains restricted to the Owner Dashboard
+
+#### Booking Alerts
+
+- [x] Automatic appointment refresh every 30 seconds
+- [x] Detect newly created customer bookings without refreshing the page
+- [x] Display `Nueva reserva` alert
+- [x] Multi-service bookings count as one reservation alert
+- [x] Dismiss alerts with `Marcar como visto`
+- [x] Background refresh failures do not erase already-loaded dashboard data
+
+#### UI & Tablet Experience
+
+- [x] Appointment status color badges
+- [x] Distinct workflow-action colors
+- [x] Responsive KPI layout
+- [x] Responsive technician-production grids
+- [x] Larger scheduling controls for tablet use
+- [x] Improved loading state
+- [x] Error state with retry action
+- [x] iPad-friendly responsive layout
+
+#### Remaining Operations Roadmap
+
 - Family / group appointment checkout
-- ✅ Customer defaults to "Any Technician" when booking
-- ✅ "Any Technician" assigns a qualified technician who is available for the full appointment
-- ✅ Automatic assignment balances technicians by scheduled minutes for the selected day
-- Future receptionist reassignment between technicians
-- Future smarter assignment using workload and production data
-- Inventory management accessible to OWNER and RECEPTIONIST roles
-- Track product quantities, low-stock items, and replenishment needs
+- Smarter automatic technician assignment using production and workload data
+- Inventory management accessible to OWNER and RECEPTIONIST
 - Owner/receptionist tools for managing services, add-ons, employees, qualifications, prices, and active status
+- WhatsApp notifications to reception when appointments are created
+
+### 🚧 Inventory Management — Next Active Phase
+
+Inventory Management is the next major development phase.
+
+Planned v1 scope:
+
+- OWNER and RECEPTIONIST access
+- Inventory item catalog
+- Current quantity on hand
+- Low-stock thresholds
+- Low-stock indicators and alerts
+- Restocking / quantity adjustments
+- Shopping list for items requiring replenishment
+- iPad-friendly operational interface
+
+Future inventory expansion:
+
+- Product usage tracking
+- Supply purchase history
+- Inventory cost reporting
+- Consumption trends
+- Integration with operating-expense reporting
 
 ### Advanced Owner Dashboard & Reporting
 
