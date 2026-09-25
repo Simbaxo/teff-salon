@@ -32,6 +32,8 @@ export async function POST(request: Request) {
             appointmentIds,
             serviceIds,
             addonIds,
+            servicePrices,
+            addonPrices,
             discountTotal,
             payments,
             tips,
@@ -45,11 +47,13 @@ export async function POST(request: Request) {
             !Array.isArray(serviceIds) ||
             serviceIds.length === 0 ||
             !Array.isArray(addonIds) ||
+            !Array.isArray(servicePrices) ||
+            !Array.isArray(addonPrices) ||
             !Array.isArray(payments) ||
             !Array.isArray(tips)
         ) {
             return Response.json(
-                { error: "Invalid checkout information"},
+                { error: "Invalid checkout information" },
                 { status: 400 }
             );
         }
@@ -75,6 +79,68 @@ export async function POST(request: Request) {
         // Remove duplicate IDs before validation selections
         const uniqueServiceIds = [...new Set(serviceIds)];
         const uniqueAddonIds = [...new Set(addonIds)];
+
+        // Checkout prices may be adjusted for this sale only.
+        // They must still be valid whole Colombian-peso amounts.
+        const servicePricesAreValid = servicePrices.every(
+            (item: { serviceId: number; price: number }) =>
+                Number.isInteger(item.serviceId) &&
+                item.serviceId > 0 &&
+                Number.isInteger(item.price) &&
+                item.price >= 0
+        );
+
+        const addonPricesAreValid = addonPrices.every(
+            (item: { addonId: number; price: number }) =>
+                Number.isInteger(item.addonId) &&
+                item.addonId > 0 &&
+                Number.isInteger(item.price) &&
+                item.price >= 0
+        );
+
+        if (!servicePricesAreValid || !addonPricesAreValid) {
+            return Response.json(
+                { error: "Invalid checkout line-item prices" },
+                { status: 400 }
+            );
+        }
+
+        const submittedServicePrices = new Map<number, number>(
+            servicePrices.map(
+                (item: { serviceId: number; price: number }) => [
+                    item.serviceId,
+                    item.price,
+                ]
+            )
+        );
+
+        const submittedAddonPrices = new Map<number, number>(
+            addonPrices.map(
+                (item: { addonId: number; price: number }) => [
+                    item.addonId,
+                    item.price,
+                ]
+            )
+        );
+
+        const servicePriceIdsMatch =
+            submittedServicePrices.size === uniqueServiceIds.length &&
+            uniqueServiceIds.every((id) =>
+                submittedServicePrices.has(id)
+            );
+
+        const addonPriceIdsMatch =
+            submittedAddonPrices.size === uniqueAddonIds.length &&
+            uniqueAddonIds.every((id) =>
+                submittedAddonPrices.has(id)
+            );
+
+        if (!servicePriceIdsMatch || !addonPriceIdsMatch) {
+            return Response.json(
+                { error: "Checkout prices do not match selected items" },
+                { status: 400 }
+            );
+        }
 
         // Make sure the discount is a valid whole COP amount
         if (
@@ -366,23 +432,19 @@ export async function POST(request: Request) {
             );
         }
 
-        // Use the booked price when the service was part of the original appointment
-        // Newly added services use today's menu price.
-        const servicesTotal = services.reduce((total, service) => {
-            const price =
-                bookedServicePrices.get(service.id) ?? service.price;
+        // Use the validated checkout price for this specific sale.
+        // Catalog and original booking prices remain unchanged.
+        const servicesTotal = services.reduce(
+            (total, service) =>
+                total + (submittedServicePrices.get(service.id) ?? 0),
+            0
+        );
 
-            return total + price;
-        }, 0);
-
-        // Original add-ons keep their booked price
-        // Add-ons added durning checkout use today's menu price.
-        const addonsTotal = addons.reduce((total, addon) => {
-            const price =
-                bookedAddonPrices.get(addon.id) ?? addon.price;
-            
-            return total + price;
-        }, 0);
+        const addonsTotal = addons.reduce(
+            (total, addon) =>
+                total + (submittedAddonPrices.get(addon.id) ?? 0),
+            0
+        );
 
         // The browser's subtotal is never trusted
         const subtotal = servicesTotal + addonsTotal;
@@ -417,7 +479,10 @@ export async function POST(request: Request) {
                                 return total;
                             }
 
-                            return total + item.bookedPrice;
+                            return (
+                                total +
+                                (submittedServicePrices.get(item.serviceId) ?? 0)
+                            );
                         },
                         0
                     );
@@ -430,7 +495,10 @@ export async function POST(request: Request) {
                                 return total;
                             }
 
-                            return total + item.bookedPrice;
+                            return (
+                                total +
+                                (submittedAddonPrices.get(item.addonId) ?? 0)
+                            );
                         },
                         0
                     );
@@ -449,14 +517,18 @@ export async function POST(request: Request) {
             const addedServiceRevenue = services
                 .filter((service) => newServiceIds.includes(service.id))
                 .reduce(
-                    (total, service) => total + service.price,
+                    (total, service) =>
+                        total +
+                        (submittedServicePrices.get(service.id) ?? 0),
                     0
                 );
 
             const addedAddonRevenue = addons
                 .filter((addon) => newAddonIds.includes(addon.id))
                 .reduce(
-                    (total, addon) => total + addon.price,
+                    (total, addon) =>
+                        total +
+                        (submittedAddonPrices.get(addon.id) ?? 0),
                     0
                 );
 
@@ -681,8 +753,8 @@ export async function POST(request: Request) {
                         itemType: "SERVICE",
                         itemId: service.id,
                         itemName: service.nameEs,
-                        unitPrice: 
-                            bookedServicePrices.get(service.id) ?? service.price,
+                        unitPrice:
+                            submittedServicePrices.get(service.id) ?? 0,
                     })),
 
                     // Save a permanent snapshot of the add-ons actually sold
@@ -692,7 +764,7 @@ export async function POST(request: Request) {
                         itemId: addon.id,
                         itemName: addon.nameEs,
                         unitPrice: 
-                            bookedAddonPrices.get(addon.id) ?? addon.price,
+                            submittedAddonPrices.get(addon.id) ?? 0,
                     })),
                 ],
             });

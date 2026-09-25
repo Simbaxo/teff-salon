@@ -319,6 +319,49 @@ export default function CheckoutEditor({
         ]);
     }
 
+    // Adjust a service price for this checkout only.
+    // This does not change the permanent salon catalog price.
+    function updateServicePrice(
+        serviceId: number,
+        price: number
+    ) {
+        if (!Number.isInteger(price) || price < 0) {
+            return;
+        }
+
+        setSelectedServices((current) =>
+            current.map((item) =>
+                item.service.id === serviceId
+                    ? {
+                        ...item,
+                        bookedPrice: price,
+                    }
+                    : item
+            )
+        );
+    }
+
+    // Adjust an add-on price for this checkout only.
+    function updateAddonPrice(
+        addonId: number,
+        price: number
+    ) {
+        if (!Number.isInteger(price) || price < 0) {
+            return;
+        }
+
+        setSelectedAddons((current) =>
+            current.map((item) =>
+                item.addon.id === addonId
+                    ? {
+                        ...item,
+                        bookedPrice: price,
+                    }
+                    : item
+            )
+        );
+    }
+
     // Send the verified checkout information to the server
     async function handleCompleteCheckout() {
         if (!canCompleteCheckout || isSubmitting) {
@@ -351,12 +394,25 @@ export default function CheckoutEditor({
                         appointmentIds: visitAppointments.map(
                             (visitAppointment) => visitAppointment.id
                         ),
+
                         serviceIds: selectedServices.map(
                             (item) => item.service.id    
                         ),
+
                         addonIds: selectedAddons.map(
                             (item) => item.addon.id
                         ),
+
+                        servicePrices: selectedServices.map((item) => ({
+                            serviceId: item.service.id,
+                            price: item.bookedPrice,
+                        })),
+
+                        addonPrices: selectedAddons.map((item) => ({
+                            addonId: item.addon.id,
+                            price: item.bookedPrice,
+                        })),
+                        
                         discountTotal: discount,
                         payments: paymentsToSubmit,
                         
@@ -450,23 +506,40 @@ export default function CheckoutEditor({
                                     key={item.service.id}
                                     className="flex items-center justify-between rounded-lg bg-white px-3 py-2"
                                 >
-                                    <span className="text-sm text-neutral-700">
-                                        {item.service.nameEs}
-                                    </span>
-
                                     <div className="flex items-center gap-3">
-                                    <span className="text-sm font-semibold text-black">
-                                        ${item.bookedPrice.toLocaleString("es-CO")}
-                                    </span>
+                                        <span className="text-sm text-neutral-700">
+                                            {item.service.nameEs}
+                                        </span>
 
-                                    <button
-                                        type="button"
-                                        onClick={() => removeService(item.service.id)}
-                                        className="text-xs font-semibold text-red-600"
-                                    >
-                                        Quitar
-                                    </button>
-                                </div>
+                                        <label className="flex items-center gap-2">
+                                            <span className="text-xs text-neutral-500">
+                                                $
+                                            </span>
+
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="1000"
+                                                value={item.bookedPrice}
+                                                onChange={(event) =>
+                                                    updateServicePrice(
+                                                        item.service.id,
+                                                        Number(event.target.value)
+                                                    )
+                                                }
+                                                className="w-28 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-right text-sm font-semibold text-black"
+                                                aria-label={`Precio de ${item.service.nameEs}`}
+                                            />
+                                        </label>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => removeService(item.service.id)}
+                                            className="text-xs font-semibold text-red-600"
+                                        >
+                                            Quitar
+                                        </button>
+                                    </div>
 
                                 </div>
                             ))}
@@ -491,9 +564,26 @@ export default function CheckoutEditor({
                                         </span>
 
                                         <div className="flex items-center gap-3">
-                                            <span className="text-sm font-semibold text-black">
-                                                ${item.bookedPrice.toLocaleString("es-CO")}
-                                            </span>
+                                            <label className="flex items-center gap-2">
+                                                <span className="text-xs text-neutral-500">
+                                                    $
+                                                </span>
+
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="1000"
+                                                    value={item.bookedPrice}
+                                                    onChange={(event) =>
+                                                        updateAddonPrice(
+                                                            item.addon.id,
+                                                            Number(event.target.value)
+                                                        )
+                                                    }
+                                                    className="w-28 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-right text-sm font-semibold text-black"
+                                                    aria-label={`Precio de ${item.addon.nameEs}`}
+                                                />
+                                            </label>
 
                                             <button
                                                 type="button"
