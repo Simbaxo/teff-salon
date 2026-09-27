@@ -560,6 +560,20 @@ export async function POST(request: Request) {
                 },
               });
 
+              // Schedule blocks represent technician unavailability such as
+              // vacation, late arrival, early departure, or personal time.
+              const existingScheduleBlocks =
+                  await tx.employeeScheduleBlock.findMany({
+                      where: {
+                          employeeId: {
+                              in: block.qualifiedEmployeeIds,
+                          },
+                          date: new Date(
+                              `${date}T00:00:00.000Z`
+                          ),
+                      },
+                  });
+
               // Keep only technicians who are free during this service block.
               const availableEmployeeIds =
                 block.qualifiedEmployeeIds.filter((candidateEmployeeId) => {
@@ -585,7 +599,37 @@ export async function POST(request: Request) {
                     }
                   );
 
-                  return !hasConflict;
+                  const hasScheduleBlockConflict =
+                    existingScheduleBlocks.some(
+                        (scheduleBlock) => {
+                            if (
+                                scheduleBlock.employeeId !==
+                                candidateEmployeeId
+                            ) {
+                                return false;
+                            }
+
+                            const blockedStart =
+                                timeToMinutes(
+                                    scheduleBlock.startTime
+                                );
+
+                            const blockedEnd =
+                                timeToMinutes(
+                                    scheduleBlock.endTime
+                                );
+
+                            return (
+                                blockStart < blockedEnd &&
+                                blockEnd > blockedStart
+                            );
+                        }
+                    );
+
+                  return (
+                      !hasConflict &&
+                      !hasScheduleBlockConflict
+                  );
                 });
 
               const isNailService = block.service.category === "NAILS";

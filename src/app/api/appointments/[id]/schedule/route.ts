@@ -203,6 +203,16 @@ export async function PATCH(
                   },
                 });
 
+                const existingScheduleBlocks =
+                  await tx.employeeScheduleBlock.findMany({
+                      where: {
+                          employeeId: appointment.employeeId,
+                          date: new Date(
+                              `${date}T00:00:00.000Z`
+                          ),
+                      },
+                  });
+
               const hasConflict = existingAppointments.some(
                 (existingAppointment) => {
                   const existingStart = timeToMinutes(
@@ -220,8 +230,29 @@ export async function PATCH(
                 }
               );
 
-              if (hasConflict) {
-                throw new Error("SCHEDULE_CONFLICT");
+              const hasScheduleBlockConflict =
+                existingScheduleBlocks.some(
+                    (scheduleBlock) => {
+                        const blockedStart = timeToMinutes(
+                            scheduleBlock.startTime
+                        );
+
+                        const blockedEnd = timeToMinutes(
+                            scheduleBlock.endTime
+                        );
+
+                        return (
+                            requestedStart < blockedEnd &&
+                            requestedEnd > blockedStart
+                        );
+                    }
+                );
+
+              if (
+                  hasConflict ||
+                  hasScheduleBlockConflict
+              ) {
+                  throw new Error("SCHEDULE_CONFLICT");
               }
             }
 

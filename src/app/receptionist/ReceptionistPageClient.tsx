@@ -77,6 +77,20 @@ type Employee = {
     active: boolean;
 };
 
+type ScheduleBlock = {
+    id: number;
+    employeeId: number;
+    date: string;
+    startTime: string;
+    endTime: string;
+    reason: string | null;
+
+    employee: {
+        id: number;
+        name: string;
+    };
+};
+
 function getStatusLabel(status: string) {
     switch (status) {
         case "BOOKED":
@@ -154,6 +168,8 @@ export default function ReceptionistPageClient({
     monthlyGoalProgress,
     monthlyTechnicianSummary,
 }: ReceptionistPageClientProps) {
+    const today = getTeffToday();
+
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
@@ -172,7 +188,26 @@ export default function ReceptionistPageClient({
 
     const [newBookingCount, setNewBookingCount] = useState(0);
 
-    const today = getTeffToday();
+    const [scheduleBlocks, setScheduleBlocks] =
+        useState<ScheduleBlock[]>([]);
+
+    const [blockEmployeeId, setBlockEmployeeId] =
+        useState<number>(0);
+
+    const [blockDate, setBlockDate] = useState(today);
+
+    const [blockStartTime, setBlockStartTime] =
+        useState("09:30");
+
+    const [blockEndTime, setBlockEndTime] =
+        useState("10:30");
+
+    const [blockReason, setBlockReason] = useState("");
+
+    const [isSavingBlock, setIsSavingBlock] =
+        useState(false);
+
+    const [blockError, setBlockError] = useState("");
 
     // Load appointments and detect new customer reservations.
     async function loadAppointments(options?: {
@@ -245,6 +280,25 @@ export default function ReceptionistPageClient({
         }
     }
 
+    async function loadScheduleBlocks() {
+        try {
+            const response = await fetch("/api/schedule-blocks");
+
+            if (!response.ok) {
+                throw new Error(
+                    "No se pudieron cargar los bloqueos"
+                );
+            }
+
+            const data: ScheduleBlock[] =
+                await response.json();
+
+            setScheduleBlocks(data);
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
     async function loadEmployees() {
         try {
             const response = await fetch("/api/employees");
@@ -263,6 +317,7 @@ export default function ReceptionistPageClient({
     useEffect(() => {
         loadAppointments();
         loadEmployees();
+        loadScheduleBlocks();
 
         // Refresh reception periodically so new customer bookings appear automatically.
         const interval = window.setInterval(() => {
@@ -273,6 +328,108 @@ export default function ReceptionistPageClient({
             window.clearInterval(interval);
         };
     }, []);
+
+    async function createScheduleBlock() {
+        setBlockError("");
+
+        if (blockEmployeeId <= 0) {
+            setBlockError("Selecciona una técnica.");
+            return;
+        }
+
+        if (!blockDate) {
+            setBlockError("Selecciona una fecha.");
+            return;
+        }
+
+        if (blockStartTime >= blockEndTime) {
+            setBlockError(
+                "La hora final debe ser posterior a la hora inicial."
+            );
+            return;
+        }
+
+        try {
+            setIsSavingBlock(true);
+
+            const response = await fetch(
+                "/api/schedule-blocks",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        employeeId: blockEmployeeId,
+                        date: blockDate,
+                        startTime: blockStartTime,
+                        endTime: blockEndTime,
+                        reason: blockReason,
+                    }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.error ||
+                        "No se pudo bloquear el horario"
+                );
+            }
+
+            setBlockReason("");
+            setBlockError("");
+
+            await loadScheduleBlocks();
+        } catch (error) {
+            setBlockError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo bloquear el horario"
+            );
+        } finally {
+            setIsSavingBlock(false);
+        }
+    }
+
+    async function deleteScheduleBlock(
+        blockId: number
+    ) {
+        const confirmed = window.confirm(
+            "¿Eliminar este bloqueo de horario?"
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                `/api/schedule-blocks/${blockId}`,
+                {
+                    method: "DELETE",
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.error ||
+                        "No se pudo eliminar el bloqueo"
+                );
+            }
+
+            await loadScheduleBlocks();
+        } catch (error) {
+            alert(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo eliminar el bloqueo"
+            );
+        }
+    }
 
     // Reassign an appointment to another qualified technician.
     async function reassignEmployee(
@@ -540,6 +697,208 @@ export default function ReceptionistPageClient({
                         {formatCOP(todaysSalesTotal)}
                     </p>
                 </div>
+            </div>
+
+            {/* Technician schedule blocking */}
+            <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
+                <div>
+                    <h2 className="text-xl font-bold text-black">
+                        Bloquear horario
+                    </h2>
+
+                    <p className="mt-1 text-sm text-neutral-500">
+                        Marca períodos en los que una técnica no estará disponible.
+                    </p>
+                </div>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                    <div>
+                        <label className="block text-sm font-semibold text-black">
+                            Técnica
+                        </label>
+
+                        <select
+                            value={blockEmployeeId}
+                            onChange={(event) =>
+                                setBlockEmployeeId(
+                                    Number(event.target.value)
+                                )
+                            }
+                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                        >
+                            <option value={0}>
+                                Seleccionar
+                            </option>
+
+                            {employees.map((employee) => (
+                                <option
+                                    key={employee.id}
+                                    value={employee.id}
+                                >
+                                    {employee.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-black">
+                            Fecha
+                        </label>
+
+                        <input
+                            type="date"
+                            value={blockDate}
+                            onChange={(event) =>
+                                setBlockDate(event.target.value)
+                            }
+                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-black">
+                            Desde
+                        </label>
+
+                        <select
+                            value={blockStartTime}
+                            onChange={(event) =>
+                                setBlockStartTime(
+                                    event.target.value
+                                )
+                            }
+                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                        >
+                            {receptionTimeOptions.map((time) => (
+                                <option key={time} value={time}>
+                                    {formatTime(time)}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-black">
+                            Hasta
+                        </label>
+
+                        <select
+                            value={blockEndTime}
+                            onChange={(event) =>
+                                setBlockEndTime(
+                                    event.target.value
+                                )
+                            }
+                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                        >
+                            {receptionTimeOptions.map((time) => (
+                                <option key={time} value={time}>
+                                    {formatTime(time)}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-black">
+                            Motivo
+                        </label>
+
+                        <input
+                            type="text"
+                            maxLength={200}
+                            value={blockReason}
+                            onChange={(event) =>
+                                setBlockReason(event.target.value)
+                            }
+                            placeholder="Ej. Llega tarde"
+                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                        />
+                    </div>
+                </div>
+
+                {blockError && (
+                    <p className="mt-4 text-sm font-medium text-red-700">
+                        {blockError}
+                    </p>
+                )}
+
+                <button
+                    type="button"
+                    onClick={createScheduleBlock}
+                    disabled={isSavingBlock}
+                    className="mt-5 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                    {isSavingBlock
+                        ? "Bloqueando..."
+                        : "Bloquear horario"}
+                </button>
+            </div>
+
+            {/* Schedule blocks for the selected block date */}
+            <div className="mt-6 rounded-xl bg-white p-5 shadow-sm">
+                <h2 className="text-lg font-bold text-black">
+                    Horarios bloqueados
+                </h2>
+
+                <p className="mt-1 text-sm text-neutral-500">
+                    {blockDate}
+                </p>
+
+                {scheduleBlocks.filter(
+                    (block) =>
+                        block.date.slice(0, 10) === blockDate
+                ).length === 0 ? (
+                    <p className="mt-4 text-sm text-neutral-500">
+                        No hay horarios bloqueados para esta fecha.
+                    </p>
+                ) : (
+                    <div className="mt-4 space-y-3">
+                        {scheduleBlocks
+                            .filter(
+                                (block) =>
+                                    block.date.slice(0, 10) ===
+                                    blockDate
+                            )
+                            .map((block) => (
+                                <div
+                                    key={block.id}
+                                    className="flex flex-col gap-3 rounded-xl border border-neutral-200 p-4 sm:flex-row sm:items-center sm:justify-between"
+                                >
+                                    <div>
+                                        <p className="font-semibold text-black">
+                                            {block.employee.name}
+                                        </p>
+
+                                        <p className="mt-1 text-sm text-neutral-600">
+                                            {formatTime(block.startTime)}
+                                            {" – "}
+                                            {formatTime(block.endTime)}
+                                        </p>
+
+                                        {block.reason && (
+                                            <p className="mt-1 text-sm text-neutral-500">
+                                                {block.reason}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            deleteScheduleBlock(
+                                                block.id
+                                            )
+                                        }
+                                        className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                                    >
+                                        Eliminar
+                                    </button>
+                                </div>
+                            ))}
+                    </div>
+                )}
             </div>
 
             <div className="mt-8">

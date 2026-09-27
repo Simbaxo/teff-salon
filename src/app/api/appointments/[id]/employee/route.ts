@@ -185,6 +185,14 @@ export async function PATCH(
                                 },
                             });
 
+                            const existingScheduleBlocks =
+                                await tx.employeeScheduleBlock.findMany({
+                                    where: {
+                                        employeeId,
+                                        date: appointment.date,
+                                    },
+                                });
+
                             // Convert "10:30" into minutes from midnight
                             function timeToMinutes(time: string) {
                                 const [hours, minutes] = time.split(":").map(Number);
@@ -210,14 +218,32 @@ export async function PATCH(
                                     );
                                 }
                             );
+
+                            const hasScheduleBlockConflict =
+                                existingScheduleBlocks.some(
+                                    (scheduleBlock) => {
+                                        const blockedStart = timeToMinutes(
+                                            scheduleBlock.startTime
+                                        );
+
+                                        const blockedEnd = timeToMinutes(
+                                            scheduleBlock.endTime
+                                        );
+
+                                        return (
+                                            requestedStart < blockedEnd &&
+                                            requestedEnd > blockedStart
+                                        );
+                                    }
+                                );
     
-                            if (hasConflict) {
-                                throw new Error("REASSIGNMENT_CONFLICT")
+                            if (
+                                hasConflict ||
+                                hasScheduleBlockConflict
+                            ) {
+                                throw new Error("REASSIGNMENT_CONFLICT");
                             }
                         }
-
-
-
 
                         // If this appointment has already been checked out, find its sale
                         // This matters when the Owner corrects a historical technician assignment

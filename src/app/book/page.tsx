@@ -94,6 +94,14 @@ type Appointment = {
     status: string;
 };
 
+type ScheduleBlock = {
+    id: number;
+    employeeId: number;
+    date: string;
+    startTime: string;
+    endTime: string;
+};
+
 export default function BookPage() {
     // State
     const { language } = useLanguage();
@@ -174,6 +182,8 @@ export default function BookPage() {
     const [assignedEmployeeName, setAssignedEmployeeName] = useState("");
     const [bookedAppointments, setBookedAppointments] =
         useState<Appointment[]>([]);
+    const [scheduleBlocks, setScheduleBlocks] =
+    useState<ScheduleBlock[]>([]);
 
     // Fetch the services from API
     useEffect(() => {
@@ -234,19 +244,39 @@ export default function BookPage() {
         loadServiceAddons();
     }, []);
 
-    // Get the appointments from API
+    // Load appointments and employee schedule blocks that affect availability.
     useEffect(() => {
-        async function loadAppointments() {
-            // Only load appointments that should block booking availability
-            const response = await fetch("/api/appointments?mode=availability");
-            const data = await response.json();
+        async function loadAvailability() {
+            const [
+                appointmentsResponse,
+                scheduleBlocksResponse,
+            ] = await Promise.all([
+                fetch("/api/appointments?mode=availability"),
+                fetch("/api/schedule-blocks?mode=availability"),
+            ]);
 
-            setBookedAppointments(data);
+            if (
+                !appointmentsResponse.ok ||
+                !scheduleBlocksResponse.ok
+            ) {
+                return;
+            }
+
+            const [
+                appointmentsData,
+                scheduleBlocksData,
+            ] = await Promise.all([
+                appointmentsResponse.json(),
+                scheduleBlocksResponse.json(),
+            ]);
+
+            setBookedAppointments(appointmentsData);
+            setScheduleBlocks(scheduleBlocksData);
         }
 
-        loadAppointments();
+        loadAvailability();
     }, []);
-    
+        
     // Functions
     const availableAddonIds = serviceAddons
         .filter((relation) => 
@@ -602,7 +632,28 @@ export default function BookPage() {
                     );
                 });
 
-                return !hasConflict;
+                const hasScheduleBlockConflict =
+                    scheduleBlocks.some((block) => {
+                        if (
+                            block.employeeId !== employeeId ||
+                            block.date.slice(0, 10) !== selectedDate
+                        ) {
+                            return false;
+                        }
+
+                        const blockedStart =
+                            timeToMinutes(block.startTime);
+
+                        const blockedEnd =
+                            timeToMinutes(block.endTime);
+
+                        return (
+                            serviceStart < blockedEnd &&
+                            serviceEnd > blockedStart
+                        );
+                    });
+
+                return !hasConflict && !hasScheduleBlockConflict;
             }
 
             let hasAvailableTechnician = false;

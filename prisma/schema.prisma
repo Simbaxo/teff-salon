@@ -34,12 +34,36 @@ model Employee {
 
   employeeServices EmployeeService[]
   appointments     Appointment[]
+  scheduleBlocks EmployeeScheduleBlock[]
+
   // Tracks commissions earned by this employee
   commissions      Commission[]
   tips             Tip[]
+  
 
   // Optional login account for employees who need system access
   user User?
+}
+
+model EmployeeScheduleBlock {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+
+  // Calendar day and unavailable time range.
+  date      DateTime
+  startTime String
+  endTime   String
+
+  // Optional operational note such as:
+  // "Vacaciones", "Llega tarde", "Cita médica".
+  reason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, date])
 }
 
 // Login accounts for people who can access the internal TEFF system
