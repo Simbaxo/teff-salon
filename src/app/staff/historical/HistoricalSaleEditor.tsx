@@ -240,6 +240,14 @@ export default function HistoricalSaleEditor() {
         });
     }, [selectedServices]);
 
+    function selectZeroValue(
+        event: React.FocusEvent<HTMLInputElement>
+    ) {
+        if (event.currentTarget.value === "0") {
+            event.currentTarget.select();
+        }
+    }
+
     function updatePayment(
         paymentMethod: PaymentMethod,
         amount: number
@@ -888,6 +896,7 @@ export default function HistoricalSaleEditor() {
                                                 type="number"
                                                 min="0"
                                                 step="1000"
+                                                onFocus={selectZeroValue}
                                                 value={selection.price}
                                                 onChange={(event) =>
                                                     updateSelectedService(
@@ -1048,6 +1057,7 @@ export default function HistoricalSaleEditor() {
                                                 type="number"
                                                 min="0"
                                                 step="1000"
+                                                onFocus={selectZeroValue}
                                                 value={selection.price}
                                                 onChange={(event) =>
                                                     updateSelectedAddon(
@@ -1127,6 +1137,7 @@ export default function HistoricalSaleEditor() {
                             min="0"
                             max={subtotal}
                             step="1000"
+                            onFocus={selectZeroValue}
                             value={discount}
                             onChange={(event) =>
                                 setDiscount(
@@ -1177,6 +1188,7 @@ export default function HistoricalSaleEditor() {
                                 type="number"
                                 min="0"
                                 step="1000"
+                                onFocus={selectZeroValue}
                                 value={payments[method]}
                                 onChange={(event) =>
                                     updatePayment(
@@ -1284,6 +1296,7 @@ export default function HistoricalSaleEditor() {
                                                 type="number"
                                                 min="0"
                                                 step="1000"
+                                                onFocus={selectZeroValue}
                                                 value={tip.amount}
                                                 onChange={(event) =>
                                                     updateTip(employeeId, {

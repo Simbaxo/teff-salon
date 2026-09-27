@@ -248,6 +248,16 @@ export default function CheckoutEditor({
         loadMenu();
     }, []);
 
+    // Select a zero-value money field when staff taps/clicks it,
+    // so typing replaces 0 instead of appending digits to it.
+    function selectZeroValue(
+        event: React.FocusEvent<HTMLInputElement>
+    ) {
+        if (event.currentTarget.value === "0") {
+            event.currentTarget.select();
+        }
+    }
+
     // Add a service to the final checkout selection
     function addService(service: AvailableService) {
         const alreadySelected = selectedServices.some(
@@ -520,6 +530,7 @@ export default function CheckoutEditor({
                                                 type="number"
                                                 min="0"
                                                 step="1000"
+                                                onFocus={selectZeroValue}
                                                 value={item.bookedPrice}
                                                 onChange={(event) =>
                                                     updateServicePrice(
@@ -573,6 +584,7 @@ export default function CheckoutEditor({
                                                     type="number"
                                                     min="0"
                                                     step="1000"
+                                                    onFocus={selectZeroValue}
                                                     value={item.bookedPrice}
                                                     onChange={(event) =>
                                                         updateAddonPrice(
@@ -706,6 +718,7 @@ export default function CheckoutEditor({
                     id="discount"
                     type="text"
                     min="0"
+                    onFocus={selectZeroValue}
                     max={checkoutSubtotal}
                     value={discount}
                     onChange={(event) =>
@@ -756,6 +769,7 @@ export default function CheckoutEditor({
                                         id={`tip-${employeeId}`}
                                         type="number"
                                         min="0"
+                                        onFocus={selectZeroValue}
                                         value={tip.amount}
                                         onChange={(event) => {
                                             const amount = Number(
@@ -858,6 +872,7 @@ export default function CheckoutEditor({
                     <input 
                         type="number"
                         min="0"
+                        onFocus={selectZeroValue}
                         value={payments.CASH}
                         onChange={(event) => 
                             setPayments((current) => ({
@@ -877,6 +892,7 @@ export default function CheckoutEditor({
                     <input 
                         type="number"
                         min="0"
+                        onFocus={selectZeroValue}
                         value={payments.BOLD}
                         onChange={(event) => 
                             setPayments((current) => ({
@@ -920,6 +936,7 @@ export default function CheckoutEditor({
                     <input 
                         type="number"
                         min="0"
+                        onFocus={selectZeroValue}
                         value={payments.TRANSFER}
                         onChange={(event) => 
                             setPayments((current) => ({
