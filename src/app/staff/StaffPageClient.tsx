@@ -229,6 +229,31 @@ export default  function StaffPage({
         ).length;
     }
 
+    function getBookingAppointmentPosition(
+        appointmentId: number,
+        bookingId: number | null
+    ) {
+        if (bookingId === null) {
+            return null;
+        }
+
+        const bookingAppointments = appointmentsForDate
+            .filter(
+                (appointment) =>
+                    appointment.bookingId === bookingId
+            )
+            .sort((a, b) =>
+                a.startTime.localeCompare(b.startTime)
+            );
+
+        const index = bookingAppointments.findIndex(
+            (appointment) =>
+                appointment.id === appointmentId
+        );
+
+        return index >= 0 ? index + 1 : null;
+    }
+
     // Group Appointments by Technician
     const appointmentsByEmployee = appointmentsForDate.reduce(
         (groups, appointment) => {
@@ -446,7 +471,14 @@ export default  function StaffPage({
                                         .map((appointment) => (
                                         <div
                                             key={appointment.id}
-                                            className="rounded-xl bg-white p-5 shadow-sm"
+                                            className={`rounded-xl p-5 shadow-sm ${
+                                                appointment.bookingId !== null &&
+                                                getBookingAppointmentCount(
+                                                    appointment.bookingId
+                                                ) > 1
+                                                    ? "border-l-4 border-violet-400 bg-violet-50/40"
+                                                    : "bg-white"
+                                            }`}
                                         >
                                             <div className="flex items-start justify-between">
                                                 <div>
@@ -463,11 +495,26 @@ export default  function StaffPage({
                                                         {appointment.customer.phone}
                                                     </p>
                                                     {appointment.bookingId !== null &&
-                                                        getBookingAppointmentCount(appointment.bookingId) > 1 && (
-                                                            <p className="mt-2 text-xs font-semibold text-neutral-500">
-                                                                Misma reserva ·{" "}
-                                                                {getBookingAppointmentCount(appointment.bookingId)} servicios
-                                                            </p>
+                                                        getBookingAppointmentCount(
+                                                            appointment.bookingId
+                                                        ) > 1 && (
+                                                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                                                <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-800">
+                                                                    Servicio{" "}
+                                                                    {getBookingAppointmentPosition(
+                                                                        appointment.id,
+                                                                        appointment.bookingId
+                                                                    )}{" "}
+                                                                    de{" "}
+                                                                    {getBookingAppointmentCount(
+                                                                        appointment.bookingId
+                                                                    )}
+                                                                </span>
+
+                                                                <span className="text-xs font-semibold text-neutral-500">
+                                                                    Misma Reserva #{appointment.bookingId}
+                                                                </span>
+                                                            </div>
                                                         )}
                                                 </div>
 
