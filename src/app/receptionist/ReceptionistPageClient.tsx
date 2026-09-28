@@ -1249,13 +1249,22 @@ export default function ReceptionistPageClient({
                                 className="rounded-xl bg-white p-5 shadow-sm"
                             >
                                 <div className="flex items-center justify-between">
-                                    <p className="font-bold text-black">
+                                    <Link
+                                        href={`/receptionist/technicians/${employee.id}`}
+                                        className="font-bold text-black hover:underline"
+                                    >
                                         {employee.name}
-                                    </p>
+                                    </Link>
 
                                     <p className="font-bold text-black">
                                         {formatCOP(employee.sales)}
                                     </p>
+                                    <Link
+                                        href={`/receptionist/technicians/${employee.id}`}
+                                        className="mt-3 inline-block text-sm font-semibold text-black"
+                                    >
+                                        Ver actividad →
+                                    </Link>
                                 </div>
 
                                 <p className="mt-2 text-sm text-neutral-500">
@@ -1337,13 +1346,22 @@ export default function ReceptionistPageClient({
                                 className="rounded-xl bg-white p-5 shadow-sm"
                             >
                                 <div className="flex items-center justify-between">
-                                    <p className="font-bold text-black">
+                                    <Link
+                                        href={`/receptionist/technicians/${employee.id}`}
+                                        className="font-bold text-black hover:underline"
+                                    >
                                         {employee.name}
-                                    </p>
+                                    </Link>
 
                                     <p className="font-bold text-black">
                                         {formatCOP(employee.sales)}
                                     </p>
+                                    <Link
+                                        href={`/receptionist/technicians/${employee.id}`}
+                                        className="mt-3 inline-block text-sm font-semibold text-black"
+                                    >
+                                        Ver actividad →
+                                    </Link>
                                 </div>
 
                                 <p className="mt-2 text-sm text-neutral-500">
