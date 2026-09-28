@@ -427,12 +427,19 @@ export default  function StaffPage({
                     />
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-4 flex flex-wrap gap-3">
                     <Link
                         href="/staff/historical"
                         className="inline-flex rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white hover:bg-neutral-800"
                     >
                         + Registrar servicio anterior
+                    </Link>
+
+                    <Link
+                        href="/staff/upcoming"
+                        className="inline-flex rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-neutral-100"
+                    >
+                        📅 Ver próximas citas
                     </Link>
                 </div>
 
