@@ -179,7 +179,27 @@ export default function BookPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [bookingError, setBookingError] = useState("");
     const [bookingSuccess, setBookingSuccess] = useState(false);
-    const [assignedEmployeeName, setAssignedEmployeeName] = useState("");
+    type BookingConfirmationAppointment = {
+        id: number;
+        startTime: string;
+        status: string;
+
+        employee: {
+            id: number;
+            name: string;
+        };
+
+        appointmentServices: {
+            serviceId: number;
+            bookedPrice: number;
+            bookedDuration: number;
+        }[];
+    };
+
+    const [
+        confirmationAppointments,
+        setConfirmationAppointments,
+    ] = useState<BookingConfirmationAppointment[]>([]);
     const [bookedAppointments, setBookedAppointments] =
         useState<Appointment[]>([]);
     const [scheduleBlocks, setScheduleBlocks] =
@@ -739,8 +759,11 @@ export default function BookPage() {
                 throw new Error(data.error || "Booking failed");
             }
 
-            // The server returns the technician actually assigned to the appointment
-            setAssignedEmployeeName(data.employee?.name || "");
+            // Save the appointments returned by the server so the confirmation
+            // shows the technician actually assigned to each service.
+            setConfirmationAppointments(
+                data.appointments ?? []
+            );
 
             setBookingSuccess(true);
             setIsReviewing(false);
@@ -767,29 +790,218 @@ export default function BookPage() {
         }
     }
 
+    // Information used by the customer confirmation screen.
+    const confirmationServices = serviceAssignments.map(
+        ({ service }) => {
+            const addonItems = selectedAddons
+                .filter(
+                    (addonId) =>
+                        addonServiceAssignments[addonId] ===
+                        service.id
+                )
+                .map((addonId) =>
+                    addons.find(
+                        (addon) => addon.id === addonId
+                    )
+                )
+                .filter(
+                    (addon): addon is NonNullable<typeof addon> =>
+                        addon !== undefined
+                );
+
+            return {
+                service,
+                addons: addonItems,
+            };
+        }
+    );
+
+    const confirmationTotal =
+        confirmationServices.reduce(
+            (total, item) =>
+                total +
+                item.service.price +
+                item.addons.reduce(
+                    (addonTotal, addon) =>
+                        addonTotal + addon.price,
+                    0
+                ),
+            0
+        );
+
+    const requiresApproval =
+        confirmationServices.some(
+            (item) => item.service.requiresApproval
+        );
+
+    function formatConfirmationDate(date: string) {
+        if (!date) {
+            return "";
+        }
+
+        return new Intl.DateTimeFormat(
+            language === "es" ? "es-CO" : "en-US",
+            {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+                timeZone: "UTC",
+            }
+        ).format(
+            new Date(
+                `${date}T12:00:00.000Z`
+            )
+        );
+    }
+
     return (
         <main className="min-h-screen bg-neutral-100 px-6 py-12">
             {bookingSuccess && (
-                <div className="mx-auto mt-12 max-w-xl rounded-2xl bg-white p-8 text-center shadow-sm">
-                    <h2 className="text-2xl font-bold text-black">
-                        {language === "es"
-                            ? "¡Cita creada exitosamente!"
-                            : "Appointment created successfully!"}
-                    </h2>
+                <div className="mx-auto mt-8 max-w-xl">
+                    <div className="rounded-2xl bg-white p-6 shadow-sm sm:p-8">
+                        {/* Confirmation status */}
+                        <div
+                            className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl font-bold ${
+                                requiresApproval
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-green-100 text-green-700"
+                            }`}
+                        >
+                            {requiresApproval ? "⏳" : "✓"}
+                        </div>
 
-                    <p className="mt-3 text-neutral-600">
-                        {language === "es"
-                            ? "Tu cita ha sido registrada."
-                            : "Your appointment has been registered."}
-                    </p>
-                    
-                    {assignedEmployeeName && (
-                    <p className="mt-4 font-semibold text-black">
-                        {language === "es"
-                            ? `Técnica asignada: ${assignedEmployeeName}`
-                            : `Assigned technician: ${assignedEmployeeName}`}
-                    </p>
-                )}
+                        <div className="mt-5 text-center">
+                            <h2 className="text-2xl font-bold text-black">
+                                {requiresApproval
+                                    ? language === "es"
+                                        ? "Solicitud recibida"
+                                        : "Request received"
+                                    : language === "es"
+                                    ? "¡Tu cita está confirmada!"
+                                    : "Your appointment is confirmed!"}
+                            </h2>
+
+                            <p className="mt-2 text-neutral-600">
+                                {requiresApproval
+                                    ? language === "es"
+                                        ? "Te confirmaremos los servicios pendientes lo antes posible."
+                                        : "We'll confirm the pending services as soon as possible."
+                                    : language === "es"
+                                    ? "Tu reserva quedó registrada correctamente."
+                                    : "Your booking has been registered successfully."}
+                            </p>
+                        </div>
+
+                        {/* Date and starting time */}
+                        <div className="mt-6 rounded-xl bg-neutral-100 p-4 text-center">
+                            <p className="font-semibold capitalize text-black">
+                                {formatConfirmationDate(selectedDate)}
+                            </p>
+
+                            <p className="mt-1 text-xl font-bold text-black">
+                                {formatTime(selectedTime)}
+                            </p>
+                        </div>
+
+                        {/* Complete booking itinerary */}
+                        <div className="mt-6 space-y-4">
+                            {confirmationServices.map((item, index) => {
+                                const createdAppointment =
+                                    confirmationAppointments.find(
+                                        (appointment) =>
+                                            appointment.appointmentServices.some(
+                                                (appointmentService) =>
+                                                    appointmentService.serviceId ===
+                                                    item.service.id
+                                            )
+                                    );
+
+                                return (
+                                <div
+                                    key={item.service.id}
+                                    className="border-b border-neutral-200 pb-4 last:border-b-0"
+                                >
+                                    {confirmationServices.length > 1 && (
+                                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                                            {language === "es"
+                                                ? `Servicio ${index + 1} de ${confirmationServices.length}`
+                                                : `Service ${index + 1} of ${confirmationServices.length}`}
+                                        </p>
+                                    )}
+
+                                    <div className="flex items-start justify-between gap-4">
+                                        <p className="font-semibold text-black">
+                                            {language === "es"
+                                                ? item.service.nameEs
+                                                : item.service.nameEn}
+                                        </p>
+
+                                        <p className="whitespace-nowrap font-semibold text-black">
+                                            $
+                                            {item.service.price.toLocaleString(
+                                                "es-CO"
+                                            )}
+                                        </p>
+                                    </div>
+
+                                    {createdAppointment && (
+                                        <p className="mt-1 text-sm text-neutral-500">
+                                            {createdAppointment.employee.name}
+                                            {" · "}
+                                            {formatTime(createdAppointment.startTime)}
+                                        </p>
+                                    )}
+
+                                    {item.addons.map((addon) => (
+                                        <div
+                                            key={addon.id}
+                                            className="mt-2 flex items-start justify-between gap-4 text-sm text-neutral-500"
+                                        >
+                                            <span>
+                                                +{" "}
+                                                {language === "es"
+                                                    ? addon.nameEs
+                                                    : addon.nameEn}
+                                            </span>
+
+                                            <span>
+                                                $
+                                                {addon.price.toLocaleString(
+                                                    "es-CO"
+                                                )}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Booking total */}
+                        <div className="mt-2 flex items-center justify-between border-t border-neutral-200 pt-5">
+                            <span className="font-bold text-black">
+                                Total
+                            </span>
+
+                            <span className="text-xl font-bold text-black">
+                                $
+                                {confirmationTotal.toLocaleString(
+                                    "es-CO"
+                                )}
+                            </span>
+                        </div>
+                        
+                        <button
+                            type="button"
+                            onClick={() => window.location.reload()}
+                            className="mt-6 w-full rounded-xl bg-black px-5 py-4 font-semibold text-white hover:bg-neutral-800"
+                        >
+                            {language === "es"
+                                ? "Reservar otra cita"
+                                : "Book another appointment"}
+                        </button>
+                    </div>
                 </div>
             )}
 
