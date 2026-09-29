@@ -21,11 +21,12 @@ The goal of the MVP is to manage the complete salon workflow:
 | 7 | Owner Dashboard & Reporting | ✅ v1 Complete |
 | 8 | Production Readiness & Deployment | ✅ Complete |
 | 9 | Receptionist Dashboard | ✅ v1 Complete |
-| 10 | Inventory Management | 🚧 Next |
+| 10 | Post-MVP Operations & Scheduling | ✅ Active Features Deployed |
+| 11 | Inventory Management | 🚧 Next Major Phase |
 
 **MVP completion: 100% — deployed and production smoke-tested September 15, 2026.**
 
-*The live MVP supports the complete workflow from customer booking through scheduling, staff operations, checkout, payments, commissions, customer history, and owner reporting. The first Post-MVP enhancement, “Any Technician,” has also been completed.*
+*The live application now extends beyond the original MVP with Receptionist Dashboard v1, Any Technician assignment, historical appointment/sale entry, technician schedule blocking, checkout price adjustments, technician activity reporting, upcoming appointment views, multi-service reservation grouping, and an enhanced customer booking confirmation experience.*
 
 ---
 
@@ -77,6 +78,7 @@ The goal of the MVP is to manage the complete salon workflow:
 - Commission
 - Tip
 - SalonSettings
+- EmployeeScheduleBlock
 
 ### Implemented Relationships
 
@@ -91,6 +93,7 @@ The goal of the MVP is to manage the complete salon workflow:
 - Sales → Commissions
 - Sales → Tips
 - Users → optional Employee account
+- Employees → Schedule Blocks
 
 Appointment services and add-ons store price and duration snapshots so historical bookings are not affected if menu prices change later.
 
@@ -132,6 +135,14 @@ Appointment services and add-ons store price and duration snapshots so historica
 - Colombian mobile numbers default to the +57 country code.
 - International customers can select their country code during booking.
 - Full international numbers entered manually are supported without duplicating the selected country code.
+- Enhanced customer booking confirmation receipt
+- Confirmation shows the complete multi-service itinerary
+- Confirmation shows actual assigned technician and start time for each service
+- Confirmation shows service and add-on prices plus the complete booking total
+- Fully confirmed bookings display `¡Tu cita está confirmada!`
+- Approval-required bookings display `Solicitud recibida` instead of incorrectly implying confirmation
+- Multi-technician bookings display the correct technician for each individual service
+- `Reservar otra cita` action available after successful booking
 
 
 ---
@@ -155,6 +166,22 @@ Appointment services and add-ons store price and duration snapshots so historica
 - Server-side booking validation now enforces valid IDs, active technicians, Medellín dates, and TEFF business hours.
 - Customer booking slots now match TEFF hours: Mon–Sat 9:30–18:30, Sunday 10:30–17:30.
 - Fixed server-side opening-hours validation for Monday-Saturday 9:30 AM.
+
+### Technician Schedule Blocking
+
+- OWNER and RECEPTIONIST can block technician availability
+- Schedule blocks support date, start time, end time, and an optional operational reason
+- Blocks can represent vacation, late arrival, early departure, appointments, or other unavailable periods
+- Overlapping schedule blocks for the same technician are rejected
+- Schedule blocks are stored separately from appointments
+- Public booking availability receives only the scheduling fields required to calculate availability
+- Internal schedule-block reasons are not exposed to customers
+- Customer booking slots respect technician schedule blocks
+- Server-side booking validation respects schedule blocks
+- `Any Technician` excludes technicians who are blocked during the requested service
+- Appointment rescheduling cannot move a service into blocked time
+- Technician reassignment cannot move a service to a technician who is blocked
+- Removing a schedule block immediately restores normal availability
 
 ### Concurrency Protection
 
@@ -194,6 +221,31 @@ Appointment services and add-ons store price and duration snapshots so historica
 - RECEPTIONIST navigation includes Staff and Reception without exposing Admin.
 - Appointment status badges use distinct colors for faster operational scanning.
 - Workflow actions use distinct colors for check-in, service start, and service completion.
+- Multi-service reservations are visually distinguished from standalone appointments
+- Multi-service cards show `Servicio X de Y`
+- Related service cards show `Misma reserva #X`
+- Multi-service reservations use a distinct visual treatment for faster staff scanning
+- Added `/staff/upcoming` future-appointments agenda
+- Upcoming appointments are grouped chronologically by date
+- Upcoming agenda shows customer, technician, service, add-ons, time, and status
+- Multi-service reservations retain `Servicio X de Y` and `Misma reserva #X` identification in the upcoming agenda
+- Staff page includes a direct `Ver próximas citas` action
+
+### Historical Appointment & Sale Entry
+
+- OWNER and RECEPTIONIST can register services that occurred before they were entered into the live app
+- Historical entry creates real Customer, Booking, Appointment, Sale, Payment, Commission, Tip, and line-item records
+- Existing customers are reused by normalized phone number
+- Multiple services can be entered in one historical visit
+- Each historical service can be assigned to the technician who actually performed it
+- Compatible add-ons can be attached to historical services
+- Historical service and add-on prices can be adjusted to the actual amount charged
+- Discounts are supported
+- Cash, Bold, transfer, and split payments are supported
+- Technician tips are supported
+- Historical commissions are generated from actual recorded production
+- Historical records feed normal reporting instead of living in a separate reporting system
+- Historical appointment timestamps reflect the actual historical service date rather than the date the record was entered
 
 ### Appointment Workflow
 
@@ -309,6 +361,12 @@ Technicians remain Employee records for scheduling, commissions, and tips withou
 - Single-technician visits automatically attribute newly added checkout items to that technician.
 - Multi-technician visits reject ambiguous checkout-added items instead of guessing technician ownership.
 - Checkout verifies that attributed pre-discount revenue equals the sale subtotal before commission calculation.
+- OWNER and RECEPTIONIST can adjust individual service prices during checkout
+- OWNER and RECEPTIONIST can adjust individual add-on prices during checkout
+- Checkout subtotal recalculates from the adjusted line-item prices
+- Sale line items preserve the actual final price charged
+- Commission calculations use the adjusted sale values
+- Money-entry fields automatically select an initial `0` so staff can replace it directly on desktop and iPad
 
 ### Discounts
 
@@ -516,12 +574,42 @@ Recent catalog updates include:
 - +15 minutes
 - Available across active nail services
 
-### Next Operational Setup
+### Current Operational Focus
 
-- Enter the complete TEFF service menu and prices
-- Enter all production add-ons and compatibility rules
-- Confirm every employee's service qualifications and active status
-- Verify production users and roles before daily salon use
+- Continue live salon testing with OWNER and RECEPTIONIST workflows
+- Validate iPad receptionist alert behavior
+- Monitor schedule-blocking behavior during normal salon operations
+- Continue entering real appointments through the live system
+- Use historical entry when services were completed before being recorded in TEFF
+- Collect operational feedback before beginning Inventory Management v1
+
+### September 2026 Post-MVP Production Update
+
+The TEFF application is now being used and tested against real salon workflows.
+
+Recently completed and deployed:
+
+- [x] Receptionist Dashboard v1
+- [x] Any Technician automatic assignment
+- [x] Appointment reassignment and rescheduling
+- [x] Historical appointment and sale entry
+- [x] Checkout line-item price adjustments
+- [x] Technician schedule blocking
+- [x] Schedule-block enforcement across all scheduling paths
+- [x] Technician daily/monthly activity drill-down
+- [x] Multi-service reservation visual grouping
+- [x] Future appointment agenda
+- [x] Enhanced customer booking confirmation receipt
+- [x] Multi-technician confirmation details
+- [x] Improved financial input behavior for staff
+
+Current testing focus:
+
+- [ ] iPad receptionist booking-alert behavior
+
+Next major planned operational feature:
+
+- [ ] Inventory Management v1
 
 ## 🚀 Post-MVP Roadmap
 
@@ -562,6 +650,9 @@ Receptionist Dashboard v1 is complete and deployed to production.
 - [x] Change appointment date and time
 - [x] Preserve conflict and technician-qualification validation
 - [x] Support existing appointment times outside standard 30-minute options
+- [x] Block technician schedules for unavailable periods
+- [x] Delete schedule blocks to restore availability
+- [x] Schedule blocks are enforced by customer booking and internal appointment-management APIs
 
 #### Performance Reporting
 
@@ -576,8 +667,12 @@ Receptionist Dashboard v1 is complete and deployed to production.
 - [x] Monthly production by technician
 - [x] Monthly customer count by technician
 - [x] Commission/payroll information remains restricted to the Owner Dashboard
+- [x] Technician names link to detailed activity views
+- [x] Technician activity page shows today's production and completed appointments
+- [x] Technician activity page shows current-month production and completed appointments
+- [x] Technician detail uses attributed production rather than exposing commission payout amounts
 
-#### Booking Alerts
+#### Booking Alerts & iPad Notifications
 
 - [x] Automatic appointment refresh every 30 seconds
 - [x] Detect newly created customer bookings without refreshing the page
@@ -585,6 +680,9 @@ Receptionist Dashboard v1 is complete and deployed to production.
 - [x] Multi-service bookings count as one reservation alert
 - [x] Dismiss alerts with `Marcar como visto`
 - [x] Background refresh failures do not erase already-loaded dashboard data
+- [ ] Verify receptionist alert behavior on the salon iPad while the page is actively visible
+- [ ] Verify behavior after app switching, backgrounding, screen lock, and wake
+- [ ] Evaluate true push/background notifications for iPad instead of relying only on browser polling
 
 #### UI & Tablet Experience
 
