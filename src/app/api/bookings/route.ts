@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { sendPushNotification } from "@/lib/push";
 import { normalizePhoneNumber } from "@/lib/phone";
 import {
   getTeffCurrentMinutes,
@@ -803,6 +804,116 @@ export async function POST(request: Request) {
 
     if (!result) {
       throw new Error("Unable to complete booking transaction");
+    }
+
+    // Notify registered TEFF staff devices after the booking transaction
+    // succeeds. Push failures must never cause a valid booking to fail
+    try {
+      const pushSubscriptions =
+        await prisma.pushSubscription.findMany({
+          where: {
+            user: {
+              active: true,
+              role: {
+                in: ["OWNER", "RECEPTIONIST"],
+              },
+            },
+          },
+        });
+
+      if (pushSubscriptions.length > 0) {
+        const firstAppointment =
+          result.appointments[0];
+
+        const serviceNames = result.appointments
+          .flatMap((appointment) =>
+            appointment.appointmentServices.map(
+              (appointmentService) => {
+                const service = serviceBlocks.find(
+                  (block) =>
+                    block.service.id ===
+                    appointmentService.serviceId
+                );
+
+                return service?.service.nameEs;
+              }
+            )
+          )
+          .filter(
+            (name): name is string =>
+              typeof name === "string"
+          );
+
+        const serviceSummary =
+          serviceNames.length > 2
+            ? `${serviceNames
+                .slice(0, 2)
+                .join(", ")} +${serviceNames.length - 2}`
+            : serviceNames.join(", ");
+
+        const notificationBody = [
+          result.customer.name,
+          serviceSummary,
+          firstAppointment
+            ? `${date} · ${firstAppointment.startTime}`
+            : date,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
+        await Promise.allSettled(
+          pushSubscriptions.map(
+            async (subscription) => {
+              try {
+                await sendPushNotification(
+                  subscription,
+                  {
+                    title: "🔔 Nueva Reserva",
+                    body: notificationBody,
+                    url: "/receptionist",
+                  }
+                );
+              } catch (error) {
+                console.error(
+                  `Booking push failed for subscription ${subscription.id}:`,
+                  error
+                );
+
+                // Remove subscriptions that the browser/push provider
+                // says no longer exist.
+                const statusCode =
+                  typeof error === "object" &&
+                  error !== null &&
+                  "statusCode" in error
+                    ? Number(error.statusCode)
+                    : null;
+
+                if (
+                  statusCode === 404 ||
+                  statusCode === 410
+                ) {
+                  await prisma.pushSubscription
+                    .delete({
+                      where: {
+                        id: subscription.id,
+                      },
+                    })
+                    .catch(() => {
+                      // A concurrent request may already have removed it
+                    });
+                }
+              }
+            }
+          )
+        );
+      }
+    } catch (error) {
+      // Booking already succeeded. Notification infrastructure must
+      // never turn a successful reservation into an API failure
+      console.error(
+        "Unable to send new-booking push notifications:",
+        error
+      );
     }
 
     return Response.json(result, { status: 201 });    

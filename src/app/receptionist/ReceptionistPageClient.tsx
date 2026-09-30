@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
     getTeffToday,
     hasTeffAppointmentStarted,
@@ -157,6 +158,26 @@ function formatCOP(value: number) {
     }).format(value);
 }
 
+// Convert the VAPID public key into the format required by PushManager.
+function urlBase64ToUint8Array(base64String: string) {
+    const padding =
+        "=".repeat((4 - (base64String.length % 4)) % 4);
+
+    const base64 = (
+        base64String + padding
+    )
+        .replace(/-/g, "+")
+        .replace(/_/g, "/");
+
+    const rawData = window.atob(base64);
+
+    return Uint8Array.from(
+        [...rawData].map(
+            (character) => character.charCodeAt(0)
+        )
+    );
+}
+
 export default function ReceptionistPageClient({
     todaysSalesTotal,
     weeklySalesTotal,
@@ -174,6 +195,23 @@ export default function ReceptionistPageClient({
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
     const [employees, setEmployees] = useState<Employee[]>([]);
+    // Web Push support for the salon iPad and other staff devices
+    const [pushSupported, setPushSupported] = useState(false);
+
+    const [notificationPermission, setNotificationPermission] =
+        useState<NotificationPermission>("default");
+
+    const [serviceWorkerReady, setServiceWorkerReady] =
+        useState(false);
+
+    const [isEnablingPush, setIsEnablingPush] =
+        useState(false);
+
+    const [pushEnabled, setPushEnabled] =
+        useState(false);
+
+    const [pushError, setPushError] =
+        useState("");
 
     const [reassigningAppointmentId, setReassigningAppointmentId] =
         useState<number | null>(null);
@@ -313,6 +351,55 @@ export default function ReceptionistPageClient({
             console.error(error);
         }
     }
+
+    // Register TEFF's service worker and detect Web Push support
+    // Permission is NOT requested here; staff must explicitly enable it
+    useEffect(() => {
+        const supportsPush =
+            "serviceWorker" in navigator &&
+            "PushManager" in window &&
+            "Notification" in window;
+
+        setPushSupported(supportsPush);
+
+        if (!supportsPush) {
+            return;
+        }
+
+        setNotificationPermission(
+            Notification.permission
+        );
+
+        async function registerServiceWorker() {
+            try {
+                await navigator.serviceWorker.register(
+                    "/sw.js"
+                );
+
+                const registration =
+                    await navigator.serviceWorker.ready;
+
+                setServiceWorkerReady(true);
+
+                const existingSubscription =
+                    await registration.pushManager.getSubscription();
+
+                setPushEnabled(
+                    existingSubscription !== null &&
+                    Notification.permission === "granted"
+                );
+            } catch (error) {
+                console.error(
+                    "Failed to register TEFF service worker:",
+                    error
+                );
+
+                setServiceWorkerReady(false);
+            }
+        }
+
+        registerServiceWorker();
+    }, []);
 
     useEffect(() => {
         loadAppointments();
@@ -568,6 +655,102 @@ export default function ReceptionistPageClient({
             appointment.status === "IN_PROGRESS"
     ).length;
 
+    async function enablePushNotifications() {
+        setPushError("");
+
+        if (!pushSupported || !serviceWorkerReady) {
+            setPushError(
+                "Las notificaciones todavía no están disponibles en este dispositivo."
+            );
+            return;
+        }
+
+        const publicKey =
+            process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+
+        if (!publicKey) {
+            setPushError(
+                "La configuración de notificaciones no está disponible."
+            );
+            return;
+        }
+
+        try {
+            setIsEnablingPush(true);
+
+            // iPadOS requires this permission request to happen
+            // directly after a user action.
+            const permission =
+                await Notification.requestPermission();
+
+            setNotificationPermission(permission);
+
+            if (permission !== "granted") {
+                setPushError(
+                    "No se otorgó permiso para mostrar notificaciones."
+                );
+                return;
+            }
+
+            const registration =
+                await navigator.serviceWorker.ready;
+
+            // Reuse the device's existing subscription when possible.
+            let subscription =
+                await registration.pushManager.getSubscription();
+
+            if (!subscription) {
+                subscription =
+                    await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey:
+                            urlBase64ToUint8Array(
+                                publicKey
+                            ),
+                    });
+            }
+
+            const response = await fetch(
+                "/api/push/subscribe",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json",
+                    },
+                    body: JSON.stringify(
+                        subscription.toJSON()
+                    ),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.error ||
+                        "No se pudo guardar la suscripción."
+                );
+            }
+
+            setPushEnabled(true);
+            setPushError("");
+        } catch (error) {
+            console.error(
+                "Failed to enable TEFF push notifications:",
+                error
+            );
+
+            setPushError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudieron activar las notificaciones."
+            );
+        } finally {
+            setIsEnablingPush(false);
+        }
+    }
+
     if (isLoading) {
         return (
             <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
@@ -631,6 +814,57 @@ export default function ReceptionistPageClient({
 
     return (
         <div className="mt-8">
+
+            {/* Web Push notification controls */}
+            {pushSupported && (
+                <div className="mb-6 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p className="font-bold text-black">
+                                🔔 Notificaciones
+                            </p>
+
+                            <p className="mt-1 text-sm text-neutral-600">
+                                {pushEnabled
+                                    ? "Este dispositivo recibirá alertas de nuevas reservas."
+                                    : notificationPermission === "denied"
+                                    ? "Las notificaciones están bloqueadas en este dispositivo."
+                                    : "Activa las alertas de nuevas reservas en este dispositivo."}
+                            </p>
+                        </div>
+
+                        {pushEnabled ? (
+                            <span className="inline-flex rounded-lg bg-green-100 px-4 py-2 text-sm font-semibold text-green-800">
+                                ✓ Activadas
+                            </span>
+                        ) : (
+                            notificationPermission !== "denied" && (
+                                <button
+                                    type="button"
+                                    onClick={enablePushNotifications}
+                                    disabled={
+                                        isEnablingPush ||
+                                        !serviceWorkerReady
+                                    }
+                                    className="rounded-lg bg-black px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {isEnablingPush
+                                        ? "Activando..."
+                                        : serviceWorkerReady
+                                        ? "Activar notificaciones"
+                                        : "Preparando..."}
+                                </button>
+                            )
+                        )}
+                    </div>
+
+                    {pushError && (
+                        <p className="mt-3 text-sm font-medium text-red-700">
+                            {pushError}
+                        </p>
+                    )}
+                </div>
+            )}
 
             {newBookingCount > 0 && (
                 <div className="mb-6 flex flex-col gap-3 rounded-xl border border-neutral-300 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
