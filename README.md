@@ -79,6 +79,7 @@ The goal of the MVP is to manage the complete salon workflow:
 - Tip
 - SalonSettings
 - EmployeeScheduleBlock
+- PushSubscription
 
 ### Implemented Relationships
 
@@ -94,6 +95,7 @@ The goal of the MVP is to manage the complete salon workflow:
 - Sales → Tips
 - Users → optional Employee account
 - Employees → Schedule Blocks
+- Users → Push Subscriptions
 
 Appointment services and add-ons store price and duration snapshots so historical bookings are not affected if menu prices change later.
 
@@ -516,6 +518,10 @@ Remaining owner-dashboard work is primarily UI polish and future advanced report
 - [x] Keep local development connected to the `development` branch
 - [x] Keep Vercel connected to the `production` branch
 - [x] Verify production build succeeds
+- [x] Configure production Web Push VAPID keys
+- [x] Apply `PushSubscription` production migration
+- [x] Verify production Web Push delivery
+- [x] Verify TEFF installation as an iPad Home Screen web app
 
 ### Security & Dependency Hardening
 
@@ -602,10 +608,14 @@ Recently completed and deployed:
 - [x] Enhanced customer booking confirmation receipt
 - [x] Multi-technician confirmation details
 - [x] Improved financial input behavior for staff
+- [x] Web Push notifications for new customer reservations
 
-Current testing focus:
+Production notification status:
 
-- [ ] iPad receptionist booking-alert behavior
+- [x] iPad Web Push notifications production-verified
+- [x] OWNER notification delivery verified
+- [x] RECEPTIONIST notification delivery verified
+- [x] Real customer booking → background iPad notification verified
 
 Next major planned operational feature:
 
@@ -672,17 +682,29 @@ Receptionist Dashboard v1 is complete and deployed to production.
 - [x] Technician activity page shows current-month production and completed appointments
 - [x] Technician detail uses attributed production rather than exposing commission payout amounts
 
-#### Booking Alerts & iPad Notifications
+#### Web Push Notifications
 
-- [x] Automatic appointment refresh every 30 seconds
-- [x] Detect newly created customer bookings without refreshing the page
-- [x] Display `Nueva reserva` alert
-- [x] Multi-service bookings count as one reservation alert
-- [x] Dismiss alerts with `Marcar como visto`
-- [x] Background refresh failures do not erase already-loaded dashboard data
-- [ ] Verify receptionist alert behavior on the salon iPad while the page is actively visible
-- [ ] Verify behavior after app switching, backgrounding, screen lock, and wake
-- [ ] Evaluate true push/background notifications for iPad instead of relying only on browser polling
+New-booking Web Push Notifications v1 is complete and production-verified.
+
+- [x] Standards-based Web Push notifications
+- [x] Service worker handles background notifications
+- [x] PWA manifest and TEFF Home Screen app support
+- [x] TEFF-branded Home Screen and notification icons
+- [x] OWNER and RECEPTIONIST devices can enable notifications
+- [x] Push subscriptions are stored securely in PostgreSQL
+- [x] Multiple authorized staff devices are supported
+- [x] New customer bookings automatically trigger push notifications
+- [x] Multi-service bookings generate one notification per reservation rather than one per service
+- [x] Notifications include customer, service summary, date, and starting time
+- [x] Tapping a notification opens `/receptionist`
+- [x] Background delivery works while the TEFF web app is not open
+- [x] Production delivery verified on the salon iPad
+- [x] OWNER notification delivery verified
+- [x] RECEPTIONIST notification delivery verified
+- [x] Expired push subscriptions are automatically removed after `404` / `410` provider responses
+- [x] Push-delivery failures cannot cause an otherwise valid customer booking to fail
+- [x] Protected `/api/push/test` endpoint retained for device diagnostics
+- [x] Legacy 30-second appointment polling and in-app booking alert removed
 
 #### UI & Tablet Experience
 
@@ -756,11 +778,17 @@ Future inventory expansion:
 
 ### Integrations & Automation
 
+- ✅ Web Push notifications for new customer bookings
+- ✅ Background notification delivery to authorized staff devices
+- ✅ OWNER and RECEPTIONIST push-notification support
+- ✅ iPad Home Screen PWA support
+- ✅ Notification tap opens the Reception dashboard
+- ✅ Protected push-notification test endpoint for device diagnostics
 - Google Calendar integration
 - Color-coded appointments by technician
 - Automatic WhatsApp appointment confirmations
 - Automatic WhatsApp appointment reminders
-- WhatsApp notifications to reception when appointments are created
+- WhatsApp notifications to reception as an optional secondary channel
 - Future integrations with additional payment or communication services
 
 ### Customer Experience
