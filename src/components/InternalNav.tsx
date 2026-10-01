@@ -17,12 +17,21 @@ export default function InternalNav({
             </Link>
 
             {(userRole === "OWNER" || userRole === "RECEPTIONIST") && (
-                <Link
-                    href="/receptionist"
-                    className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
-                >
-                    Recepción
-                </Link>
+                <>
+                    <Link
+                        href="/receptionist"
+                        className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
+                    >
+                        Recepción
+                    </Link>
+
+                    <Link
+                        href="/inventory"
+                        className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
+                    >
+                        Inventario
+                    </Link>
+                </>
             )}
 
             {userRole === "OWNER" && (
