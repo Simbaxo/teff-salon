@@ -529,6 +529,52 @@ export default function ReceptionistPageClient({
         }
     }
 
+    // Delete an appointment after explicit confirmation.
+    async function deleteAppointment(
+        appointmentId: number,
+        status: string
+    ) {
+        const message =
+            status === "IN_PROGRESS"
+                ? "Esta cita está actualmente En servicio.\n\n¿Seguro que deseas eliminarla? Esta acción no se puede deshacer."
+                : "¿Seguro que deseas eliminar esta cita? Esta acción no se puede deshacer.";
+
+        const confirmed = window.confirm(message);
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                `/api/appointments/${appointmentId}`,
+                {
+                    method: "DELETE",
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                if (response.status === 409) {
+                    alert(
+                        "Esta cita ya está asociada a una venta y no se puede eliminar."
+                    );
+                    return;
+                }
+
+                alert(data.error || "No se pudo eliminar la cita");
+                return;
+            }
+
+            // Reload appointments and dashboard information after deletion.
+            await loadAppointments();
+        } catch (error) {
+            console.error(error);
+            alert("No se pudo eliminar la cita");
+        }
+    }
+
     // Change the date/time of one appointment block.
     async function rescheduleAppointment(
         appointmentId: number,
@@ -1229,7 +1275,7 @@ export default function ReceptionistPageClient({
                                 </div>
 
                                 {/* Appointment workflow actions */}
-                                <div className="mt-4 border-t border-neutral-200 pt-4">
+                                <div className="mt-4 flex flex-wrap gap-2 border-t border-neutral-200 pt-4">
                                     {appointment.status === "REQUESTED" && (
                                         <button
                                             type="button"
@@ -1328,6 +1374,18 @@ export default function ReceptionistPageClient({
                                             Finalizar Servicio
                                         </Link>
                                     )}
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            deleteAppointment(
+                                                appointment.id,
+                                                appointment.status
+                                            )
+                                        }
+                                        className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700"
+                                    >
+                                        Eliminar Cita
+                                    </button>
                                 </div>
                             </div>
                         ))}
