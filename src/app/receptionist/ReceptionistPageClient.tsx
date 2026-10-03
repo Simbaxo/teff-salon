@@ -191,6 +191,10 @@ export default function ReceptionistPageClient({
 }: ReceptionistPageClientProps) {
     const today = getTeffToday();
 
+    // Reception opens on today, but staff can review previous appointment dates.
+    const [selectedAppointmentDate, setSelectedAppointmentDate] =
+        useState(today);
+
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
@@ -705,6 +709,18 @@ export default function ReceptionistPageClient({
         .sort((a, b) =>
             a.startTime.localeCompare(b.startTime)
         );
+
+    // Appointment list can display today or a previous date independently
+    // from the dashboard's "today" KPI cards.
+    const selectedDateAppointments = appointments
+        .filter(
+            (appointment) =>
+                appointment.date.slice(0, 10) ===
+                selectedAppointmentDate
+        )
+        .sort((a, b) =>
+            a.startTime.localeCompare(b.startTime)
+        );
     
     // Reception snapshot for today's salon activity.
     const todaysAppointmentCount = todaysAppointments.filter(
@@ -1183,26 +1199,67 @@ export default function ReceptionistPageClient({
             </div>
 
             <div className="mt-8">
-                <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-black">
-                        Citas de Hoy
-                    </h2>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <h2 className="text-xl font-bold text-black">
+                            {selectedAppointmentDate === today
+                                ? "Citas de Hoy"
+                                : "Citas del Día"}
+                        </h2>
 
-                    <span className="text-sm text-neutral-500">
-                        {todaysAppointments.length}{" "}
-                        {todaysAppointments.length === 1 ? "cita" : "citas"}
-                    </span>
+                        <p className="mt-1 text-sm text-neutral-500">
+                            {selectedDateAppointments.length}{" "}
+                            {selectedDateAppointments.length === 1
+                                ? "cita"
+                                : "citas"}
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-end gap-2">
+                        <div>
+                            <label
+                                htmlFor="reception-appointment-date"
+                                className="block text-xs font-semibold text-neutral-500"
+                            >
+                                Ver fecha
+                            </label>
+
+                            <input
+                                id="reception-appointment-date"
+                                type="date"
+                                value={selectedAppointmentDate}
+                                onChange={(event) =>
+                                    setSelectedAppointmentDate(
+                                        event.target.value
+                                    )
+                                }
+                                className="mt-1 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                            />
+                        </div>
+
+                        {selectedAppointmentDate !== today && (
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setSelectedAppointmentDate(today)
+                                }
+                                className="rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-neutral-100"
+                            >
+                                Hoy
+                            </button>
+                        )}
+                    </div>
                 </div>
 
-                {todaysAppointments.length === 0 ? (
+                {selectedDateAppointments.length === 0 ? (
                     <div className="mt-4 rounded-xl bg-white p-5 shadow-sm">
                         <p className="text-neutral-500">
-                            No hay citas programadas para hoy.
+                            No hay citas programadas para esta fecha.
                         </p>
                     </div>
                 ) : (
                     <div className="mt-4 space-y-3">
-                        {todaysAppointments.map((appointment) => (
+                        {selectedDateAppointments.map((appointment) => (
                             <div
                                 key={appointment.id}
                                 className="rounded-xl bg-white p-5 shadow-sm"

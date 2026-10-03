@@ -363,18 +363,18 @@ export default function HistoricalSaleEditor() {
         }
     }
 
-    function addAddon() {
-        const firstSelectedService = selectedServices[0];
+    function addAddon(serviceId?: number) {
+        const targetServiceId =
+            serviceId ?? selectedServices[0]?.serviceId;
 
-        if (!firstSelectedService) {
+        if (!targetServiceId) {
             return;
         }
 
         const compatibleAddonIds = serviceAddonRelations
             .filter(
                 (relation) =>
-                    relation.serviceId ===
-                    firstSelectedService.serviceId
+                    relation.serviceId === targetServiceId
             )
             .map((relation) => relation.addonId);
 
@@ -390,7 +390,7 @@ export default function HistoricalSaleEditor() {
             ...current,
             {
                 addonId: firstAddon.id,
-                serviceId: firstSelectedService.serviceId,
+                serviceId: targetServiceId,
                 price: firstAddon.price,
             },
         ]);
@@ -913,15 +913,27 @@ export default function HistoricalSaleEditor() {
                                         </div>
                                     </div>
 
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            removeSelectedService(index)
-                                        }
-                                        className="mt-3 text-sm font-semibold text-red-600"
-                                    >
-                                        Quitar servicio
-                                    </button>
+                                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                addAddon(selection.serviceId)
+                                            }
+                                            className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-neutral-100"
+                                        >
+                                            + Agregar adicional
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                removeSelectedService(index)
+                                            }
+                                            className="text-sm font-semibold text-red-600"
+                                        >
+                                            Quitar servicio
+                                        </button>
+                                    </div>
                                 </div>
                             );
                         })}
@@ -940,15 +952,6 @@ export default function HistoricalSaleEditor() {
                             Cada adicional pertenece a uno de los servicios realizados.
                         </p>
                     </div>
-
-                    <button
-                        type="button"
-                        onClick={addAddon}
-                        disabled={selectedServices.length === 0}
-                        className="rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white disabled:opacity-40"
-                    >
-                        + Agregar adicional
-                    </button>
                 </div>
 
                 {selectedAddons.length === 0 ? (
