@@ -36,6 +36,7 @@ export async function PATCH(
     const appointmentId = Number(id);
     const date = body.date;
     const startTime = body.startTime;
+    const overrideOverlap = body.overrideOverlap === true;
 
     if (
       !Number.isInteger(appointmentId) ||
@@ -248,11 +249,14 @@ export async function PATCH(
                     }
                 );
 
-              if (
-                  hasConflict ||
-                  hasScheduleBlockConflict
-              ) {
-                  throw new Error("SCHEDULE_CONFLICT");
+              // Schedule blocks such as vacation or late arrival cannot be overridden.
+              if (hasScheduleBlockConflict) {
+                  throw new Error("SCHEDULE_BLOCK_CONFLICT");
+              }
+
+              // Owner/Receptionist may intentionally override another appointment overlap.
+              if (hasConflict && !overrideOverlap) {
+                  throw new Error("APPOINTMENT_CONFLICT");
               }
             }
 
@@ -276,10 +280,13 @@ export async function PATCH(
         break;
       } catch (error) {
         if (
-          error instanceof Error &&
-          error.message === "SCHEDULE_CONFLICT"
+            error instanceof Error &&
+            (
+                error.message === "APPOINTMENT_CONFLICT" ||
+                error.message === "SCHEDULE_BLOCK_CONFLICT"
+            )
         ) {
-          throw error;
+            throw error;
         }
 
         const isSerializableConflict =
@@ -293,7 +300,7 @@ export async function PATCH(
         }
 
         if (attempt === maxAttempts) {
-          throw new Error("SCHEDULE_CONFLICT");
+            throw new Error("SCHEDULE_CONFLICT");
         }
       }
     }
@@ -307,8 +314,34 @@ export async function PATCH(
     return Response.json(result);
   } catch (error) {
     if (
-      error instanceof Error &&
-      error.message === "SCHEDULE_CONFLICT"
+        error instanceof Error &&
+        error.message === "APPOINTMENT_CONFLICT"
+    ) {
+        return Response.json(
+            {
+                error: "Appointment overlaps another appointment",
+                conflictType: "APPOINTMENT",
+            },
+            { status: 409 }
+        );
+    }
+
+    if (
+        error instanceof Error &&
+        error.message === "SCHEDULE_BLOCK_CONFLICT"
+    ) {
+        return Response.json(
+            {
+                error: "Employee has a schedule block during this time",
+                conflictType: "SCHEDULE_BLOCK",
+            },
+            { status: 409 }
+        );
+    }
+
+    if (
+        error instanceof Error &&
+        error.message === "SCHEDULE_CONFLICT"
     ) {
       return Response.json(
         {

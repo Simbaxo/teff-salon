@@ -576,6 +576,7 @@ export default function ReceptionistPageClient({
     }
 
     // Change the date/time of one appointment block.
+    // Appointment overlaps can be intentionally overridden after confirmation.
     async function rescheduleAppointment(
         appointmentId: number,
         date: string,
@@ -584,23 +585,62 @@ export default function ReceptionistPageClient({
         try {
             setReschedulingAppointmentId(appointmentId);
 
-            const response = await fetch(
-                `/api/appointments/${appointmentId}/schedule`,
-                {
-                    method: "PATCH",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        date,
-                        startTime,
-                    }),
-                }
-            );
+            async function sendRescheduleRequest(overrideOverlap = false) {
+                const response = await fetch(
+                    `/api/appointments/${appointmentId}/schedule`,
+                    {
+                        method: "PATCH",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            date,
+                            startTime,
+                            overrideOverlap,
+                        }),
+                    }
+                );
 
-            const data = await response.json();
+                const data = await response.json();
+
+                return {
+                    response,
+                    data,
+                };
+            }
+
+            // First attempt always respects normal overlap protection.
+            let { response, data } = await sendRescheduleRequest();
+
+            // If another appointment causes the conflict, staff may override it.
+            if (
+                response.status === 409 &&
+                data.conflictType === "APPOINTMENT"
+            ) {
+                const confirmed = window.confirm(
+                    "Este horario se superpone con otra cita.\n\n¿Deseas guardar la cita de todas formas?"
+                );
+
+                if (!confirmed) {
+                    return;
+                }
+
+                // Retry only after explicit confirmation.
+                ({ response, data } =
+                    await sendRescheduleRequest(true));
+            }
 
             if (!response.ok) {
+                if (
+                    response.status === 409 &&
+                    data.conflictType === "SCHEDULE_BLOCK"
+                ) {
+                    alert(
+                        "La técnica tiene un bloqueo de horario durante este período."
+                    );
+                    return;
+                }
+
                 alert(data.error || "No se pudo cambiar el horario");
                 return;
             }

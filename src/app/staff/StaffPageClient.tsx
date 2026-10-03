@@ -303,44 +303,88 @@ export default  function StaffPage({
         }
     }
 
-    // Reassign an appointment to another qualified technician
+    // Reassign an appointment to another qualified technician.
+    // Appointment overlaps can be intentionally overridden after confirmation.
     async function reassignEmployee(
         appointmentId: number,
         employeeId: number
     ) {
         try {
             setReassigningAppointmentId(appointmentId);
-            
-            const response = await fetch(
-                `/api/appointments/${appointmentId}/employee`,
-                {
-                    method: "PATCH",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({ employeeId }),
-                }
-            );
 
-            const data = await response.json();
+            async function sendReassignmentRequest(overrideOverlap = false) {
+                const response = await fetch(
+                    `/api/appointments/${appointmentId}/employee`,
+                    {
+                        method: "PATCH",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            employeeId,
+                            overrideOverlap,
+                        }),
+                    }
+                );
+
+                const data = await response.json();
+
+                return {
+                    response,
+                    data,
+                };
+            }
+
+            // First attempt keeps normal overlap protection enabled.
+            let { response, data } = await sendReassignmentRequest();
+
+            // If the new technician already has another appointment,
+            // staff may intentionally override the overlap.
+            if (
+                response.status === 409 &&
+                data.conflictType === "APPOINTMENT"
+            ) {
+                const confirmed = window.confirm(
+                    "Esta técnica ya tiene otra cita durante este horario.\n\n¿Deseas asignar la cita de todas formas?"
+                );
+
+                if (!confirmed) {
+                    return;
+                }
+
+                // Retry only after explicit confirmation.
+                ({ response, data } =
+                    await sendReassignmentRequest(true));
+            }
 
             if (!response.ok) {
-                alert(data.error || "No se puedo cambiar la técnica");
+                if (
+                    response.status === 409 &&
+                    data.conflictType === "SCHEDULE_BLOCK"
+                ) {
+                    alert(
+                        "La técnica tiene un bloqueo de horario durante este período."
+                    );
+                    return;
+                }
+
+                alert(data.error || "No se pudo cambiar la técnica");
                 return;
             }
 
-            // Reload appointments so the card moves to the correct technician
+            // Reload so the appointment moves to the correct technician.
             await loadAppointments();
         } catch (error) {
             console.error(error);
-            alert("No se pudo cambiar la técnica")
+            alert("No se pudo cambiar la técnica");
         } finally {
             setReassigningAppointmentId(null);
         }
     }
 
     // Change the schedule of one appointment block without changing
-    // the other services that belong to the same customer booking.
+    // the other services that belong to the same customer booking
+    // Appointment overlaps can be intentionally overridden after confirmation
     async function rescheduleAppointment(
         appointmentId: number,
         date: string,
@@ -349,23 +393,62 @@ export default  function StaffPage({
         try {
             setReschedulingAppointmentId(appointmentId);
 
-            const response = await fetch(
-                `/api/appointments/${appointmentId}/schedule`,
-                {
-                    method: "PATCH",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        date,
-                        startTime,
-                    }),
-                }
-            );
+            async function sendRescheduleRequest(overrideOverlap = false) {
+                const response = await fetch(
+                    `/api/appointments/${appointmentId}/schedule`,
+                    {
+                        method: "PATCH",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            date,
+                            startTime,
+                            overrideOverlap,
+                        }),
+                    }
+                );
 
-            const data = await response.json();
+                const data = await response.json();
+
+                return {
+                    response,
+                    data,
+                };
+            }
+
+            // First attempt keeps normal overlap protection enabled.
+            let { response, data } = await sendRescheduleRequest();
+
+            // Staff may intentionally override another appointment overlap.
+            if (
+                response.status === 409 &&
+                data.conflictType === "APPOINTMENT"
+            ) {
+                const confirmed = window.confirm(
+                    "Este horario se superpone con otra cita.\n\n¿Deseas guardar la cita de todas formas?"
+                );
+
+                if (!confirmed) {
+                    return;
+                }
+
+                // Retry only after explicit confirmation.
+                ({ response, data } =
+                    await sendRescheduleRequest(true));
+            }
 
             if (!response.ok) {
+                if (
+                    response.status === 409 &&
+                    data.conflictType === "SCHEDULE_BLOCK"
+                ) {
+                    alert(
+                        "La técnica tiene un bloqueo de horario durante este período."
+                    );
+                    return;
+                }
+
                 alert(data.error || "No se pudo cambiar el horario");
                 return;
             }
@@ -378,7 +461,7 @@ export default  function StaffPage({
         } finally {
             setReschedulingAppointmentId(null);
         }
-    }    
+    }
 
     return (
         <main className="min-h-screen bg-neutral-100 p-6">
