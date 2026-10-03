@@ -462,6 +462,7 @@ export default function ReceptionistPageClient({
     }
 
     // Reassign an appointment to another qualified technician.
+    // Appointment overlaps can be intentionally overridden after confirmation.
     async function reassignEmployee(
         appointmentId: number,
         employeeId: number
@@ -469,25 +470,66 @@ export default function ReceptionistPageClient({
         try {
             setReassigningAppointmentId(appointmentId);
 
-            const response = await fetch(
-                `/api/appointments/${appointmentId}/employee`,
-                {
-                    method: "PATCH",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({ employeeId }),
-                }
-            );
+            async function sendReassignmentRequest(overrideOverlap = false) {
+                const response = await fetch(
+                    `/api/appointments/${appointmentId}/employee`,
+                    {
+                        method: "PATCH",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            employeeId,
+                            overrideOverlap,
+                        }),
+                    }
+                );
 
-            const data = await response.json();
+                const data = await response.json();
+
+                return {
+                    response,
+                    data,
+                };
+            }
+
+            // First attempt keeps normal overlap protection enabled.
+            let { response, data } = await sendReassignmentRequest();
+
+            // Reception may intentionally override another appointment overlap.
+            if (
+                response.status === 409 &&
+                data.conflictType === "APPOINTMENT"
+            ) {
+                const confirmed = window.confirm(
+                    "Esta técnica ya tiene otra cita durante este horario.\n\n¿Deseas asignar la cita de todas formas?"
+                );
+
+                if (!confirmed) {
+                    return;
+                }
+
+                // Retry only after explicit confirmation.
+                ({ response, data } =
+                    await sendReassignmentRequest(true));
+            }
 
             if (!response.ok) {
+                if (
+                    response.status === 409 &&
+                    data.conflictType === "SCHEDULE_BLOCK"
+                ) {
+                    alert(
+                        "La técnica tiene un bloqueo de horario durante este período."
+                    );
+                    return;
+                }
+
                 alert(data.error || "No se pudo cambiar la técnica");
                 return;
             }
 
-            // Reload appointments so reception immediately sees the new technician.
+            // Reload so reception immediately sees the new technician.
             await loadAppointments();
         } catch (error) {
             console.error(error);
