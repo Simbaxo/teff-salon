@@ -32,6 +32,33 @@ type InventoryMovementType =
     | "DAMAGED"
     | "CORRECTION";
 
+type InventoryMovement = {
+    id: number;
+    type: InventoryMovementType;
+    quantityChange: number;
+    quantityBefore: number;
+    quantityAfter: number;
+    note: string | null;
+    createdAt: string;
+
+    user: {
+        id: number;
+        name: string;
+    };
+};
+
+type InventoryHistory = {
+    item: {
+        id: number;
+        name: string;
+        unit: string;
+        quantity: number;
+        active: boolean;
+    };
+
+    movements: InventoryMovement[];
+};
+
 function getStatusLabel(status: InventoryStatus) {
     switch (status) {
         case "IN_STOCK":
@@ -52,6 +79,31 @@ function getStatusClasses(status: InventoryStatus) {
         case "OUT_OF_STOCK":
             return "bg-red-100 text-red-800";
     }
+}
+
+function getMovementLabel(type: InventoryMovementType) {
+    switch (type) {
+        case "RESTOCK":
+            return "📦 Reposición";
+        case "USAGE":
+            return "✂️ Uso";
+        case "DAMAGED":
+            return "⚠️ Dañado";
+        case "CORRECTION":
+            return "🔧 Corrección";
+    }
+}
+
+function formatMovementDate(value: string) {
+    return new Intl.DateTimeFormat("es-CO", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "America/Bogota",
+    }).format(new Date(value));
 }
 
 export default function InventoryPageClient() {
@@ -109,6 +161,19 @@ export default function InventoryPageClient() {
         useState(false);
 
     const [adjustmentError, setAdjustmentError] =
+        useState("");
+
+    // Inventory movement history.
+    const [historyItem, setHistoryItem] =
+        useState<InventoryItem | null>(null);
+
+    const [inventoryHistory, setInventoryHistory] =
+        useState<InventoryHistory | null>(null);
+
+    const [isLoadingHistory, setIsLoadingHistory] =
+        useState(false);
+
+    const [historyError, setHistoryError] =
         useState("");
 
     async function loadInventory() {
@@ -311,6 +376,40 @@ export default function InventoryPageClient() {
             );
         } finally {
             setIsSaving(false);
+        }
+    }
+
+    async function loadMovementHistory(item: InventoryItem) {
+        try {
+            setHistoryItem(item);
+            setInventoryHistory(null);
+            setHistoryError("");
+            setIsLoadingHistory(true);
+
+            const response = await fetch(
+                `/api/inventory/${item.id}/movements`
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.error ||
+                        "No se pudo cargar el historial."
+                );
+            }
+
+            setInventoryHistory(data);
+        } catch (error) {
+            console.error(error);
+
+            setHistoryError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo cargar el historial."
+            );
+        } finally {
+            setIsLoadingHistory(false);
         }
     }
 
@@ -851,21 +950,32 @@ export default function InventoryPageClient() {
                                                 </p>
                                             </div>
 
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setAdjustingItem(item);
-                                                    setMovementType("RESTOCK");
-                                                    setAdjustmentQuantity("1");
-                                                    setAdjustmentNote("");
-                                                    setAdjustmentError("");
-                                                }}
-                                                className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-neutral-100"
-                                            >
-                                                Ajustar stock
-                                            </button>
-                                        </div>
+                                            <div className="flex flex-wrap justify-end gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        loadMovementHistory(item)
+                                                    }
+                                                    className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-neutral-100"
+                                                >
+                                                    Ver historial
+                                                </button>
 
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setAdjustingItem(item);
+                                                        setMovementType("RESTOCK");
+                                                        setAdjustmentQuantity("1");
+                                                        setAdjustmentNote("");
+                                                        setAdjustmentError("");
+                                                    }}
+                                                    className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-neutral-100"
+                                                >
+                                                    Ajustar stock
+                                                </button>
+                                            </div>
+                                        </div>
                                         {item.notes && (
                                             <p className="mt-4 border-t border-neutral-200 pt-4 text-sm text-neutral-500">
                                                 {
@@ -1027,6 +1137,143 @@ export default function InventoryPageClient() {
                             ? "Guardando..."
                             : "Guardar ajuste"}
                     </button>
+                </div>
+            )}
+
+            {/* Inventory movement history */}
+            {historyItem && (
+                <div className="mt-6 rounded-xl bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <h2 className="text-xl font-bold text-black">
+                                Historial de inventario
+                            </h2>
+
+                            <p className="mt-1 font-semibold text-black">
+                                {historyItem.name}
+                            </p>
+
+                            <p className="mt-1 text-sm text-neutral-500">
+                                Stock actual: {historyItem.quantity}{" "}
+                                {historyItem.unit}
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setHistoryItem(null);
+                                setInventoryHistory(null);
+                                setHistoryError("");
+                            }}
+                            className="text-sm font-semibold text-neutral-500 hover:text-black"
+                        >
+                            Cerrar
+                        </button>
+                    </div>
+
+                    {isLoadingHistory && (
+                        <p className="mt-5 text-sm text-neutral-500">
+                            Cargando historial...
+                        </p>
+                    )}
+
+                    {historyError && (
+                        <div className="mt-5">
+                            <p className="text-sm font-medium text-red-700">
+                                {historyError}
+                            </p>
+
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    loadMovementHistory(historyItem)
+                                }
+                                className="mt-3 rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
+                            >
+                                Reintentar
+                            </button>
+                        </div>
+                    )}
+
+                    {!isLoadingHistory &&
+                        !historyError &&
+                        inventoryHistory &&
+                        inventoryHistory.movements.length === 0 && (
+                            <p className="mt-5 text-sm text-neutral-500">
+                                Este producto todavía no tiene movimientos registrados.
+                            </p>
+                        )}
+
+                    {!isLoadingHistory &&
+                        !historyError &&
+                        inventoryHistory &&
+                        inventoryHistory.movements.length > 0 && (
+                            <div className="mt-5 space-y-3">
+                                {inventoryHistory.movements.map(
+                                    (movement) => (
+                                        <div
+                                            key={movement.id}
+                                            className="rounded-xl border border-neutral-200 p-4"
+                                        >
+                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                <div>
+                                                    <p className="font-bold text-black">
+                                                        {getMovementLabel(
+                                                            movement.type
+                                                        )}
+                                                    </p>
+
+                                                    <p className="mt-1 text-sm text-neutral-600">
+                                                        {movement.quantityBefore}
+                                                        {" → "}
+                                                        {movement.quantityAfter}{" "}
+                                                        {historyItem.unit}
+                                                    </p>
+
+                                                    <p className="mt-1 text-sm text-neutral-500">
+                                                        Por:{" "}
+                                                        {movement.user.name}
+                                                    </p>
+
+                                                    {movement.note && (
+                                                        <p className="mt-2 text-sm text-neutral-500">
+                                                            Nota:{" "}
+                                                            {movement.note}
+                                                        </p>
+                                                    )}
+                                                </div>
+
+                                                <div className="sm:text-right">
+                                                    <p
+                                                        className={`text-lg font-bold ${
+                                                            movement.quantityChange > 0
+                                                                ? "text-green-700"
+                                                                : movement.quantityChange < 0
+                                                                ? "text-red-700"
+                                                                : "text-black"
+                                                        }`}
+                                                    >
+                                                        {movement.quantityChange > 0
+                                                            ? "+"
+                                                            : ""}
+                                                        {
+                                                            movement.quantityChange
+                                                        }
+                                                    </p>
+
+                                                    <p className="mt-1 text-xs text-neutral-500">
+                                                        {formatMovementDate(
+                                                            movement.createdAt
+                                                        )}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+                                )}
+                            </div>
+                        )}
                 </div>
             )}
 
