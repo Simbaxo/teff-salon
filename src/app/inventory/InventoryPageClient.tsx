@@ -26,6 +26,12 @@ type FilterOption =
     | "LOW_STOCK"
     | "OUT_OF_STOCK";
 
+type InventoryMovementType =
+    | "RESTOCK"
+    | "USAGE"
+    | "DAMAGED"
+    | "CORRECTION";
+
 function getStatusLabel(status: InventoryStatus) {
     switch (status) {
         case "IN_STOCK":
@@ -84,6 +90,25 @@ export default function InventoryPageClient() {
     ] = useState("0");
 
     const [notes, setNotes] =
+        useState("");
+
+    // Stock-adjustment controls
+    const [adjustingItem, setAdjustingItem] =
+        useState<InventoryItem | null>(null);
+
+    const [movementType, setMovementType] =
+        useState<InventoryMovementType>("RESTOCK");
+
+    const [adjustmentQuantity, setAdjustmentQuantity] =
+        useState("1");
+
+    const [adjustmentNote, setAdjustmentNote] =
+        useState("");
+
+    const [isAdjusting, setIsAdjusting] =
+        useState(false);
+
+    const [adjustmentError, setAdjustmentError] =
         useState("");
 
     async function loadInventory() {
@@ -286,6 +311,96 @@ export default function InventoryPageClient() {
             );
         } finally {
             setIsSaving(false);
+        }
+    }
+
+    async function adjustInventory() {
+        if (!adjustingItem) {
+            return;
+        }
+
+        setAdjustmentError("");
+
+        const parsedQuantity =
+            Number(adjustmentQuantity);
+
+        if (
+            !Number.isInteger(parsedQuantity) ||
+            parsedQuantity === 0
+        ) {
+            setAdjustmentError(
+                "La cantidad debe ser un número entero diferente de 0."
+            );
+            return;
+        }
+
+        // Normal stock additions/removals use a positive quantity.
+        // Corrections may intentionally use + or - values.
+        if (
+            movementType !== "CORRECTION" &&
+            parsedQuantity < 0
+        ) {
+            setAdjustmentError(
+                "Usa una cantidad positiva para este tipo de movimiento."
+            );
+            return;
+        }
+
+        try {
+            setIsAdjusting(true);
+
+            const response = await fetch(
+                `/api/inventory/${adjustingItem.id}/adjust`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json",
+                    },
+                    body: JSON.stringify({
+                        type: movementType,
+                        quantity: parsedQuantity,
+                        note:
+                            adjustmentNote.trim() ||
+                            null,
+                    }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                if (
+                    response.status === 409
+                ) {
+                    throw new Error(
+                        "No hay suficiente inventario para realizar este ajuste."
+                    );
+                }
+
+                throw new Error(
+                    data.error ||
+                        "No se pudo ajustar el inventario."
+                );
+            }
+
+            setAdjustingItem(null);
+            setMovementType("RESTOCK");
+            setAdjustmentQuantity("1");
+            setAdjustmentNote("");
+            setAdjustmentError("");
+
+            await loadInventory();
+        } catch (error) {
+            console.error(error);
+
+            setAdjustmentError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo ajustar el inventario."
+            );
+        } finally {
+            setIsAdjusting(false);
         }
     }
 
@@ -738,6 +853,13 @@ export default function InventoryPageClient() {
 
                                             <button
                                                 type="button"
+                                                onClick={() => {
+                                                    setAdjustingItem(item);
+                                                    setMovementType("RESTOCK");
+                                                    setAdjustmentQuantity("1");
+                                                    setAdjustmentNote("");
+                                                    setAdjustmentError("");
+                                                }}
                                                 className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-neutral-100"
                                             >
                                                 Ajustar stock
@@ -757,6 +879,156 @@ export default function InventoryPageClient() {
                         </div>
                     )}
             </div>
+
+            {/* Stock adjustment panel */}
+            {adjustingItem && (
+                <div className="mt-6 rounded-xl bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <h2 className="text-xl font-bold text-black">
+                                Ajustar stock
+                            </h2>
+
+                            <p className="mt-1 font-semibold text-black">
+                                {adjustingItem.name}
+                            </p>
+
+                            <p className="mt-1 text-sm text-neutral-500">
+                                Stock actual:{" "}
+                                {adjustingItem.quantity}{" "}
+                                {adjustingItem.unit}
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setAdjustingItem(null);
+                                setAdjustmentError("");
+                            }}
+                            className="text-sm font-semibold text-neutral-500 hover:text-black"
+                        >
+                            Cerrar
+                        </button>
+                    </div>
+
+                    <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                        {[
+                            {
+                                value: "RESTOCK",
+                                label: "📦 Reposición",
+                            },
+                            {
+                                value: "USAGE",
+                                label: "✂️ Uso",
+                            },
+                            {
+                                value: "DAMAGED",
+                                label: "⚠️ Dañado",
+                            },
+                            {
+                                value: "CORRECTION",
+                                label: "🔧 Corrección",
+                            },
+                        ].map((option) => (
+                            <button
+                                key={option.value}
+                                type="button"
+                                onClick={() =>
+                                    setMovementType(
+                                        option.value as InventoryMovementType
+                                    )
+                                }
+                                className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
+                                    movementType === option.value
+                                        ? "border-black bg-black text-white"
+                                        : "border-neutral-300 bg-white text-black hover:bg-neutral-100"
+                                }`}
+                            >
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="mt-5 grid gap-4 md:grid-cols-2">
+                        <div>
+                            <label className="block text-sm font-semibold text-black">
+                                Cantidad
+                            </label>
+
+                            <input
+                                type="number"
+                                step="1"
+                                min={
+                                    movementType ===
+                                    "CORRECTION"
+                                        ? undefined
+                                        : "1"
+                                }
+                                value={adjustmentQuantity}
+                                onFocus={(event) =>
+                                    event.currentTarget.select()
+                                }
+                                onChange={(event) =>
+                                    setAdjustmentQuantity(
+                                        event.target.value
+                                    )
+                                }
+                                className="mt-2 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
+                            />
+
+                            <p className="mt-2 text-xs text-neutral-500">
+                                {movementType === "RESTOCK" &&
+                                    "Cantidad recibida para agregar al inventario."}
+
+                                {movementType === "USAGE" &&
+                                    "Cantidad utilizada del producto."}
+
+                                {movementType === "DAMAGED" &&
+                                    "Cantidad dañada, perdida o descartada."}
+
+                                {movementType === "CORRECTION" &&
+                                    "Usa un número positivo para agregar o negativo para reducir."}
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-black">
+                                Nota
+                            </label>
+
+                            <input
+                                type="text"
+                                value={adjustmentNote}
+                                onChange={(event) =>
+                                    setAdjustmentNote(
+                                        event.target.value
+                                    )
+                                }
+                                placeholder="Opcional"
+                                className="mt-2 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
+                            />
+                        </div>
+                    </div>
+
+                    {adjustmentError && (
+                        <p className="mt-4 text-sm font-medium text-red-700">
+                            {adjustmentError}
+                        </p>
+                    )}
+
+                    <button
+                        type="button"
+                        onClick={adjustInventory}
+                        disabled={isAdjusting}
+                        className="mt-5 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                        {isAdjusting
+                            ? "Guardando..."
+                            : "Guardar ajuste"}
+                    </button>
+                </div>
+            )}
 
             {/* Shopping-list reminder */}
             {shoppingListItems.length > 0 && (
