@@ -24,7 +24,8 @@ type InventoryItem = {
 type FilterOption =
     | "ALL"
     | "LOW_STOCK"
-    | "OUT_OF_STOCK";
+    | "OUT_OF_STOCK"
+    | "INACTIVE";
 
 type InventoryMovementType =
     | "RESTOCK"
@@ -175,14 +176,53 @@ export default function InventoryPageClient() {
 
     const [historyError, setHistoryError] =
         useState("");
+    
+    // Product-detail editing. Quantity is intentionally excluded.
+    const [editingItem, setEditingItem] =
+        useState<InventoryItem | null>(null);
 
-    async function loadInventory() {
+    const [editName, setEditName] =
+        useState("");
+
+    const [editCategory, setEditCategory] =
+        useState("");
+
+    const [editUnit, setEditUnit] =
+        useState("");
+
+    const [editLowStockThreshold, setEditLowStockThreshold] =
+        useState("0");
+
+    const [editNotes, setEditNotes] =
+        useState("");
+
+    const [editActive, setEditActive] =
+        useState(true);
+
+    const [isUpdatingItem, setIsUpdatingItem] =
+        useState(false);
+
+    const [editError, setEditError] =
+        useState("");
+
+    async function loadInventory(
+        options?: {
+            inactive?: boolean;
+        }
+    ) {
         try {
             setIsLoading(true);
             setLoadError("");
 
+            const inactive =
+                options?.inactive ?? false;
+
+            const url = inactive
+                ? "/api/inventory?status=inactive"
+                : "/api/inventory";
+
             const response =
-                await fetch("/api/inventory");
+                await fetch(url);
 
             if (!response.ok) {
                 throw new Error(
@@ -208,6 +248,25 @@ export default function InventoryPageClient() {
     useEffect(() => {
         loadInventory();
     }, []);
+
+    async function changeFilter(
+        nextFilter: FilterOption
+    ) {
+        setFilter(nextFilter);
+        setShowShoppingList(false);
+
+        if (nextFilter === "INACTIVE") {
+            await loadInventory({
+                inactive: true,
+            });
+            return;
+        }
+
+        // If leaving the inactive view, restore active inventory.
+        if (filter === "INACTIVE") {
+            await loadInventory();
+        }
+    }
 
     const totalItems = items.length;
 
@@ -249,6 +308,7 @@ export default function InventoryPageClient() {
 
             const matchesFilter =
                 filter === "ALL" ||
+                filter === "INACTIVE" ||
                 item.status === filter;
 
             const matchesShoppingList =
@@ -376,6 +436,112 @@ export default function InventoryPageClient() {
             );
         } finally {
             setIsSaving(false);
+        }
+    }
+
+    function openEditItem(item: InventoryItem) {
+        setEditingItem(item);
+        setEditName(item.name);
+        setEditCategory(item.category ?? "");
+        setEditUnit(item.unit);
+        setEditLowStockThreshold(
+            String(item.lowStockThreshold)
+        );
+        setEditNotes(item.notes ?? "");
+        setEditActive(item.active);
+        setEditError("");
+    }
+
+    async function updateInventoryItem() {
+        if (!editingItem) {
+            return;
+        }
+
+        setEditError("");
+
+        const parsedThreshold =
+            Number(editLowStockThreshold);
+
+        if (!editName.trim()) {
+            setEditError(
+                "Escribe el nombre del producto."
+            );
+            return;
+        }
+
+        if (!editUnit.trim()) {
+            setEditError(
+                "Escribe la unidad del producto."
+            );
+            return;
+        }
+
+        if (
+            !Number.isInteger(parsedThreshold) ||
+            parsedThreshold < 0
+        ) {
+            setEditError(
+                "El mínimo de stock debe ser un número entero mayor o igual a 0."
+            );
+            return;
+        }
+
+        try {
+            setIsUpdatingItem(true);
+
+            const response = await fetch(
+                `/api/inventory/${editingItem.id}`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type":
+                            "application/json",
+                    },
+                    body: JSON.stringify({
+                        name: editName.trim(),
+                        category:
+                            editCategory.trim() ||
+                            null,
+                        unit: editUnit.trim(),
+                        lowStockThreshold:
+                            parsedThreshold,
+                        notes:
+                            editNotes.trim() ||
+                            null,
+                        active: editActive,
+                    }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.error ||
+                        "No se pudo actualizar el producto."
+                );
+            }
+
+            setEditingItem(null);
+            setEditError("");
+
+            if (filter === "INACTIVE") {
+                await loadInventory({
+                    inactive: true,
+                });
+            } else {
+                await loadInventory();
+            }
+        } catch (error) {
+            console.error(error);
+
+            setEditError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo actualizar el producto."
+            );
+        } finally {
+            setIsUpdatingItem(false);
         }
     }
 
@@ -792,7 +958,7 @@ export default function InventoryPageClient() {
                 <button
                     type="button"
                     onClick={() =>
-                        setFilter("ALL")
+                        changeFilter("ALL")
                     }
                     className={`rounded-full px-4 py-2 text-sm font-semibold ${
                         filter === "ALL"
@@ -806,7 +972,7 @@ export default function InventoryPageClient() {
                 <button
                     type="button"
                     onClick={() =>
-                        setFilter(
+                        changeFilter(
                             "LOW_STOCK"
                         )
                     }
@@ -824,7 +990,7 @@ export default function InventoryPageClient() {
                 <button
                     type="button"
                     onClick={() =>
-                        setFilter(
+                        changeFilter(
                             "OUT_OF_STOCK"
                         )
                     }
@@ -837,6 +1003,20 @@ export default function InventoryPageClient() {
                 >
                     Agotados (
                     {outOfStockCount})
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() =>
+                        changeFilter("INACTIVE")
+                    }
+                    className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                        filter === "INACTIVE"
+                            ? "bg-black text-white"
+                            : "bg-white text-black"
+                    }`}
+                >
+                    Inactivos
                 </button>
             </div>
 
@@ -858,8 +1038,11 @@ export default function InventoryPageClient() {
 
                         <button
                             type="button"
-                            onClick={
-                                loadInventory
+                            onClick={() =>
+                                loadInventory({
+                                    inactive:
+                                        filter === "INACTIVE",
+                                })
                             }
                             className="mt-4 rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
                         >
@@ -911,15 +1094,21 @@ export default function InventoryPageClient() {
                                                 )}
                                             </div>
 
-                                            <span
-                                                className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(
-                                                    item.status
-                                                )}`}
-                                            >
-                                                {getStatusLabel(
-                                                    item.status
-                                                )}
-                                            </span>
+                                            {item.active ? (
+                                                <span
+                                                    className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(
+                                                        item.status
+                                                    )}`}
+                                                >
+                                                    {getStatusLabel(
+                                                        item.status
+                                                    )}
+                                                </span>
+                                            ) : (
+                                                <span className="rounded-full bg-neutral-200 px-3 py-1 text-xs font-semibold text-neutral-700">
+                                                    Inactivo
+                                                </span>
+                                            )}
                                         </div>
 
                                         <div className="mt-4 flex items-end justify-between gap-4">
@@ -954,6 +1143,16 @@ export default function InventoryPageClient() {
                                                 <button
                                                     type="button"
                                                     onClick={() =>
+                                                        openEditItem(item)
+                                                    }
+                                                    className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-neutral-100"
+                                                >
+                                                    Editar producto
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
                                                         loadMovementHistory(item)
                                                     }
                                                     className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-neutral-100"
@@ -961,19 +1160,21 @@ export default function InventoryPageClient() {
                                                     Ver historial
                                                 </button>
 
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setAdjustingItem(item);
-                                                        setMovementType("RESTOCK");
-                                                        setAdjustmentQuantity("1");
-                                                        setAdjustmentNote("");
-                                                        setAdjustmentError("");
-                                                    }}
-                                                    className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-neutral-100"
-                                                >
-                                                    Ajustar stock
-                                                </button>
+                                                {item.active && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setAdjustingItem(item);
+                                                            setMovementType("RESTOCK");
+                                                            setAdjustmentQuantity("1");
+                                                            setAdjustmentNote("");
+                                                            setAdjustmentError("");
+                                                        }}
+                                                        className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-neutral-100"
+                                                    >
+                                                        Ajustar stock
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                         {item.notes && (
@@ -989,6 +1190,186 @@ export default function InventoryPageClient() {
                         </div>
                     )}
             </div>
+
+            {/* Product editing panel */}
+            {editingItem && (
+                <div className="mt-6 rounded-xl bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <h2 className="text-xl font-bold text-black">
+                                Editar producto
+                            </h2>
+
+                            <p className="mt-1 text-sm text-neutral-500">
+                                Actualiza la información del producto sin modificar su stock.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setEditingItem(null);
+                                setEditError("");
+                            }}
+                            className="text-sm font-semibold text-neutral-500 hover:text-black"
+                        >
+                            Cerrar
+                        </button>
+                    </div>
+
+                    <div className="mt-5 grid gap-4 md:grid-cols-2">
+                        <div>
+                            <label className="block text-sm font-semibold text-black">
+                                Producto
+                            </label>
+
+                            <input
+                                type="text"
+                                value={editName}
+                                onChange={(event) =>
+                                    setEditName(
+                                        event.target.value
+                                    )
+                                }
+                                className="mt-2 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-black">
+                                Categoría
+                            </label>
+
+                            <input
+                                type="text"
+                                value={editCategory}
+                                onChange={(event) =>
+                                    setEditCategory(
+                                        event.target.value
+                                    )
+                                }
+                                placeholder="Ej. Uñas"
+                                className="mt-2 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-black">
+                                Unidad
+                            </label>
+
+                            <input
+                                type="text"
+                                value={editUnit}
+                                onChange={(event) =>
+                                    setEditUnit(
+                                        event.target.value
+                                    )
+                                }
+                                placeholder="unidad, botella, caja..."
+                                className="mt-2 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-black">
+                                Mínimo de stock
+                            </label>
+
+                            <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={editLowStockThreshold}
+                                onFocus={(event) =>
+                                    event.currentTarget.select()
+                                }
+                                onChange={(event) =>
+                                    setEditLowStockThreshold(
+                                        event.target.value
+                                    )
+                                }
+                                className="mt-2 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
+                            />
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-semibold text-black">
+                                Notas
+                            </label>
+
+                            <textarea
+                                value={editNotes}
+                                onChange={(event) =>
+                                    setEditNotes(
+                                        event.target.value
+                                    )
+                                }
+                                rows={3}
+                                placeholder="Marca, tamaño, proveedor, presentación..."
+                                className="mt-2 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="mt-5 rounded-xl border border-neutral-200 p-4">
+                        <label className="flex cursor-pointer items-center justify-between gap-4">
+                            <div>
+                                <p className="font-semibold text-black">
+                                    Producto activo
+                                </p>
+
+                                <p className="mt-1 text-sm text-neutral-500">
+                                    Los productos inactivos dejan de aparecer en el inventario operativo.
+                                </p>
+                            </div>
+
+                            <input
+                                type="checkbox"
+                                checked={editActive}
+                                onChange={(event) =>
+                                    setEditActive(
+                                        event.target.checked
+                                    )
+                                }
+                                className="h-5 w-5"
+                            />
+                        </label>
+                    </div>
+
+                    <div className="mt-5 rounded-xl bg-neutral-50 p-4">
+                        <p className="text-sm font-semibold text-black">
+                            Stock actual
+                        </p>
+
+                        <p className="mt-1 text-lg font-bold text-black">
+                            {editingItem.quantity}{" "}
+                            {editingItem.unit}
+                        </p>
+
+                        <p className="mt-1 text-xs text-neutral-500">
+                            Para cambiar esta cantidad usa “Ajustar stock” para conservar el historial.
+                        </p>
+                    </div>
+
+                    {editError && (
+                        <p className="mt-4 text-sm font-medium text-red-700">
+                            {editError}
+                        </p>
+                    )}
+
+                    <button
+                        type="button"
+                        onClick={updateInventoryItem}
+                        disabled={isUpdatingItem}
+                        className="mt-5 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                        {isUpdatingItem
+                            ? "Guardando..."
+                            : "Guardar cambios"}
+                    </button>
+                </div>
+            )}
 
             {/* Stock adjustment panel */}
             {adjustingItem && (

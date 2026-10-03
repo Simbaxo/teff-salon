@@ -19,7 +19,13 @@ function getInventoryStatus(
     return "IN_STOCK";
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get("status");
+
+    const showInactive =
+        status === "inactive";
+
     const session = await auth();
 
     if (!session?.user) {
@@ -40,7 +46,9 @@ export async function GET() {
         const items =
             await prisma.inventoryItem.findMany({
                 where: {
-                    active: true,
+                    active: showInactive
+                        ? false
+                        : true,
                 },
                 orderBy: [
                     {
