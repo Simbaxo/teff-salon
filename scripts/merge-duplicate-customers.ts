@@ -39,7 +39,11 @@ async function main() {
   >();
 
   for (const customer of customers) {
-    const normalizedPhone = normalizePhoneNumber(customer.phone);
+    if (!customer.phone) {
+      continue;
+    }
+
+  const normalizedPhone = normalizePhoneNumber(customer.phone);
 
     // Skip values that cannot be safely normalized
     if (!normalizedPhone) {

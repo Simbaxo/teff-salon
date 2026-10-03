@@ -170,6 +170,7 @@ export default function BookPage() {
     // Colombia is the default because TEFF is located in Medellin
     const [countryCode, setCountryCode] = useState("+57");
     const [customerPhone, setCustomerPhone] = useState("");
+    const [noPhone, setNoPhone] = useState(false);
     const [customerEmail, setCustomerEmail] = useState("");
     const [customerNotes, setCustomerNotes] = useState("");
     const [isReviewing, setIsReviewing] = useState(false);
@@ -688,9 +689,13 @@ export default function BookPage() {
     );
 
     // Show the full phone number without duplicating a country code
-    const displayCustomerPhone = customerPhone.trim().startsWith("+")
-        ? customerPhone
-        : `${countryCode} ${customerPhone}`;
+    const displayCustomerPhone = noPhone
+        ? language === "es"
+            ? "Sin teléfono"
+            : "No phone"
+        : customerPhone.trim().startsWith("+")
+            ? customerPhone
+            : `${countryCode} ${customerPhone}`;
 
     // The scheduling stage begin after add-on are completed
     // or immediately when selected services have no add-ons
@@ -706,9 +711,11 @@ export default function BookPage() {
 
             // If the customer typed an international number themselves,
             // don't add the selected country code a second time.
-            const fullCustomerPhone = customerPhone.trim().startsWith("+")
-                ? customerPhone
-                : `${countryCode}${customerPhone}`
+            const fullCustomerPhone = noPhone
+                ? ""
+                : customerPhone.trim().startsWith("+")
+                    ? customerPhone
+                    : `${countryCode}${customerPhone}`;
 
             const response = await fetch("/api/bookings", {
                 method: "POST",
@@ -1526,6 +1533,7 @@ export default function BookPage() {
                                     <select 
                                         value={countryCode}
                                         onChange={(event) => setCountryCode(event.target.value)}
+                                        disabled={noPhone}
                                         className="rounded-xl border border-neutral-300 bg-white p-4 text-black"
                                         aria-label={language === "es" ? "Código de País" : "Country Code"}
                                     >
@@ -1540,14 +1548,38 @@ export default function BookPage() {
                                         type="tel"
                                         value={customerPhone}
                                         onChange={(event) => setCustomerPhone(event.target.value)}
+                                        disabled={noPhone}
                                         placeholder={
                                         language === "es"
                                             ? "Teléfono / WhatsApp"
                                             : "Phone / WhatsApp"
                                         }
-                                        className="min-w-0 flex-1 rounded-xl border border-neutral-300 bg-white p-4 text-black"
-                                    />
+                                        className="min-w-0 flex-1 rounded-xl border border-neutral-300 bg-white p-4 text-black disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+                                        />
                                     </div>
+
+                                    <label className="flex items-center gap-3 text-sm text-neutral-700">
+                                    <input
+                                        type="checkbox"
+                                        checked={noPhone}
+                                        onChange={(event) => {
+                                            const checked = event.target.checked;
+
+                                            setNoPhone(checked);
+
+                                            if (checked) {
+                                                setCustomerPhone("");
+                                            }
+                                        }}
+                                        className="h-4 w-4"
+                                    />
+
+                                    <span>
+                                        {language === "es"
+                                            ? "Cliente no desea proporcionar teléfono"
+                                            : "Customer does not want to provide a phone number"}
+                                    </span>
+                                </label>                     
                             </div>
 
                                 <input 
@@ -1579,9 +1611,9 @@ export default function BookPage() {
                     {selectedTime && !isReviewing && (
                         <button
                             onClick={() => setIsReviewing(true)}
-                            disabled={!customerName || !customerPhone}
+                            disabled={!customerName || (!customerPhone && !noPhone)}
                             className={`mt-8 w-full rounded-xl px-6 py-3 font-semibold ${
-                                customerName && customerPhone
+                                customerName && (customerPhone || noPhone)
                                     ? "bg-black text-white"
                                     : "cursor-not-allowed bg-neutral-300 text-neutral-500"
                             }`}

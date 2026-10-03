@@ -86,7 +86,7 @@ export async function POST(request: Request) {
       typeof customerName === "string" ? customerName.trim() : "";
     
     const normalizedCustomerPhone =
-      typeof customerPhone === "string" 
+      typeof customerPhone === "string" && customerPhone.trim() !== ""
         ? normalizePhoneNumber(customerPhone)
         : null;
     
@@ -108,18 +108,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Phone normalization already validates the supported format
-    if (!normalizedCustomerPhone) {
-      return Response.json(
-        { error: "Invalid customer phone" },
-        { status: 400 }
-      );
-    }
-
     // Make sure the booking contains the required information
     if (
       !normalizedCustomerName ||
-      !normalizedCustomerPhone ||
       !date ||
       !startTime ||
       !Array.isArray(serviceIds) ||
@@ -484,23 +475,28 @@ export async function POST(request: Request) {
         result = await prisma.$transaction(
           async (tx) => {
             // Reuse an existing customer when the phone number already exists.
-            const customer = await tx.customer.upsert({
-              where: {
-                phone: normalizedCustomerPhone,
-              },
-
-              update: {
-                // Keep customer details current when they book again.
-                name: normalizedCustomerName,
-                email: normalizedCustomerEmail || null,
-              },
-
-              create: {
-                name: normalizedCustomerName,
-                phone: normalizedCustomerPhone,
-                email: normalizedCustomerEmail || null,
-              },
-            });
+            const customer = normalizedCustomerPhone
+              ? await tx.customer.upsert({
+                    where: {
+                        phone: normalizedCustomerPhone,
+                    },
+                    update: {
+                        name: normalizedCustomerName,
+                        email: normalizedCustomerEmail || null,
+                    },
+                    create: {
+                        name: normalizedCustomerName,
+                        phone: normalizedCustomerPhone,
+                        email: normalizedCustomerEmail || null,
+                    },
+                })
+              : await tx.customer.create({
+                    data: {
+                        name: normalizedCustomerName,
+                        phone: null,
+                        email: normalizedCustomerEmail || null,
+                    },
+                });
 
             // One Booking represents the customer's complete salon visit.
             const booking = await tx.booking.create({
