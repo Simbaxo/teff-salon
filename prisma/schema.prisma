@@ -224,6 +224,7 @@ model AppointmentService {
 }
 
 model AppointmentAddon {
+  id             Int @id @default(autoincrement())
   appointmentId  Int
   addonId        Int
   bookedPrice    Int
@@ -232,7 +233,8 @@ model AppointmentAddon {
   appointment Appointment @relation(fields: [appointmentId], references: [id])
   addon       Addon       @relation(fields: [addonId], references: [id])
 
-  @@id([appointmentId, addonId])
+  @@index([appointmentId])
+  @@index([addonId])
 }
 
 // Represents on completed customer transcation

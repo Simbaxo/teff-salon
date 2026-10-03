@@ -149,10 +149,12 @@ export default function BookPage() {
         },
     ]
     const [selectedServices, setSelectedServices] = useState<number[]>([]);
-    const [selectedAddons, setSelectedAddons] = useState<number[]>([]);
-    // Tracks which service each selected add-on belongs to.
-    const [addonServiceAssignments, setAddonServiceAssignments] =
-        useState<Record<number, number>>({});
+
+    // Each add-on selection belongs to a specific service.
+    // This allows the same add-on, such as Retiro, to be used for both hands and feet.
+    const [selectedAddons, setSelectedAddons] = useState<
+        { addonId: number; serviceId: number }[]
+    >([]);
     // "any" lets the salon automatically assign an available qualified technician
     const [selectedEmployee, setSelectedEmployee] = 
         useState<number | "any" | null>(null);
@@ -304,50 +306,75 @@ export default function BookPage() {
         )
         .map((relation) => relation.addonId);
 
-    // Remove add-ons and assignments that are no longer valid
+    // Remove add-on selections that are no longer valid
     // when the customer changes their selected services.
     useEffect(() => {
-        const validAddonIds = serviceAddons
-            .filter((relation) =>
-                selectedServices.includes(relation.serviceId)
-            )
-            .map((relation) => relation.addonId);
-
         setSelectedAddons((current) =>
-            current.filter((addonId) =>
-                validAddonIds.includes(addonId)
+            current.filter((selection) =>
+                selectedServices.includes(selection.serviceId) &&
+                serviceAddons.some(
+                    (relation) =>
+                        relation.addonId === selection.addonId &&
+                        relation.serviceId === selection.serviceId
+                )
             )
         );
-
-        setAddonServiceAssignments((current) => {
-            const updated: Record<number, number> = {};
-
-            for (const [addonIdText, serviceId] of Object.entries(current)) {
-                const addonId = Number(addonIdText);
-
-                const relationshipStillValid = serviceAddons.some(
-                    (relation) =>
-                        relation.addonId === addonId &&
-                        relation.serviceId === serviceId &&
-                        selectedServices.includes(serviceId)
-                );
-
-                if (relationshipStillValid) {
-                    updated[addonId] = serviceId;
-                }
-            }
-
-            return updated;
-        });
     }, [selectedServices, serviceAddons]);
 
-    const availableAddons = addons.filter((addon) => 
+    const availableAddons = addons.filter((addon) =>
         availableAddonIds.includes(addon.id)
     );
 
-    const selectedAddonDetails = addons.filter((addon) => 
-        selectedAddons.includes(addon.id)
+    // Select or remove an add-on for a specific service.
+    // The same add-on can be selected once for each service.
+    function toggleAddon(addonId: number, serviceId: number) {
+        setSelectedAddons((current) => {
+            const isSelected = current.some(
+                (selection) =>
+                    selection.addonId === addonId &&
+                    selection.serviceId === serviceId
+            );
+
+            if (isSelected) {
+                return current.filter(
+                    (selection) =>
+                        !(
+                            selection.addonId === addonId &&
+                            selection.serviceId === serviceId
+                        )
+                );
+            }
+
+            return [...current, { addonId, serviceId }];
+        });
+    }
+
+    // Find Selected Services Data
+    const selectedServiceDetails = services.filter((service) =>
+        selectedServices.includes(service.id)
     );
+
+    // Build the selected add-on details while preserving duplicate add-ons
+    // assigned to different services, such as Retiro for hands and feet.
+    const selectedAddonDetails = selectedAddons
+        .map((selection) => {
+            const addon = addons.find(
+                (item) => item.id === selection.addonId
+            );
+
+            if (!addon) {
+                return null;
+            }
+
+            return {
+                ...addon,
+                serviceId: selection.serviceId,
+            };
+        })
+        .filter(
+            (addon): addon is NonNullable<typeof addon> =>
+                addon !== null
+        );
 
     function toggleService(serviceId: number) {
         setSelectedServices((current) =>
@@ -356,50 +383,6 @@ export default function BookPage() {
                 : [...current, serviceId]
         );
     }
-
-    // Select or remove an add-on and remember which service it belongs to.
-    function toggleAddon(addonId: number) {
-        const isSelected = selectedAddons.includes(addonId);
-
-        // Deselect the add-on and remove its service assignment.
-        if (isSelected) {
-            setSelectedAddons((current) =>
-                current.filter((id) => id !== addonId)
-            );
-
-            setAddonServiceAssignments((current) => {
-                const updated = { ...current };
-                delete updated[addonId];
-                return updated;
-            });
-
-            return;
-        }
-
-        // Find selected services that support this add-on.
-        const compatibleServiceIds = serviceAddons
-            .filter(
-                (relation) =>
-                    relation.addonId === addonId &&
-                    selectedServices.includes(relation.serviceId)
-            )
-            .map((relation) => relation.serviceId);
-
-        // If there is exactly one possible service, assign it automatically.
-        if (compatibleServiceIds.length === 1) {
-            setSelectedAddons((current) => [...current, addonId]);
-
-            setAddonServiceAssignments((current) => ({
-                ...current,
-                [addonId]: compatibleServiceIds[0],
-            }));
-        }
-    }
-
-    // Find Selected Services Data
-    const selectedServiceDetails = services.filter((service) =>
-        selectedServices.includes(service.id)
-    );
 
     // Calculate Qualified Employees
     const qualifiedEmployees = employees.filter((employee) =>
@@ -746,9 +729,9 @@ export default function BookPage() {
                     startTime: selectedTime,
                     serviceIds: selectedServices,
                     // Tell the API which service each selected add-on belongs to.
-                    addonAssignments: selectedAddons.map((addonId) => ({
-                        addonId,
-                        serviceId: addonServiceAssignments[addonId],
+                    addonAssignments: selectedAddons.map((selection) => ({
+                        addonId: selection.addonId,
+                        serviceId: selection.serviceId,
                     })),
                 }),
             });
@@ -795,13 +778,12 @@ export default function BookPage() {
         ({ service }) => {
             const addonItems = selectedAddons
                 .filter(
-                    (addonId) =>
-                        addonServiceAssignments[addonId] ===
-                        service.id
+                    (selection) =>
+                        selection.serviceId === service.id
                 )
-                .map((addonId) =>
+                .map((selection) =>
                     addons.find(
-                        (addon) => addon.id === addonId
+                        (addon) => addon.id === selection.addonId
                     )
                 )
                 .filter(
@@ -1172,7 +1154,9 @@ export default function BookPage() {
                                             )
                                     );
 
-                                    const isSelected = selectedAddons.includes(addon.id);
+                                    const isSelected = selectedAddons.some(
+                                        (selection) => selection.addonId === addon.id
+                                    );
 
                                     return (
                                         <div
@@ -1185,7 +1169,11 @@ export default function BookPage() {
                                         >
                                             <button
                                                 type="button"
-                                                onClick={() => toggleAddon(addon.id)}
+                                                onClick={() => {
+                                                    if (compatibleServices.length === 1) {
+                                                        toggleAddon(addon.id, compatibleServices[0].id);
+                                                    }
+                                                }}
                                                 className="w-full text-left"
                                             >
                                                 <h3 className="font-semibold text-black">
@@ -1216,23 +1204,13 @@ export default function BookPage() {
                                                             <button
                                                                 key={service.id}
                                                                 type="button"
-                                                                onClick={() => {
-                                                                    setSelectedAddons((current) =>
-                                                                        current.includes(addon.id)
-                                                                            ? current
-                                                                            : [...current, addon.id]
-                                                                    );
-
-                                                                    setAddonServiceAssignments(
-                                                                        (current) => ({
-                                                                            ...current,
-                                                                            [addon.id]: service.id,
-                                                                        })
-                                                                    );
-                                                                }}
+                                                                onClick={() => toggleAddon(addon.id, service.id)}
                                                                 className={`rounded-lg border px-3 py-2 text-sm ${
-                                                                    addonServiceAssignments[addon.id] ===
-                                                                    service.id
+                                                                    selectedAddons.some(
+                                                                        (selection) =>
+                                                                            selection.addonId === addon.id &&
+                                                                            selection.serviceId === service.id
+                                                                    )
                                                                         ? "border-black bg-black text-white"
                                                                         : "border-neutral-300 bg-white text-black"
                                                                 }`}
@@ -1650,7 +1628,10 @@ export default function BookPage() {
                                         </p>
 
                                         {selectedAddonDetails.map((addon) => (
-                                            <p key={addon.id} className="text-black">
+                                            <p
+                                                key={`${addon.id}-${addon.serviceId}`}
+                                                className="text-black"
+                                            >
                                                 {language === "es" ? addon.nameEs : addon.nameEn}
                                             </p>
                                         ))}
