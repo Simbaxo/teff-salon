@@ -1408,7 +1408,8 @@ export default function InventoryPageClient() {
 
             {/* Product editing panel */}
             {editingItem && (
-                <div className="mt-6 rounded-xl bg-white p-5 shadow-sm">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
                     <div className="flex items-start justify-between gap-4">
                         <div>
                             <h2 className="text-xl font-bold text-black">
@@ -1606,11 +1607,13 @@ export default function InventoryPageClient() {
                             : "Guardar cambios"}
                     </button>
                 </div>
+                </div>
             )}
 
             {/* Stock adjustment panel */}
             {adjustingItem && (
-                <div className="mt-6 rounded-xl bg-white p-5 shadow-sm">
+               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
                     <div className="flex items-start justify-between gap-4">
                         <div>
                             <h2 className="text-xl font-bold text-black">
@@ -1756,11 +1759,13 @@ export default function InventoryPageClient() {
                             : "Guardar ajuste"}
                     </button>
                 </div>
+                </div>
             )}
 
             {/* Inventory movement history */}
             {historyItem && (
-                <div className="mt-6 rounded-xl bg-white p-5 shadow-sm">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
                     <div className="flex items-start justify-between gap-4">
                         <div>
                             <h2 className="text-xl font-bold text-black">
@@ -1892,6 +1897,7 @@ export default function InventoryPageClient() {
                                 )}
                             </div>
                         )}
+                </div>
                 </div>
             )}
 
