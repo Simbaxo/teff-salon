@@ -205,6 +205,16 @@ export default function InventoryPageClient() {
     const [editError, setEditError] =
         useState("");
 
+    // Shopping-list restock quantities keyed by inventory item ID.
+    const [shoppingQuantities, setShoppingQuantities] =
+        useState<Record<number, string>>({});
+
+    const [restockingItemId, setRestockingItemId] =
+        useState<number | null>(null);
+
+    const [shoppingError, setShoppingError] =
+        useState("");
+
     async function loadInventory(
         options?: {
             inactive?: boolean;
@@ -579,6 +589,76 @@ export default function InventoryPageClient() {
         }
     }
 
+    async function restockFromShoppingList(
+        item: InventoryItem
+    ) {
+        setShoppingError("");
+
+        const rawQuantity =
+            shoppingQuantities[item.id] ?? "1";
+
+        const parsedQuantity =
+            Number(rawQuantity);
+
+        if (
+            !Number.isInteger(parsedQuantity) ||
+            parsedQuantity <= 0
+        ) {
+            setShoppingError(
+                "La cantidad a reponer debe ser un número entero mayor a 0."
+            );
+            return;
+        }
+
+        try {
+            setRestockingItemId(item.id);
+
+            const response = await fetch(
+                `/api/inventory/${item.id}/adjust`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json",
+                    },
+                    body: JSON.stringify({
+                        type: "RESTOCK",
+                        quantity: parsedQuantity,
+                        note:
+                            "Reposición desde lista de compras",
+                    }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.error ||
+                        "No se pudo registrar la reposición."
+                );
+            }
+
+            setShoppingQuantities((current) => {
+                const next = { ...current };
+                delete next[item.id];
+                return next;
+            });
+
+            await loadInventory();
+        } catch (error) {
+            console.error(error);
+
+            setShoppingError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo registrar la reposición."
+            );
+        } finally {
+            setRestockingItemId(null);
+        }
+    }
+
     async function adjustInventory() {
         if (!adjustingItem) {
             return;
@@ -746,12 +826,19 @@ export default function InventoryPageClient() {
 
                     <button
                         type="button"
-                        onClick={() =>
+                        onClick={async () => {
+                            // Shopping list always uses active inventory.
+                            if (filter === "INACTIVE") {
+                                setFilter("ALL");
+                                await loadInventory();
+                            }
+
+                            setShoppingError("");
+
                             setShowShoppingList(
-                                (current) =>
-                                    !current
-                            )
-                        }
+                                (current) => !current
+                            );
+                        }}
                         className="rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-neutral-100"
                     >
                         🛒{" "}
@@ -1137,7 +1224,57 @@ export default function InventoryPageClient() {
                                                         item.unit
                                                     }
                                                 </p>
-                                            </div>
+
+                                                {showShoppingList && (
+                                                    <div className="mt-4 rounded-xl bg-neutral-50 p-4">
+                                                        <label className="block text-sm font-semibold text-black">
+                                                            Cantidad a comprar
+                                                        </label>
+
+                                                        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                                                            <input
+                                                                type="number"
+                                                                min="1"
+                                                                step="1"
+                                                                value={
+                                                                    shoppingQuantities[item.id] ??
+                                                                    ""
+                                                                }
+                                                                onFocus={(event) =>
+                                                                    event.currentTarget.select()
+                                                                }
+                                                                onChange={(event) =>
+                                                                    setShoppingQuantities(
+                                                                        (current) => ({
+                                                                            ...current,
+                                                                            [item.id]:
+                                                                                event.target.value,
+                                                                        })
+                                                                    )
+                                                                }
+                                                                placeholder="Cantidad"
+                                                                className="w-full rounded-lg border border-neutral-300 bg-white px-4 py-2 text-black sm:max-w-36"
+                                                            />
+
+                                                            <button
+                                                                type="button"
+                                                                disabled={
+                                                                    restockingItemId === item.id
+                                                                }
+                                                                onClick={() =>
+                                                                    restockFromShoppingList(item)
+                                                                }
+                                                                className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                                                            >
+                                                                {restockingItemId === item.id
+                                                                    ? "Guardando..."
+                                                                    : "Registrar reposición"}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                </div>
 
                                             <div className="flex flex-wrap justify-end gap-2">
                                                 <button
@@ -1190,6 +1327,14 @@ export default function InventoryPageClient() {
                         </div>
                     )}
             </div>
+
+            {shoppingError && (
+                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
+                    <p className="text-sm font-medium text-red-700">
+                        {shoppingError}
+                    </p>
+                </div>
+            )}
 
             {/* Product editing panel */}
             {editingItem && (
