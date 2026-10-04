@@ -27,6 +27,19 @@ type FilterOption =
     | "OUT_OF_STOCK"
     | "INACTIVE";
 
+const INVENTORY_CATEGORIES = [
+    "Uñas",
+    "Pestañas",
+    "Estética",
+    "Limpieza",
+    "Desechables",
+    "Oficina",
+    "Otros",
+] as const;
+
+type InventoryCategory =
+    (typeof INVENTORY_CATEGORIES)[number];
+
 type InventoryMovementType =
     | "RESTOCK"
     | "USAGE"
@@ -215,6 +228,9 @@ export default function InventoryPageClient() {
     const [shoppingError, setShoppingError] =
         useState("");
 
+    const [categoryFilter, setCategoryFilter] =
+        useState<"ALL" | InventoryCategory>("ALL");
+
     async function loadInventory(
         options?: {
             inactive?: boolean;
@@ -316,6 +332,10 @@ export default function InventoryPageClient() {
                         normalizedSearch
                     );
 
+            const matchesCategory =
+                categoryFilter === "ALL" ||
+                item.category === categoryFilter;
+
             const matchesFilter =
                 filter === "ALL" ||
                 filter === "INACTIVE" ||
@@ -330,6 +350,7 @@ export default function InventoryPageClient() {
 
             return (
                 matchesSearch &&
+                matchesCategory &&
                 matchesFilter &&
                 matchesShoppingList
             );
@@ -337,6 +358,7 @@ export default function InventoryPageClient() {
     }, [
         items,
         search,
+        categoryFilter,
         filter,
         showShoppingList,
     ]);
@@ -904,20 +926,28 @@ export default function InventoryPageClient() {
                                 Categoría
                             </label>
 
-                            <input
-                                type="text"
+                            <select
                                 value={category}
-                                onChange={(
-                                    event
-                                ) =>
-                                    setCategory(
-                                        event.target
-                                            .value
-                                    )
+                                onChange={(event) =>
+                                    setCategory(event.target.value)
                                 }
-                                placeholder="Ej. Uñas"
-                                className="mt-2 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
-                            />
+                                className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                            >
+                                <option value="">
+                                    Selecciona una categoría
+                                </option>
+
+                                {INVENTORY_CATEGORIES.map(
+                                    (inventoryCategory) => (
+                                        <option
+                                            key={inventoryCategory}
+                                            value={inventoryCategory}
+                                        >
+                                            {inventoryCategory}
+                                        </option>
+                                    )
+                                )}
+                            </select>
                         </div>
 
                         <div>
@@ -1039,6 +1069,46 @@ export default function InventoryPageClient() {
                     </button>
                 </div>
             )}
+
+            {/* Category filter */}
+            <div className="mt-6">
+                <label
+                    htmlFor="inventory-category-filter"
+                    className="block text-sm font-semibold text-black"
+                >
+                    Categoría
+                </label>
+
+                <select
+                    id="inventory-category-filter"
+                    value={categoryFilter}
+                    onChange={(event) =>
+                        setCategoryFilter(
+                            event.target.value as
+                                | "ALL"
+                                | InventoryCategory
+                        )
+                    }
+                    className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black sm:max-w-xs"
+                >
+                    <option value="ALL">
+                        Todas las categorías
+                    </option>
+
+                    {INVENTORY_CATEGORIES.map(
+                        (inventoryCategory) => (
+                            <option
+                                key={inventoryCategory}
+                                value={inventoryCategory}
+                            >
+                                {inventoryCategory}
+                            </option>
+                        )
+                    )}
+                </select>
+            </div>
+
+{/* Filters */}
 
             {/* Filters */}
             <div className="mt-6 flex flex-wrap gap-2">
@@ -1385,17 +1455,39 @@ export default function InventoryPageClient() {
                                 Categoría
                             </label>
 
-                            <input
-                                type="text"
+                             <select
                                 value={editCategory}
                                 onChange={(event) =>
                                     setEditCategory(
                                         event.target.value
                                     )
                                 }
-                                placeholder="Ej. Uñas"
-                                className="mt-2 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
-                            />
+                                className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                            >
+                                <option value="">
+                                    Sin categoría
+                                </option>
+
+                                {editCategory &&
+                                    !INVENTORY_CATEGORIES.includes(
+                                        editCategory as InventoryCategory
+                                    ) && (
+                                        <option value={editCategory}>
+                                            {editCategory} (actual)
+                                        </option>
+                                    )}
+
+                                {INVENTORY_CATEGORIES.map(
+                                    (inventoryCategory) => (
+                                        <option
+                                            key={inventoryCategory}
+                                            value={inventoryCategory}
+                                        >
+                                            {inventoryCategory}
+                                        </option>
+                                    )
+                                )}
+                            </select>
                         </div>
 
                         <div>
