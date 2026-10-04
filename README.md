@@ -721,31 +721,67 @@ New-booking Web Push Notifications v1 is complete and production-verified.
 
 - Family / group appointment checkout
 - Smarter automatic technician assignment using production and workload data
-- Inventory management accessible to OWNER and RECEPTIONIST
 - Owner/receptionist tools for managing services, add-ons, employees, qualifications, prices, and active status
 - WhatsApp notifications to reception when appointments are created
 
-### 🚧 Inventory Management — Next Active Phase
+### ✅ Inventory Management v1
 
-Inventory Management is the next major development phase.
+Inventory Management v1 is complete and ready for production operational testing.
 
-Planned v1 scope:
+#### Access & Product Management
 
-- OWNER and RECEPTIONIST access
-- Inventory item catalog
-- Current quantity on hand
-- Low-stock thresholds
-- Low-stock indicators and alerts
-- Restocking / quantity adjustments
-- Shopping list for items requiring replenishment
-- iPad-friendly operational interface
+- [x] OWNER and RECEPTIONIST access
+- [x] Inventory item catalog
+- [x] Create and edit inventory products
+- [x] Archive and reactivate inventory products
+- [x] Controlled inventory categories
+- [x] Category and stock-status filtering
+- [x] Search by product name or category
+- [x] iPad-friendly operational interface
+
+#### Stock Management
+
+- [x] Current quantity on hand
+- [x] Configurable low-stock thresholds
+- [x] Automatic in-stock, low-stock, and out-of-stock indicators
+- [x] RESTOCK movements for received inventory
+- [x] USAGE movements for consumed inventory
+- [x] DAMAGED movements for damaged, lost, or discarded inventory
+- [x] CORRECTION movements for physical-count corrections
+- [x] Inventory cannot be adjusted below zero
+- [x] Stock quantity can only be changed through audited inventory movements
+
+#### Shopping List
+
+- [x] Automatic shopping list for low-stock and out-of-stock products
+- [x] Enter purchase/restock quantity directly from the shopping list
+- [x] Register received inventory directly from the shopping list
+- [x] Shopping-list restocks create normal audited RESTOCK movements
+- [x] Products automatically leave the shopping list after sufficient replenishment
+- [x] Inactive products are excluded from operational shopping workflows
+
+#### Inventory Audit History
+
+- [x] Complete movement history per inventory item
+- [x] Quantity-before and quantity-after snapshots
+- [x] Signed quantity changes
+- [x] Movement type and optional operational notes
+- [x] Authenticated staff user attribution
+- [x] Medellín-local movement timestamps
+- [x] Movement history remains available when a product is archived
+
+Current testing focus:
+
+- [ ] Enter TEFF's real salon inventory
+- [ ] Validate daily inventory workflows with reception on the salon iPad
+- [ ] Refine categories, units, and low-stock thresholds using real operational data
 
 Future inventory expansion:
 
-- Product usage tracking
-- Supply purchase history
-- Inventory cost reporting
-- Consumption trends
+- Supply purchase history and supplier tracking
+- Inventory cost and valuation reporting
+- Product-consumption trends
+- Usage reporting by category and time period
 - Integration with operating-expense reporting
 
 ### Advanced Owner Dashboard & Reporting
