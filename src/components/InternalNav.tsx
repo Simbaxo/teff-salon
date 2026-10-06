@@ -31,6 +31,13 @@ export default function InternalNav({
                     >
                         Inventario
                     </Link>
+
+                    <Link
+                        href="/catalog/services"
+                        className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
+                    >
+                        Catálogo
+                    </Link>
                 </>
             )}
 
