@@ -55,6 +55,7 @@ export async function POST(request: Request) {
             customerPhone,
             customerEmail,
             customerNotes,
+            isWalkIn,
             date,
             startTime,
             services,
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
         if (
             typeof customerName !== "string" ||
             typeof customerPhone !== "string" ||
+            typeof isWalkIn !== "boolean" ||
             typeof date !== "string" ||
             typeof startTime !== "string" ||
             !Array.isArray(services) ||
@@ -81,8 +83,13 @@ export async function POST(request: Request) {
             );
         }
 
-        const normalizedCustomerName = customerName.trim();
+        const normalizedCustomerName =
+            isWalkIn
+                ? "Cliente Sin Cita"
+                : customerName.trim();
+
         const normalizedCustomerPhone =
+            !isWalkIn &&
             customerPhone.trim()
                 ? normalizePhoneNumber(
                     customerPhone
@@ -90,6 +97,7 @@ export async function POST(request: Request) {
                 : null;
 
         const normalizedCustomerEmail =
+            !isWalkIn &&
             typeof customerEmail === "string"
                 ? customerEmail.trim()
                 : "";
@@ -632,38 +640,66 @@ export async function POST(request: Request) {
         }
 
         const result = await prisma.$transaction(async (tx) => {
-            /*
-            * Reuse an existing customer when a phone number is provided.
-            * Without a phone number, create a new customer record.
-            */
-            const customer = normalizedCustomerPhone
-                ? await tx.customer.upsert({
-                    where: {
-                        phone: normalizedCustomerPhone,
-                    },
-                    update: {
-                        name: normalizedCustomerName,
-                        email:
-                            normalizedCustomerEmail ||
-                            null,
-                    },
-                    create: {
-                        name: normalizedCustomerName,
-                        phone: normalizedCustomerPhone,
-                        email:
-                            normalizedCustomerEmail ||
-                            null,
-                    },
-                })
-                : await tx.customer.create({
-                    data: {
-                        name: normalizedCustomerName,
-                        phone: null,
-                        email:
-                            normalizedCustomerEmail ||
-                            null,
-                    },
-                });
+            let customer;
+
+            if (isWalkIn) {
+                /*
+                * All anonymous walk-ins share one dedicated customer profile.
+                * Individual visits remain separate appointments and sales.
+                */
+                customer =
+                    await tx.customer.findFirst({
+                        where: {
+                            name: "Cliente Sin Cita",
+                            phone: null,
+                        },
+                        orderBy: {
+                            id: "asc",
+                        },
+                    });
+
+                if (!customer) {
+                    customer =
+                        await tx.customer.create({
+                            data: {
+                                name: "Cliente Sin Cita",
+                                phone: null,
+                                email: null,
+                            },
+                        });
+                }
+            } else if (normalizedCustomerPhone) {
+                customer =
+                    await tx.customer.upsert({
+                        where: {
+                            phone: normalizedCustomerPhone,
+                        },
+                        update: {
+                            name: normalizedCustomerName,
+                            email:
+                                normalizedCustomerEmail ||
+                                null,
+                        },
+                        create: {
+                            name: normalizedCustomerName,
+                            phone: normalizedCustomerPhone,
+                            email:
+                                normalizedCustomerEmail ||
+                                null,
+                        },
+                    });
+            } else {
+                customer =
+                    await tx.customer.create({
+                        data: {
+                            name: normalizedCustomerName,
+                            phone: null,
+                            email:
+                                normalizedCustomerEmail ||
+                                null,
+                        },
+                    });
+            }
 
             // One Booking represents the complete historical salon visit.
             const booking = await tx.booking.create({

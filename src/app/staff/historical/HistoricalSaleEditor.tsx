@@ -67,6 +67,9 @@ export default function HistoricalSaleEditor() {
     const [customerPhone, setCustomerPhone] = useState("");
     const [customerEmail, setCustomerEmail] = useState("");
     const [customerNotes, setCustomerNotes] = useState("");
+    // Anonymous walk-in customer.
+    const [isWalkIn, setIsWalkIn] =
+        useState(false);
     const [date, setDate] = useState("");
     const [startTime, setStartTime] = useState("");
 
@@ -464,9 +467,9 @@ export default function HistoricalSaleEditor() {
             return;
         }
 
-        if (!customerName.trim()) {
+        if (!isWalkIn && !customerName.trim()) {
             setSubmitError(
-                "Ingresa el nombre del cliente."
+                "Ingresa el nombre del cliente o selecciona Cliente Sin Cita."
             );
             return;
         }
@@ -523,6 +526,7 @@ export default function HistoricalSaleEditor() {
                     customerPhone,
                     customerEmail,
                     customerNotes,
+                    isWalkIn,
                     date,
                     startTime,
 
@@ -694,6 +698,36 @@ export default function HistoricalSaleEditor() {
                     TEFF usará el perfil del cliente existente.
                 </p>
 
+                <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-4">
+                    <input
+                        type="checkbox"
+                        checked={isWalkIn}
+                        onChange={(event) => {
+                            const checked =
+                                event.target.checked;
+
+                            setIsWalkIn(checked);
+
+                            if (checked) {
+                                setCustomerName("");
+                                setCustomerPhone("");
+                                setCustomerEmail("");
+                            }
+                        }}
+                        className="h-5 w-5"
+                    />
+
+                    <div>
+                        <p className="font-semibold text-black">
+                            Cliente Sin Cita
+                        </p>
+
+                        <p className="mt-1 text-sm text-neutral-500">
+                            Usa esta opción cuando el cliente no proporciona nombre ni información de contacto.
+                        </p>
+                    </div>
+                </label>
+
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                     <div>
                         <label
@@ -706,11 +740,12 @@ export default function HistoricalSaleEditor() {
                         <input
                             id="historical-customer-name"
                             type="text"
+                            disabled={isWalkIn}
                             value={customerName}
                             onChange={(event) =>
                                 setCustomerName(event.target.value)
                             }
-                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black disabled:bg-neutral-100 disabled:text-neutral-400"
                             placeholder="Nombre del cliente"
                         />
                     </div>
@@ -726,6 +761,7 @@ export default function HistoricalSaleEditor() {
                         <input
                             id="historical-customer-phone"
                             type="tel"
+                            disabled={isWalkIn}
                             value={customerPhone}
                             onChange={(event) =>
                                 setCustomerPhone(event.target.value)
@@ -746,6 +782,7 @@ export default function HistoricalSaleEditor() {
                         <input
                             id="historical-customer-email"
                             type="email"
+                            disabled={isWalkIn}
                             value={customerEmail}
                             onChange={(event) =>
                                 setCustomerEmail(event.target.value)
