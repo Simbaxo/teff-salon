@@ -1,60 +1,92 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 type InternalNavProps = {
-    userRole: "OWNER" | "RECEPTIONIST" | "TECHNICIAN";
+    userRole:
+        | "OWNER"
+        | "RECEPTIONIST"
+        | "TECHNICIAN";
 };
+
+type NavLinkProps = {
+    href: string;
+    label: string;
+    pathname: string;
+};
+
+function NavLink({
+    href,
+    label,
+    pathname,
+}: NavLinkProps) {
+    const isActive =
+        pathname === href ||
+        pathname.startsWith(`${href}/`);
+
+    return (
+        <Link
+            href={href}
+            className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                isActive
+                    ? "border-[#B76E79] bg-[#B76E79] text-white"
+                    : "border-neutral-300 bg-white text-black hover:bg-neutral-100"
+            }`}
+        >
+            {label}
+        </Link>
+    );
+}
 
 export default function InternalNav({
     userRole,
 }: InternalNavProps) {
+    const pathname = usePathname();
+
     return (
         <nav className="flex flex-wrap gap-2">
-            <Link
+            <NavLink
                 href="/staff"
-                className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
-            >
-                Staff
-            </Link>
+                label="Staff"
+                pathname={pathname}
+            />
 
-            {(userRole === "OWNER" || userRole === "RECEPTIONIST") && (
+            {(userRole === "OWNER" ||
+                userRole === "RECEPTIONIST") && (
                 <>
-                    <Link
+                    <NavLink
                         href="/receptionist"
-                        className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
-                    >
-                        Recepción
-                    </Link>
+                        label="Recepción"
+                        pathname={pathname}
+                    />
 
-                    <Link
+                    <NavLink
                         href="/sales"
-                        className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
-                    >
-                        Ventas
-                    </Link>
+                        label="Ventas"
+                        pathname={pathname}
+                    />
 
-                    <Link
+                    <NavLink
                         href="/inventory"
-                        className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
-                    >
-                        Inventario
-                    </Link>
+                        label="Inventario"
+                        pathname={pathname}
+                    />
 
-                    <Link
+                    <NavLink
                         href="/catalog/services"
-                        className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
-                    >
-                        Catálogo
-                    </Link>
+                        label="Catálogo"
+                        pathname={pathname}
+                    />
                 </>
             )}
 
             {userRole === "OWNER" && (
-                <Link
+                <NavLink
                     href="/admin"
-                    className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
-                >
-                    Admin
-                </Link>
+                    label="Admin"
+                    pathname={pathname}
+                />
             )}
         </nav>
     );
