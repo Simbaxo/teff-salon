@@ -338,6 +338,8 @@ model InventoryItem {
   active Boolean @default(true)
 
   notes String?
+  // Public Vercel Blob URL for the inventory product photo.
+  imageUrl String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

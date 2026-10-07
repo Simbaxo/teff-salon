@@ -16,6 +16,7 @@ type InventoryItem = {
     lowStockThreshold: number;
     active: boolean;
     notes: string | null;
+    imageUrl: string | null;
     createdAt: string;
     updatedAt: string;
     status: InventoryStatus;
@@ -216,6 +217,15 @@ export default function InventoryPageClient() {
         useState(false);
 
     const [editError, setEditError] =
+        useState("");
+
+    const [isUploadingImage, setIsUploadingImage] =
+        useState(false);
+
+    const [isRemovingImage, setIsRemovingImage] =
+        useState(false);
+
+    const [imageError, setImageError] =
         useState("");
 
     // Shopping-list restock quantities keyed by inventory item ID.
@@ -482,6 +492,133 @@ export default function InventoryPageClient() {
         setEditNotes(item.notes ?? "");
         setEditActive(item.active);
         setEditError("");
+        setImageError("");
+    }
+
+    async function uploadInventoryImage(
+        file: File
+    ) {
+        if (!editingItem) {
+            return;
+        }
+
+        setImageError("");
+
+        if (!file.type.startsWith("image/")) {
+            setImageError(
+                "Selecciona una imagen válida."
+            );
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            setImageError(
+                "La imagen debe pesar 5 MB o menos."
+            );
+            return;
+        }
+
+        try {
+            setIsUploadingImage(true);
+
+            const formData = new FormData();
+            formData.append("image", file);
+
+            const response = await fetch(
+                `/api/inventory/${editingItem.id}/image`,
+                {
+                    method: "POST",
+                    body: formData,
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.error ||
+                        "No se pudo subir la foto."
+                );
+            }
+
+            // Update the open modal immediately.
+            setEditingItem(
+                data.item as InventoryItem
+            );
+
+            // Refresh the inventory cards with the new thumbnail.
+            await loadInventory();
+        } catch (error) {
+            console.error(error);
+
+            setImageError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo subir la foto."
+            );
+        } finally {
+            setIsUploadingImage(false);
+        }
+    }
+
+    async function removeInventoryImage() {
+        if (
+            !editingItem ||
+            !editingItem.imageUrl
+        ) {
+            return;
+        }
+
+        const confirmed = window.confirm(
+            "¿Seguro que deseas eliminar la foto de este producto?"
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        setImageError("");
+
+        try {
+            setIsRemovingImage(true);
+
+            const response = await fetch(
+                `/api/inventory/${editingItem.id}/image`,
+                {
+                    method: "DELETE",
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.error ||
+                        "No se pudo eliminar la foto."
+                );
+            }
+
+            setEditingItem((current) =>
+                current
+                    ? {
+                        ...current,
+                        imageUrl: null,
+                    }
+                    : null
+            );
+
+            await loadInventory();
+        } catch (error) {
+            console.error(error);
+
+            setImageError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo eliminar la foto."
+            );
+        } finally {
+            setIsRemovingImage(false);
+        }
     }
 
     async function updateInventoryItem() {
@@ -1234,22 +1371,32 @@ export default function InventoryPageClient() {
                                         }
                                         className="rounded-xl bg-white p-5 shadow-sm"
                                     >
-                                        <div className="flex items-start justify-between gap-4">
-                                            <div>
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="flex min-w-0 items-start gap-3">
+                                            {item.imageUrl ? (
+                                                <img
+                                                    src={item.imageUrl}
+                                                    alt={item.name}
+                                                    className="h-16 w-16 shrink-0 rounded-xl border border-neutral-200 object-cover"
+                                                />
+                                            ) : (
+                                                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-neutral-100 text-2xl">
+                                                    📦
+                                                </div>
+                                            )}
+
+                                            <div className="min-w-0">
                                                 <p className="text-lg font-bold text-black">
-                                                    {
-                                                        item.name
-                                                    }
+                                                    {item.name}
                                                 </p>
 
                                                 {item.category && (
                                                     <p className="mt-1 text-sm text-neutral-500">
-                                                        {
-                                                            item.category
-                                                        }
+                                                        {item.category}
                                                     </p>
                                                 )}
                                             </div>
+                                        </div>
 
                                             {item.active ? (
                                                 <span
@@ -1431,6 +1578,97 @@ export default function InventoryPageClient() {
                         >
                             Cerrar
                         </button>
+                    </div>
+
+                    <div className="mt-5 rounded-xl border border-neutral-200 p-4">
+                        <p className="font-semibold text-black">
+                            Foto del producto
+                        </p>
+
+                        <p className="mt-1 text-sm text-neutral-500">
+                            Agrega una foto para identificar rápidamente este producto en inventario.
+                        </p>
+
+                        {editingItem.imageUrl ? (
+                            <div className="mt-4">
+                                <img
+                                    src={editingItem.imageUrl}
+                                    alt={editingItem.name}
+                                    className="h-48 w-full rounded-xl border border-neutral-200 object-contain"
+                                />
+                            </div>
+                        ) : (
+                            <div className="mt-4 flex h-40 items-center justify-center rounded-xl border border-dashed border-neutral-300 bg-neutral-50">
+                                <div className="text-center">
+                                    <p className="text-3xl">
+                                        📷
+                                    </p>
+
+                                    <p className="mt-2 text-sm text-neutral-500">
+                                        Sin foto
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            <label className="cursor-pointer rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white">
+                                {isUploadingImage
+                                    ? "Subiendo..."
+                                    : editingItem.imageUrl
+                                    ? "Cambiar foto"
+                                    : "Agregar foto"}
+
+                                <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                                    disabled={isUploadingImage}
+                                    onChange={(event) => {
+                                        const file =
+                                            event.target.files?.[0];
+
+                                        if (file) {
+                                            void uploadInventoryImage(
+                                                file
+                                            );
+                                        }
+
+                                        // Allows selecting the same image again if needed.
+                                        event.currentTarget.value =
+                                            "";
+                                    }}
+                                    className="hidden"
+                                />
+                            </label>
+
+                            {editingItem.imageUrl && (
+                                <button
+                                    type="button"
+                                    onClick={
+                                        removeInventoryImage
+                                    }
+                                    disabled={
+                                        isRemovingImage ||
+                                        isUploadingImage
+                                    }
+                                    className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
+                                >
+                                    {isRemovingImage
+                                        ? "Eliminando..."
+                                        : "Eliminar foto"}
+                                </button>
+                            )}
+                        </div>
+
+                        <p className="mt-3 text-xs text-neutral-500">
+                            En iPad puedes tomar una foto o elegir una imagen existente. Máximo 5 MB.
+                        </p>
+
+                        {imageError && (
+                            <p className="mt-3 text-sm font-medium text-red-700">
+                                {imageError}
+                            </p>
+                        )}
                     </div>
 
                     <div className="mt-5 grid gap-4 md:grid-cols-2">
