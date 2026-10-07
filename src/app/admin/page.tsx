@@ -1,7 +1,12 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getTeffToday } from "@/lib/datetime";
+import {
+    addTeffDays,
+    getTeffDayOfWeek,
+    getTeffDayStart,
+    getTeffToday,
+} from "@/lib/datetime";
 import InternalNav from "@/components/InternalNav";
 
 export default async function AdminPage() {
@@ -16,10 +21,13 @@ export default async function AdminPage() {
     // Medellín-local date used for today's dashboard metrics.
     const today = getTeffToday();
 
-    const todayStart = new Date(`${today}T00:00:00.000Z`);
+    const todayStart =
+        getTeffDayStart(today);
 
-    const tomorrow = new Date(todayStart);
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    const tomorrow =
+        getTeffDayStart(
+            addTeffDays(today, 1)
+        );
 
     const todaysSales = await prisma.sale.findMany({
         where: {
@@ -29,12 +37,49 @@ export default async function AdminPage() {
             },
         },
         select: {
+            id: true,
             finalTotal: true,
+            createdAt: true,
+
+            payments: {
+                select: {
+                    paymentMethod: true,
+                    amount: true,
+                    processingFee: true,
+                },
+            },
+
+            tips: {
+                select: {
+                    amount: true,
+                    paymentMethod: true,
+                },
+            },
+
+            commissions: {
+                select: {
+                    commissionAmount: true,
+                },
+            },
+
             saleAppointments: {
                 select: {
                     appointment: {
                         select: {
                             customerId: true,
+
+                            customer: {
+                                select: {
+                                    name: true,
+                                },
+                            },
+
+                            employee: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                },
+                            },
                         },
                     },
                 },
@@ -49,23 +94,82 @@ export default async function AdminPage() {
 
     const todaysSaleCount = todaysSales.length;
 
-    // Count unique customers associated with today's sales.
-    // This avoids counting appointments that did not produce a sale.
-    const todaysCustomerIds = new Set(
-        todaysSales.flatMap((sale) =>
-            sale.saleAppointments.map(
-                (saleAppointment) =>
-                    saleAppointment.appointment.customerId
-            )
-        )
-    );
-
-    const todaysCustomers = todaysCustomerIds.size;
+    // Each completed sale represents one customer visit.
+    // This correctly counts repeated Cliente Sin Cita visits separately.
+    const todaysCustomers =
+        todaysSaleCount;
 
     const todaysAverageTicket =
         todaysSaleCount > 0
             ? Math.round(todaysSalesTotal / todaysSaleCount)
             : 0;
+    
+    const todaysCommissionTotal =
+        todaysSales.reduce(
+            (total, sale) =>
+                total +
+                sale.commissions.reduce(
+                    (saleTotal, commission) =>
+                        saleTotal +
+                        commission.commissionAmount,
+                    0
+                ),
+            0
+        );
+
+    const todaysTipTotal =
+        todaysSales.reduce(
+            (total, sale) =>
+                total +
+                sale.tips.reduce(
+                    (saleTotal, tip) =>
+                        saleTotal + tip.amount,
+                    0
+                ),
+            0
+        );
+
+    const todaysPaymentTotals = {
+        CASH: 0,
+        BOLD: 0,
+        TRANSFER: 0,
+    };
+
+    for (const sale of todaysSales) {
+        for (const payment of sale.payments) {
+            if (
+                payment.paymentMethod === "CASH" ||
+                payment.paymentMethod === "BOLD" ||
+                payment.paymentMethod === "TRANSFER"
+            ) {
+                todaysPaymentTotals[
+                    payment.paymentMethod
+                ] += payment.amount;
+            }
+        }
+    }
+
+    const todaysCashTotal =
+        todaysPaymentTotals.CASH;
+
+    const todaysBoldTotal =
+        todaysPaymentTotals.BOLD;
+
+    const todaysTransferTotal =
+        todaysPaymentTotals.TRANSFER;
+
+    const todaysBoldFees =
+        todaysSales.reduce(
+            (total, sale) =>
+                total +
+                sale.payments.reduce(
+                    (saleTotal, payment) =>
+                        saleTotal +
+                        payment.processingFee,
+                    0
+                ),
+            0
+        );
 
     const todaysAppointments = await prisma.appointment.count({
         where: {
@@ -82,17 +186,118 @@ export default async function AdminPage() {
         },
     });
 
-    // Calculate the current TEFF week from Monday through Sunday
-    const weekStart = new Date(todayStart);
-    const dayOfWeek = weekStart.getUTCDay();
+    const todaysAppointmentsByStatus =
+        await prisma.appointment.groupBy({
+            by: ["status"],
 
-    // Javascript uses Sunday = 0, so convert it to Monday-based weeks
-    const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek -1;
+            where: {
+                date: todayStart,
+            },
 
-    weekStart.setUTCDate(weekStart.getUTCDate() - daysSinceMonday);
+            _count: {
+                _all: true,
+            },
+        });
 
-    const weekEnd = new Date(weekStart);
-    weekEnd.setUTCDate(weekEnd.getUTCDate() + 7);
+    const appointmentStatusCounts =
+        Object.fromEntries(
+            todaysAppointmentsByStatus.map(
+                (item) => [
+                    item.status,
+                    item._count._all,
+                ]
+            )
+        );
+
+    const todaysCompletedAppointments =
+        appointmentStatusCounts.COMPLETED ?? 0;
+
+    const todaysInProgressAppointments =
+        appointmentStatusCounts.IN_PROGRESS ?? 0;
+
+    const todaysCheckedInAppointments =
+        appointmentStatusCounts.CHECKED_IN ?? 0;
+
+    const todaysBookedAppointments =
+        (appointmentStatusCounts.BOOKED ?? 0) +
+        (appointmentStatusCounts.REQUESTED ?? 0);
+
+    const todaysCancelledAppointments =
+        appointmentStatusCounts.CANCELLED ?? 0;
+
+    const todaysNoShowAppointments =
+        appointmentStatusCounts.NO_SHOW ?? 0;
+
+    const recentActivity =
+        todaysSales
+            .slice()
+            .sort(
+                (a, b) =>
+                    b.createdAt.getTime() -
+                    a.createdAt.getTime()
+            )
+            .slice(0, 10)
+            .map((sale) => {
+                const customerNames = [
+                    ...new Set(
+                        sale.saleAppointments.map(
+                            (item) =>
+                                item.appointment
+                                    .customer.name
+                        )
+                    ),
+                ];
+
+                const employeeNames = [
+                    ...new Set(
+                        sale.saleAppointments.map(
+                            (item) =>
+                                item.appointment
+                                    .employee.name
+                        )
+                    ),
+                ];
+
+                return {
+                    id: sale.id,
+                    createdAt: sale.createdAt,
+                    customers:
+                        customerNames.join(", "),
+                    employees:
+                        employeeNames.join(", "),
+                    total: sale.finalTotal,
+                };
+            });
+
+    const dayOfWeek =
+        getTeffDayOfWeek(today);
+
+    const daysSinceMonday =
+        dayOfWeek === 0
+            ? 6
+            : dayOfWeek - 1;
+
+    const weekStartDate =
+        addTeffDays(
+            today,
+            -daysSinceMonday
+        );
+
+    const weekEndDate =
+        addTeffDays(
+            weekStartDate,
+            7
+        );
+
+    const weekStart =
+        getTeffDayStart(
+            weekStartDate
+        );
+
+    const weekEnd =
+        getTeffDayStart(
+            weekEndDate
+        );
 
     // Get all sales recorded during the current week
     const weeklySales = await prisma.sale.findMany({
@@ -123,17 +328,10 @@ export default async function AdminPage() {
 
     const weeklySaleCount = weeklySales.length;
 
-    // Count each customer only once during the week
-    const weeklyCustomerIds = new Set(
-        weeklySales.flatMap((sale) =>
-            sale.saleAppointments.map(
-                (saleAppointment) =>
-                    saleAppointment.appointment.customerId
-            )
-        )
-    );
-
-    const weeklyCustomers = weeklyCustomerIds.size;
+    // Count customer visits that produced sales,
+    // not unique Customer database records
+    const weeklyCustomers =
+        weeklySaleCount;
 
     const weeklyAverageTicket =
         weeklySaleCount > 0
@@ -206,17 +404,8 @@ export default async function AdminPage() {
 
     const monthlySaleCount = monthlySales.length;
 
-    // Count each purchasing customer only once durning the month
-    const monthlyCustomerIds = new Set(
-        monthlySales.flatMap((sale) =>
-            sale.saleAppointments.map(
-                (saleAppointment) =>
-                    saleAppointment.appointment.customerId
-            )
-        )
-    );
-
-    const monthlyCustomers = monthlyCustomerIds.size
+    const monthlyCustomers =
+        monthlySaleCount;
 
     const monthlyAverageTicket =
         monthlySaleCount > 0
@@ -402,7 +591,38 @@ export default async function AdminPage() {
             style: "currency",
             currency: "COP",
             maximumFractionDigits: 0,
-        }).format(value); 
+        }).format(value);
+    
+    const formatTime = (value: Date) =>
+        new Intl.DateTimeFormat("es-CO", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+            timeZone: "America/Bogota",
+        }).format(value);
+    
+    const formatDate = (date: string) => {
+        const [year, month, day] =
+            date.split("-").map(Number);
+
+        return new Intl.DateTimeFormat(
+            "es-CO",
+            {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+                timeZone: "UTC",
+            }
+        ).format(
+            new Date(
+                Date.UTC(
+                    year,
+                    month - 1,
+                    day
+                )
+            )
+        );
+    };
 
     return (
         <main className="min-h-screen bg-neutral-100 p-6">
@@ -418,54 +638,294 @@ export default async function AdminPage() {
                     <InternalNav userRole={session.user.role} />
                 </div>
 
-                    {/* Today's operating snapshot */}
-                    <div className="mt-8">
-                        <h2 className="text-xl font-bold text-black">
-                            Hoy
-                        </h2>
+                {/* Today's operating dashboard */}
+                <div className="mt-8">
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                        <div>
+                            <h2 className="text-2xl font-bold text-black">
+                                Hoy
+                            </h2>
 
-                        <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                            <div className="rounded-xl bg-white p-5 shadow-sm">
-                                <p className="text-sm font-medium text-neutral-500">
-                                    Ventas de Hoy
-                                </p>
+                            <p className="mt-1 text-sm text-neutral-500">
+                                Actividad operativa y financiera del salón.
+                            </p>
+                        </div>
 
-                                <p className="mt-2 text-2xl font-bold text-black">
-                                    {formatCOP(todaysSalesTotal)}
-                                </p>
+                        <span className="rounded-full bg-[#B76E79]/10 px-3 py-1 text-sm font-semibold text-[#B76E79]">
+                            {formatDate(today)}
+                        </span>
+                    </div>
+
+                    {/* Main daily KPIs */}
+                    <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="rounded-xl bg-white p-5 shadow-sm">
+                            <p className="text-sm font-medium text-neutral-500">
+                                Ventas de Hoy
+                            </p>
+
+                            <p className="mt-2 text-2xl font-bold text-black">
+                                {formatCOP(todaysSalesTotal)}
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-white p-5 shadow-sm">
+                            <p className="text-sm font-medium text-neutral-500">
+                                Clientes Atendidos
+                            </p>
+
+                            <p className="mt-2 text-2xl font-bold text-black">
+                                {todaysCustomers}
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-white p-5 shadow-sm">
+                            <p className="text-sm font-medium text-neutral-500">
+                                Transacciones
+                            </p>
+
+                            <p className="mt-2 text-2xl font-bold text-black">
+                                {todaysSaleCount}
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-white p-5 shadow-sm">
+                            <p className="text-sm font-medium text-neutral-500">
+                                Ticket Promedio
+                            </p>
+
+                            <p className="mt-2 text-2xl font-bold text-black">
+                                {formatCOP(todaysAverageTicket)}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Financial + appointment activity */}
+                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                        {/* Today's money */}
+                        <div className="rounded-xl bg-white p-5 shadow-sm">
+                            <h3 className="text-lg font-bold text-black">
+                                Resumen Financiero
+                            </h3>
+
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                <div className="rounded-xl bg-neutral-50 p-4">
+                                    <p className="text-sm text-neutral-500">
+                                        Comisiones
+                                    </p>
+
+                                    <p className="mt-1 text-xl font-bold text-black">
+                                        {formatCOP(
+                                            todaysCommissionTotal
+                                        )}
+                                    </p>
+                                </div>
+
+                                <div className="rounded-xl bg-neutral-50 p-4">
+                                    <p className="text-sm text-neutral-500">
+                                        Propinas
+                                    </p>
+
+                                    <p className="mt-1 text-xl font-bold text-black">
+                                        {formatCOP(
+                                            todaysTipTotal
+                                        )}
+                                    </p>
+                                </div>
                             </div>
 
-                            <div className="rounded-xl bg-white p-5 shadow-sm">
-                                <p className="text-sm font-medium text-neutral-500">
-                                    Clientes de Hoy
-                                </p>
+                            <h4 className="mt-5 text-sm font-bold text-black">
+                                Pagos Recibidos
+                            </h4>
 
-                                <p className="mt-2 text-2xl font-bold text-black">
-                                    {todaysCustomers}
-                                </p>
+                            <div className="mt-3 space-y-3 text-sm">
+                                <div className="flex justify-between gap-4">
+                                    <span className="text-neutral-500">
+                                        Efectivo
+                                    </span>
+
+                                    <span className="font-semibold text-black">
+                                        {formatCOP(
+                                            todaysCashTotal
+                                        )}
+                                    </span>
+                                </div>
+
+                                <div className="flex justify-between gap-4">
+                                    <span className="text-neutral-500">
+                                        Bold
+                                    </span>
+
+                                    <span className="font-semibold text-black">
+                                        {formatCOP(
+                                            todaysBoldTotal
+                                        )}
+                                    </span>
+                                </div>
+
+                                <div className="flex justify-between gap-4">
+                                    <span className="text-neutral-500">
+                                        Transferencia
+                                    </span>
+
+                                    <span className="font-semibold text-black">
+                                        {formatCOP(
+                                            todaysTransferTotal
+                                        )}
+                                    </span>
+                                </div>
+
+                                {todaysBoldFees > 0 && (
+                                    <div className="flex justify-between gap-4 border-t border-neutral-200 pt-3">
+                                        <span className="text-neutral-500">
+                                            Comisión Bold
+                                        </span>
+
+                                        <span className="font-semibold text-black">
+                                            {formatCOP(
+                                                todaysBoldFees
+                                            )}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
+                        </div>
 
-                            <div className="rounded-xl bg-white p-5 shadow-sm">
-                                <p className="text-sm font-medium text-neutral-500">
+                        {/* Today's appointments */}
+                        <div className="rounded-xl bg-white p-5 shadow-sm">
+                            <div className="flex items-center justify-between gap-4">
+                                <h3 className="text-lg font-bold text-black">
                                     Citas de Hoy
-                                </p>
+                                </h3>
 
-                                <p className="mt-2 text-2xl font-bold text-black">
+                                <span className="text-2xl font-bold text-black">
                                     {todaysAppointments}
-                                </p>
+                                </span>
                             </div>
 
-                            <div className="rounded-xl bg-white p-5 shadow-sm">
-                                <p className="text-sm font-medium text-neutral-500">
-                                    Ticket Promedio
-                                </p>
+                            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                                <div className="rounded-xl bg-neutral-50 p-4">
+                                    <p className="text-sm text-neutral-500">
+                                        Completadas
+                                    </p>
 
-                                <p className="mt-2 text-2xl font-bold text-black">
-                                    {formatCOP(todaysAverageTicket)}
-                                </p>
+                                    <p className="mt-1 text-xl font-bold text-black">
+                                        {todaysCompletedAppointments}
+                                    </p>
+                                </div>
+
+                                <div className="rounded-xl bg-neutral-50 p-4">
+                                    <p className="text-sm text-neutral-500">
+                                        En Servicio
+                                    </p>
+
+                                    <p className="mt-1 text-xl font-bold text-black">
+                                        {todaysInProgressAppointments}
+                                    </p>
+                                </div>
+
+                                <div className="rounded-xl bg-neutral-50 p-4">
+                                    <p className="text-sm text-neutral-500">
+                                        Cliente Llegó
+                                    </p>
+
+                                    <p className="mt-1 text-xl font-bold text-black">
+                                        {todaysCheckedInAppointments}
+                                    </p>
+                                </div>
+
+                                <div className="rounded-xl bg-neutral-50 p-4">
+                                    <p className="text-sm text-neutral-500">
+                                        Próximas
+                                    </p>
+
+                                    <p className="mt-1 text-xl font-bold text-black">
+                                        {todaysBookedAppointments}
+                                    </p>
+                                </div>
+
+                                <div className="rounded-xl bg-neutral-50 p-4">
+                                    <p className="text-sm text-neutral-500">
+                                        Canceladas
+                                    </p>
+
+                                    <p className="mt-1 text-xl font-bold text-black">
+                                        {todaysCancelledAppointments}
+                                    </p>
+                                </div>
+
+                                <div className="rounded-xl bg-neutral-50 p-4">
+                                    <p className="text-sm text-neutral-500">
+                                        No Asistió
+                                    </p>
+
+                                    <p className="mt-1 text-xl font-bold text-black">
+                                        {todaysNoShowAppointments}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
+
+                    {/* Recent completed-sale activity */}
+                    <div className="mt-4 rounded-xl bg-white p-5 shadow-sm">
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-black">
+                                    Actividad Reciente
+                                </h3>
+
+                                <p className="mt-1 text-sm text-neutral-500">
+                                    Últimas ventas completadas de hoy.
+                                </p>
+                            </div>
+                        </div>
+
+                        {recentActivity.length === 0 ? (
+                            <p className="mt-4 text-sm text-neutral-500">
+                                Todavía no hay ventas completadas hoy.
+                            </p>
+                        ) : (
+                            <div className="mt-4 divide-y divide-neutral-200">
+                                {recentActivity.map(
+                                    (activity) => (
+                                        <div
+                                            key={activity.id}
+                                            className="flex flex-col gap-2 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                                        >
+                                            <div>
+                                                <p className="font-semibold text-black">
+                                                    {activity.customers ||
+                                                        "Cliente"}
+                                                </p>
+
+                                                <p className="mt-1 text-sm text-neutral-500">
+                                                    {formatTime(
+                                                        activity.createdAt
+                                                    )}
+                                                    {" · "}
+                                                    {activity.employees ||
+                                                        "Sin técnica"}
+                                                </p>
+                                            </div>
+
+                                            <div className="sm:text-right">
+                                                <p className="font-bold text-black">
+                                                    {formatCOP(
+                                                        activity.total
+                                                    )}
+                                                </p>
+
+                                                <p className="mt-1 text-xs text-neutral-400">
+                                                    Venta #{activity.id}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
 
                     {/* Current week's operating snapshot */}
                     <div className="mt-8">

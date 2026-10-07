@@ -11,6 +11,34 @@ export function getTeffToday() {
   }).format(new Date());
 }
 
+// Convert a TEFF calendar date into the exact start of that day
+// in Medellín. Useful when querying timestamp fields such as Sale.createdAt
+export function getTeffDayStart(date: string) {
+  return new Date(`${date}T00:00:00-05:00`);
+}
+
+// Add calendar days to a YYYY-MM-DD date without changing time zones
+export function addTeffDays(
+  date: string,
+  days: number
+) {
+  const [year, month, day] = date
+    .split("-")
+    .map(Number);
+
+  const value = new Date(
+    Date.UTC(year, month - 1, day)
+  );
+
+  value.setUTCDate(
+    value.getUTCDate() + days
+  );
+
+  return value
+    .toISOString()
+    .slice(0, 10);
+}
+
 // Return the day of the week for a YYYY-MM-DD date.
 // 0 = Sunday, 1 = Monday, ... 6 = Saturday.
 export function getTeffDayOfWeek(date: string) {
