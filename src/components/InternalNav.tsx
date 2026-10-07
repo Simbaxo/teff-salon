@@ -26,6 +26,13 @@ export default function InternalNav({
                     </Link>
 
                     <Link
+                        href="/sales"
+                        className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
+                    >
+                        Ventas
+                    </Link>
+
+                    <Link
                         href="/inventory"
                         className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
                     >
