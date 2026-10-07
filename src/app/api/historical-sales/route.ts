@@ -83,7 +83,11 @@ export async function POST(request: Request) {
 
         const normalizedCustomerName = customerName.trim();
         const normalizedCustomerPhone =
-            normalizePhoneNumber(customerPhone);
+            customerPhone.trim()
+                ? normalizePhoneNumber(
+                    customerPhone
+                )
+                : null;
 
         const normalizedCustomerEmail =
             typeof customerEmail === "string"
@@ -95,10 +99,7 @@ export async function POST(request: Request) {
                 ? customerNotes.trim()
                 : "";
 
-        if (
-            !normalizedCustomerName ||
-            !normalizedCustomerPhone
-        ) {
+        if (!normalizedCustomerName) {
             return Response.json(
                 { error: "Invalid customer information" },
                 { status: 400 }
@@ -631,21 +632,38 @@ export async function POST(request: Request) {
         }
 
         const result = await prisma.$transaction(async (tx) => {
-            // Reuse the customer when the normalized phone already exists.
-            const customer = await tx.customer.upsert({
-                where: {
-                    phone: normalizedCustomerPhone,
-                },
-                update: {
-                    name: normalizedCustomerName,
-                    email: normalizedCustomerEmail || null,
-                },
-                create: {
-                    name: normalizedCustomerName,
-                    phone: normalizedCustomerPhone,
-                    email: normalizedCustomerEmail || null,
-                },
-            });
+            /*
+            * Reuse an existing customer when a phone number is provided.
+            * Without a phone number, create a new customer record.
+            */
+            const customer = normalizedCustomerPhone
+                ? await tx.customer.upsert({
+                    where: {
+                        phone: normalizedCustomerPhone,
+                    },
+                    update: {
+                        name: normalizedCustomerName,
+                        email:
+                            normalizedCustomerEmail ||
+                            null,
+                    },
+                    create: {
+                        name: normalizedCustomerName,
+                        phone: normalizedCustomerPhone,
+                        email:
+                            normalizedCustomerEmail ||
+                            null,
+                    },
+                })
+                : await tx.customer.create({
+                    data: {
+                        name: normalizedCustomerName,
+                        phone: null,
+                        email:
+                            normalizedCustomerEmail ||
+                            null,
+                    },
+                });
 
             // One Booking represents the complete historical salon visit.
             const booking = await tx.booking.create({

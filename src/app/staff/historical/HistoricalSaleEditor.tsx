@@ -464,8 +464,10 @@ export default function HistoricalSaleEditor() {
             return;
         }
 
-        if (!customerName.trim() || !customerPhone.trim()) {
-            setSubmitError("Ingresa el nombre y teléfono del cliente.");
+        if (!customerName.trim()) {
+            setSubmitError(
+                "Ingresa el nombre del cliente."
+            );
             return;
         }
 
@@ -688,7 +690,8 @@ export default function HistoricalSaleEditor() {
                 </h2>
 
                 <p className="mt-1 text-sm text-neutral-500">
-                    Si el teléfono ya existe, TEFF usará el perfil del cliente existente.
+                    El teléfono es opcional. Si ingresas uno que ya existe,
+                    TEFF usará el perfil del cliente existente.
                 </p>
 
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -717,7 +720,7 @@ export default function HistoricalSaleEditor() {
                             htmlFor="historical-customer-phone"
                             className="block text-sm font-semibold text-black"
                         >
-                            Teléfono
+                            Teléfono (opcional)
                         </label>
 
                         <input
@@ -728,7 +731,7 @@ export default function HistoricalSaleEditor() {
                                 setCustomerPhone(event.target.value)
                             }
                             className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
-                            placeholder="+57 300 000 0000"
+                            placeholder="+57 300 000 0000 (opcional)"
                         />
                     </div>
 
