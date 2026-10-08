@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import {
     useEffect,
     useMemo,
@@ -173,6 +174,11 @@ export default function SalesPageClient() {
     const today =
         getBogotaDateString();
 
+    const searchParams = useSearchParams();
+
+    const requestedSaleId =
+        searchParams.get("saleId");
+
     const [dateRange, setDateRange] =
         useState<DateRangeOption>("TODAY");
 
@@ -298,6 +304,55 @@ export default function SalesPageClient() {
         customFrom,
         customTo,
     ]);
+
+    useEffect(() => {
+        if (!requestedSaleId) {
+            return;
+        }
+
+        const saleId = Number(requestedSaleId);
+
+        if (
+            !Number.isSafeInteger(saleId) ||
+            saleId <= 0
+        ) {
+            return;
+        }
+
+        let cancelled = false;
+
+        async function loadSelectedSale() {
+            try {
+                const response = await fetch(
+                    `/api/sales/${saleId}`
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        "No se pudo cargar la venta."
+                    );
+                }
+
+                const sale: Sale =
+                    await response.json();
+
+                if (!cancelled) {
+                    setSelectedSale(sale);
+                }
+            } catch (error) {
+                console.error(
+                    "Failed to open selected sale:",
+                    error
+                );
+            }
+        }
+
+        void loadSelectedSale();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [requestedSaleId]);
 
     const employees = useMemo(() => {
         const employeeMap =
@@ -927,7 +982,7 @@ export default function SalesPageClient() {
                             </div>
 
                             <div className="mt-4 flex justify-between gap-4 text-lg font-bold">
-                                <span>Total</span>
+                                <span className="text-black">Total</span>
 
                                 <span>
                                     {formatCOP(
@@ -984,7 +1039,7 @@ export default function SalesPageClient() {
                             </div>
 
                             <div className="mt-4 flex justify-between gap-4 text-sm font-bold">
-                                <span>Total Pagado</span>
+                                <span className="text-black">Total Pagado</span>
 
                                 <span>
                                     {formatCOP(

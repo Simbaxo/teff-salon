@@ -8,6 +8,7 @@ import {
     getTeffToday,
 } from "@/lib/datetime";
 import InternalNav from "@/components/InternalNav";
+import AdminNav from "@/components/AdminNav";
 
 export default async function AdminPage() {
     const session = await auth();
@@ -636,6 +637,10 @@ export default async function AdminPage() {
 
                 <div className="mt-4">
                     <InternalNav userRole={session.user.role} />
+                </div>
+
+                <div className="mt-6">
+                    <AdminNav />
                 </div>
 
                 {/* Today's operating dashboard */}

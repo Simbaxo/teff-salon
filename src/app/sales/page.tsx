@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import InternalNav from "@/components/InternalNav";
 import SalesPageClient from "./SalesPageClient";
+import { Suspense } from "react";
 
 export default async function SalesPage() {
     const session = await auth();
@@ -35,7 +36,13 @@ export default async function SalesPage() {
                     </div>
                 </div>
 
-                <SalesPageClient />
+                <Suspense fallback={
+                    <p className="mt-6 text-sm text-neutral-500">
+                        Cargando historial de ventas...
+                    </p>
+                }>
+                    <SalesPageClient />
+                </Suspense>
             </div>
         </main>
     );

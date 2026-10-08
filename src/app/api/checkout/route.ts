@@ -255,6 +255,24 @@ export async function POST(request: Request) {
             );
         }
 
+        // All appointments in one checkout must share the same service date.
+        // This keeps technician production and payroll attribution consistent.
+        const serviceDates = new Set(
+            visitAppointments.map((item) =>
+                item.date.toISOString().slice(0, 10)
+            )
+        );
+
+        if (serviceDates.size !== 1) {
+            return Response.json(
+                {
+                    error:
+                        "All appointments in one sale must have the same service date",
+                },
+                { status: 400 }
+            );
+        }
+
         // Remember the original booked service prices across the complete visit.
         const bookedServicePrices = new Map<number, number>();
 
