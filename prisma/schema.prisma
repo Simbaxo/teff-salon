@@ -34,19 +34,21 @@ model Employee {
 
   employeeServices EmployeeService[]
   appointments     Appointment[]
-  scheduleBlocks EmployeeScheduleBlock[]
+  scheduleBlocks   EmployeeScheduleBlock[]
 
   // Tracks commissions earned by this employee
-  commissions      Commission[]
-  tips             Tip[]
-  
+  commissions Commission[]
+  tips        Tip[]
+
+  // Payroll statements belonging to this technician.
+  payrollEntries PayrollEntry[]
 
   // Optional login account for employees who need system access
   user User?
 }
 
 model EmployeeScheduleBlock {
-  id         Int      @id @default(autoincrement())
+  id         Int @id @default(autoincrement())
   employeeId Int
 
   // Calendar day and unavailable time range.
@@ -79,7 +81,7 @@ model User {
   employeeId Int?      @unique
   employee   Employee? @relation(fields: [employeeId], references: [id])
 
-  pushSubscriptions PushSubscription[]
+  pushSubscriptions  PushSubscription[]
   inventoryMovements InventoryMovement[]
 
   createdAt DateTime @default(now())
@@ -161,7 +163,7 @@ model Customer {
   id        Int      @id @default(autoincrement())
   name      String
   // Normalized phone number uniquely identifies a customer
-  phone     String?   @unique
+  phone     String?  @unique
   email     String?
   createdAt DateTime @default(now())
 
@@ -305,6 +307,12 @@ model Commission {
 
   sale     Sale     @relation(fields: [saleId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
+
+  // Null until this commission is assigned to payroll.
+  payrollEntryId Int?
+  payrollEntry   PayrollEntry? @relation(fields: [payrollEntryId], references: [id], onDelete: Restrict)
+
+  @@index([payrollEntryId])
 }
 
 // Tracks tips belonging directly to technicians
@@ -320,6 +328,12 @@ model Tip {
 
   sale     Sale     @relation(fields: [saleId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
+
+  // Cash tips are already paid but still appear in earnings.
+  payrollEntryId Int?
+  payrollEntry   PayrollEntry? @relation(fields: [payrollEntryId], references: [id], onDelete: Restrict)
+
+  @@index([payrollEntryId])
 }
 
 model InventoryItem {
@@ -327,7 +341,7 @@ model InventoryItem {
 
   name     String
   category String?
-  unit     String @default("unidad")
+  unit     String  @default("unidad")
 
   // Current physical quantity available in the salon.
   quantity Int @default(0)
@@ -337,7 +351,7 @@ model InventoryItem {
 
   active Boolean @default(true)
 
-  notes String?
+  notes    String?
   // Public Vercel Blob URL for the inventory product photo.
   imageUrl String?
 
@@ -387,4 +401,94 @@ model SalonSettings {
   monthlySalesGoal Int      @default(0)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+// One Monday-Sunday payroll period for TEFF.
+model PayrollPeriod {
+  id Int @id @default(autoincrement())
+
+  // Calendar dates stored at midnight UTC.
+  startDate DateTime @unique
+  endDate   DateTime
+  payday    DateTime
+
+  status PayrollStatus @default(DRAFT)
+
+  reviewedAt DateTime?
+  paidAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries PayrollEntry[]
+}
+
+// One technician's payroll statement for one period.
+model PayrollEntry {
+  id Int @id @default(autoincrement())
+
+  payrollPeriodId Int
+  employeeId      Int
+
+  // Finalized financial snapshot in Colombian pesos.
+  productionTotal Int @default(0)
+  commissionTotal Int @default(0)
+  tipsTotal       Int @default(0)
+  bonusesTotal    Int @default(0)
+  totalEarned     Int @default(0)
+
+  loansTotal      Int @default(0)
+  uniformsTotal   Int @default(0)
+  otherDeductions Int @default(0)
+  tipsAlreadyPaid Int @default(0)
+  netPay          Int @default(0)
+
+  status PayrollStatus @default(DRAFT)
+
+  reviewedAt DateTime?
+  paidAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  period   PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Restrict)
+  employee Employee      @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  adjustments PayrollAdjustment[]
+  commissions Commission[]
+  tips        Tip[]
+
+  // Prevent duplicate payroll entries for one technician/week.
+  @@unique([payrollPeriodId, employeeId])
+  @@index([employeeId, status])
+}
+
+// Bonuses, loans, uniforms and other payroll adjustments.
+model PayrollAdjustment {
+  id Int @id @default(autoincrement())
+
+  payrollEntryId Int
+  type           PayrollAdjustmentType
+
+  amount      Int
+  description String?
+
+  createdAt DateTime @default(now())
+
+  entry PayrollEntry @relation(fields: [payrollEntryId], references: [id], onDelete: Restrict)
+
+  @@index([payrollEntryId])
+}
+
+enum PayrollStatus {
+  DRAFT
+  REVIEWED
+  PAID
+}
+
+enum PayrollAdjustmentType {
+  BONUS
+  LOAN
+  UNIFORM
+  OTHER_DEDUCTION
 }
