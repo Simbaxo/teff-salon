@@ -260,6 +260,80 @@ export async function PATCH(
                             },
                         });
 
+                        // Prevent technician changes after payroll has been reviewed
+                        // This protects the approved commission and tip ownership
+                        if (saleAppointment) {
+                            const lockedPayroll = await tx.payrollEntry.findFirst({
+                                where: {
+                                    period: {
+                                        status: {
+                                            in: ["REVIEWED", "PAID"],
+                                        },
+                                    },
+                                    OR: [
+                                        {
+                                            commissions: {
+                                                some: {
+                                                    saleId: saleAppointment.saleId,
+                                                },
+                                            },
+                                        },
+                                        {
+                                            tips: {
+                                                some: {
+                                                    saleId: saleAppointment.saleId,
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                                select: {
+                                    id: true,
+                                },
+                            });
+
+                            if (lockedPayroll) {
+                                throw new Error("PAYROLL_LOCKED");
+                            }
+                        }
+
+                        // Also protect appointments belonging to a reviewed payroll week,
+                        // even if no commission or tip has been assigned yet.
+                        if (saleAppointment) {
+                            const appointmentDate = appointment.date
+                                .toISOString()
+                                .slice(0, 10);
+
+                            const weekday = appointment.date.getUTCDay();
+
+                            const daysSinceMonday =
+                                weekday === 0 ? 6 : weekday - 1;
+
+                            const monday = new Date(
+                                `${appointmentDate}T00:00:00.000Z`
+                            );
+
+                            monday.setUTCDate(
+                                monday.getUTCDate() - daysSinceMonday
+                            );
+
+                            const lockedPeriod = await tx.payrollPeriod.findFirst({
+                                where: {
+                                    startDate: monday,
+                                    status: {
+                                        in: ["REVIEWED", "PAID"],
+                                    },
+                                },
+                                select: {
+                                    id: true,
+                                },
+                            });
+
+                            if (lockedPeriod) {
+                                throw new Error("PAYROLL_LOCKED");
+                            }
+                        }
+
                         // A completed sale may already have commission and tip records assigned
                         // to the original technician. Keep those records consistent with the correction
                         if (saleAppointment) {
@@ -305,11 +379,13 @@ export async function PATCH(
                 // Transaction Succeeded
                 break;
             } catch (error) {
+               // Business-rule errors should not be retried.
                 if (
                     error instanceof Error &&
                     (
                         error.message === "REASSIGNMENT_APPOINTMENT_CONFLICT" ||
-                        error.message === "REASSIGNMENT_BLOCK_CONFLICT"
+                        error.message === "REASSIGNMENT_BLOCK_CONFLICT" ||
+                        error.message === "PAYROLL_LOCKED"
                     )
                 ) {
                     throw error;
@@ -363,6 +439,22 @@ export async function PATCH(
                 { status: 409 }
             );
         }
+
+        // Prevent changes to technician assignments after payroll review.
+        if (
+            error instanceof Error &&
+            error.message === "PAYROLL_LOCKED"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "No se puede cambiar la técnica porque la nómina de esta fecha ya fue revisada o pagada.",
+                    conflictType: "PAYROLL_LOCKED",
+                },
+                { status: 409 }
+            );
+        }
+
         if (
             error instanceof Error &&
             error.message === "REASSIGNMENT_CONFLICT"

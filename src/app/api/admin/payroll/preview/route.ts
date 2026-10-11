@@ -1,7 +1,9 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { calculatePayroll } from "@/lib/payroll/calculations";
+import {
+    calculateWeeklyPayrollSummary,
+} from "@/lib/payroll/weekly-summary";
 import {
     addTeffDays,
     getTeffDayOfWeek,
@@ -315,19 +317,12 @@ export async function GET(request: Request) {
                     })
                 ) ?? [];
 
-            const totals = calculatePayroll({
-                commissions: employeeCommissions.map(
-                    (commission) => ({
-                        commissionBase:
-                            commission.commissionBase,
-                        commissionAmount:
-                            commission.commissionAmount,
-                    })
-                ),
-                tips: employeeTips.map((tip) => ({
-                    amount: tip.amount,
-                    status: tip.status,
-                })),
+            // Use the shared calculation for Preview and future Review.
+            const weeklySummary = calculateWeeklyPayrollSummary({
+                employeeId: employee.id,
+                payrollEntryId: existingEntry?.id ?? null,
+                commissions: employeeCommissions,
+                tips: employeeTips,
                 adjustments,
             });
 
@@ -353,67 +348,47 @@ export async function GET(request: Request) {
                         tipsAlreadyPaid: existingEntry.tipsAlreadyPaid,
                         netPay: existingEntry.netPay,
                     }
-                : totals;
+                : weeklySummary;
 
-            const paidCommissions =
-                employeeCommissions
-                    .filter(
-                        (commission) =>
-                            commission.status === "PAID"
-                    )
-                    .reduce(
-                        (sum, commission) =>
-                            sum + commission.commissionAmount,
-                        0
-                    );
-
-            const pendingCommissions =
-                employeeCommissions
-                    .filter(
-                        (commission) =>
-                            commission.status === "PENDING"
-                    )
-                    .reduce(
-                        (sum, commission) =>
-                            sum + commission.commissionAmount,
-                        0
-                    );
-
-            const alreadyAssignedCommissions =
-                employeeCommissions.filter(
-                    (commission) =>
-                        commission.payrollEntryId !== null
-                ).length;
-
-            const alreadyAssignedTips =
-                employeeTips.filter(
-                    (tip) =>
-                        tip.payrollEntryId !== null
-                ).length;
-
-            // Outstanding pay excludes commissions already paid.
-            // Cash tips are excluded by calculatePayroll().
+            // Snapshot totals remain frozen after review.
+            // Outstanding amounts remain informational, not payment authorization.
             const outstandingPay =
-                displayedTotals.netPay - paidCommissions;
+                displayedTotals.netPay -
+                weeklySummary.paidCommissions;
 
             return {
                 employeeId: employee.id,
                 employeeName: employee.name,
                 adjustments,
                 ...displayedTotals,
-                paidCommissions,
-                pendingCommissions,
+                paidCommissions: weeklySummary.paidCommissions,
+                pendingCommissions: weeklySummary.pendingCommissions,
                 outstandingPay,
+
+                // Preserve the existing API field names for compatibility.
                 assignedCommissionCount:
-                    alreadyAssignedCommissions,
-                assignedTipCount: alreadyAssignedTips,
+                    employeeCommissions.filter(
+                        (item) => item.payrollEntryId !== null
+                    ).length,
+
+                assignedTipCount:
+                    employeeTips.filter(
+                        (item) => item.payrollEntryId !== null
+                    ).length,
+
                 payrollEntryId: existingEntry?.id ?? null,
-                payrollStatus:
-                    existingEntry?.status ?? "DRAFT",
+                payrollStatus: existingEntry?.status ?? "DRAFT",
+
+                conflictingCommissions:
+                    weeklySummary.conflictingCommissions,
+
+                conflictingTips:
+                    weeklySummary.conflictingTips,
+
                 requiresReview:
                     outstandingPay < 0 ||
-                    alreadyAssignedCommissions > 0 ||
-                    alreadyAssignedTips > 0,
+                    weeklySummary.conflictingCommissions > 0 ||
+                    weeklySummary.conflictingTips > 0,
             };
         });
 

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import { auth } from "@/auth";
 import { canCheckout } from "@/lib/auth-roles";
 
@@ -752,9 +753,41 @@ export async function POST(request: Request) {
             );
         }
 
-        // Save the entire checkout as one atomic database transaction
+        // Save the entire checkout as one atomic database transaction.
         const sale = await prisma.$transaction(async (tx) => {
-            // Create the financial record for this checkout
+            // All appointments in this checkout share one service date.
+            const serviceDate = visitAppointments[0].date;
+
+            // Find the Monday of the service week using UTC calendar dates.
+            const monday = new Date(serviceDate);
+
+            const weekday = monday.getUTCDay();
+
+            const daysSinceMonday =
+                weekday === 0 ? 6 : weekday - 1;
+
+            monday.setUTCDate(
+                monday.getUTCDate() - daysSinceMonday
+            );
+
+            // Prevent checkout from changing reviewed or paid payroll.
+            const lockedPeriod = await tx.payrollPeriod.findFirst({
+                where: {
+                    startDate: monday,
+                    status: {
+                        in: ["REVIEWED", "PAID"],
+                    },
+                },
+                select: {
+                    id: true,
+                },
+            });
+
+            if (lockedPeriod) {
+                throw new Error("PAYROLL_LOCKED");
+            }
+
+            // Create the financial record for this checkout.
             const newSale = await tx.sale.create({
                 data: {
                     subtotal,
@@ -887,7 +920,11 @@ export async function POST(request: Request) {
             });
 
             return newSale;
-        })
+        }, {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            maxWait: 5000,
+            timeout: 10000,
+        });
 
         // Tell the checkout UI that the sale was saved successfully
         return Response.json(
@@ -905,6 +942,35 @@ export async function POST(request: Request) {
         );
 
     } catch (error) {
+
+        // The service week has already been reviewed or paid.
+        if (
+            error instanceof Error &&
+            error.message === "PAYROLL_LOCKED"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "No se puede completar esta venta porque la nómina de esa semana ya fue revisada o pagada.",
+                    conflictType: "PAYROLL_LOCKED",
+                },
+                { status: 409 }
+            );
+        }
+
+        // PostgreSQL detected a concurrent transaction conflict.
+        if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2034"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "La nómina o la venta fue modificada al mismo tiempo. Inténtalo nuevamente.",
+                },
+                { status: 409 }
+            );
+        }
     if (
         error instanceof Error &&
         error.message === "INVALID_TIP_EMPLOYEE"

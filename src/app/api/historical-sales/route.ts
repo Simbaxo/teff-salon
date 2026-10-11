@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { canCheckout } from "@/lib/auth-roles";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { getTeffToday } from "@/lib/datetime";
@@ -640,6 +641,37 @@ export async function POST(request: Request) {
         }
 
         const result = await prisma.$transaction(async (tx) => {
+            // Find the Monday belonging to the historical service date.
+            const serviceDate = new Date(`${date}T00:00:00.000Z`);
+
+            const dayOfWeek = serviceDate.getUTCDay();
+
+            const daysSinceMonday =
+                dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+            const monday = new Date(serviceDate);
+
+            monday.setUTCDate(
+                monday.getUTCDate() - daysSinceMonday
+            );
+
+            // Prevent historical sales from changing reviewed payroll.
+            const lockedPeriod = await tx.payrollPeriod.findFirst({
+                where: {
+                    startDate: monday,
+                    status: {
+                        in: ["REVIEWED", "PAID"],
+                    },
+                },
+                select: {
+                    id: true,
+                },
+            });
+
+            if (lockedPeriod) {
+                throw new Error("PAYROLL_LOCKED");
+            }
+
             let customer;
 
             if (isWalkIn) {
@@ -914,6 +946,10 @@ export async function POST(request: Request) {
                     ),
                 finalTotal: sale.finalTotal,
             };
+        }, {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            maxWait: 5000,
+            timeout: 10000,
         });
 
         return Response.json(
@@ -929,6 +965,35 @@ export async function POST(request: Request) {
             "Failed to create historical sale:",
             error
         );
+
+        // Block historical entries for reviewed or paid payroll weeks.
+        if (
+            error instanceof Error &&
+            error.message === "PAYROLL_LOCKED"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "No se puede registrar este servicio porque la nómina de esa semana ya fue revisada o pagada.",
+                    conflictType: "PAYROLL_LOCKED",
+                },
+                { status: 409 }
+            );
+        }
+
+        // Handle concurrent transaction conflicts.
+        if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2034"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "La nómina fue modificada al mismo tiempo. Actualiza e inténtalo nuevamente.",
+                },
+                { status: 409 }
+            );
+        }
 
         return Response.json(
             { error: "Unable to create historical sale" },
