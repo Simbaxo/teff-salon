@@ -8,6 +8,10 @@ import {
 import {
     calculateWeeklyPayrollSummary,
 } from "@/lib/payroll/weekly-summary";
+import {
+    workedInPayrollPeriod,
+    hasValidPayrollAttribution,
+} from "@/lib/payroll/review-validation";
 
 // Read-only preflight. Does not review or pay payroll.
 export async function POST(request: Request) {
@@ -100,6 +104,22 @@ export async function POST(request: Request) {
             );
         }
 
+        // A draft period cannot contain reviewed or paid statements.
+        const hasLockedEntries = period?.entries.some(
+            (entry) => entry.status !== "DRAFT"
+        );
+
+        if (hasLockedEntries) {
+            return Response.json(
+                {
+                    readyForReview: false,
+                    error:
+                        "Esta nómina contiene comprobantes que ya fueron revisados o pagados.",
+                },
+                { status: 409 }
+            );
+        }
+
         // Load all financial records associated with this service week.
         const commissions = await prisma.commission.findMany({
             where: {
@@ -176,21 +196,66 @@ export async function POST(request: Request) {
             },
         });
 
-        // Verify that the technician worked during this period.
-        function workedThisWeek(
-            employeeId: number,
-            appointments: {
-                appointment: {
-                    employeeId: number;
-                    date: Date;
-                };
-            }[]
+        const unmatchedCommissions = commissions.filter(
+            (commission) =>
+                !hasValidPayrollAttribution(
+                    commission,
+                    serviceStart,
+                    serviceEnd
+                )
+        );
+
+        const unmatchedTips = tips.filter(
+            (tip) =>
+                !hasValidPayrollAttribution(
+                    tip,
+                    serviceStart,
+                    serviceEnd
+                )
+        );
+
+        if (
+            unmatchedCommissions.length > 0 ||
+            unmatchedTips.length > 0
         ) {
-            return appointments.some(
-                ({ appointment }) =>
-                    appointment.employeeId === employeeId &&
-                    appointment.date >= serviceStart &&
-                    appointment.date < serviceEnd
+            return Response.json(
+                {
+                    readyForReview: false,
+                    error:
+                        "Existen comisiones o propinas sin una técnica y fecha de servicio correspondiente.",
+                    unmatchedCommissions: unmatchedCommissions.length,
+                    unmatchedTips: unmatchedTips.length,
+                },
+                { status: 409 }
+            );
+        }
+
+        // Only recognized financial statuses are allowed.
+        const invalidCommissions = commissions.filter(
+            (commission) =>
+                commission.status !== "PENDING" &&
+                commission.status !== "PAID"
+        );
+
+        const invalidTips = tips.filter(
+            (tip) =>
+                tip.status !== "PENDING" &&
+                tip.status !== "PAID"
+        );
+
+        if (
+            invalidCommissions.length > 0 ||
+            invalidTips.length > 0
+        ) {
+            return Response.json(
+                {
+                    readyForReview: false,
+                    error:
+                        "Existen comisiones o propinas con estados de pago inválidos.",
+                    invalidCommissions: invalidCommissions.length,
+                    invalidTips: invalidTips.length,
+                },
+                { status: 409 }
             );
         }
 
@@ -248,21 +313,27 @@ export async function POST(request: Request) {
                     (item) => item.employeeId === employeeId
                 );
 
+                // Include only commissions earned by this technician this week.
                 const employeeCommissions = commissions.filter(
                     (item) =>
                         item.employeeId === employeeId &&
-                        workedThisWeek(
+                        workedInPayrollPeriod(
                             employeeId,
-                            item.sale.saleAppointments
+                            item.sale.saleAppointments,
+                            serviceStart,
+                            serviceEnd
                         )
                 );
 
+                // Include only tips attributed to this technician this week.
                 const employeeTips = tips.filter(
                     (item) =>
                         item.employeeId === employeeId &&
-                        workedThisWeek(
+                        workedInPayrollPeriod(
                             employeeId,
-                            item.sale.saleAppointments
+                            item.sale.saleAppointments,
+                            serviceStart,
+                            serviceEnd
                         )
                 );
 

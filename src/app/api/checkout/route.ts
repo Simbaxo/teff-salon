@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { auth } from "@/auth";
 import { canCheckout } from "@/lib/auth-roles";
+import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 
 // Payment methods currently accepted by TEFF
 const allowedPaymentMethods = ["CASH", "BOLD", "TRANSFER"];
@@ -769,6 +770,9 @@ export async function POST(request: Request) {
             monday.setUTCDate(
                 monday.getUTCDate() - daysSinceMonday
             );
+
+            // Serialize checkout and payroll review for this service week.
+            await lockPayrollWeek(tx, monday);
 
             // Prevent checkout from changing reviewed or paid payroll.
             const lockedPeriod = await tx.payrollPeriod.findFirst({

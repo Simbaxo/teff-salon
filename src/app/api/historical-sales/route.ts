@@ -4,6 +4,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { getTeffToday } from "@/lib/datetime";
+import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 
 type HistoricalServiceInput = {
     serviceId: number;
@@ -654,6 +655,10 @@ export async function POST(request: Request) {
             monday.setUTCDate(
                 monday.getUTCDate() - daysSinceMonday
             );
+
+            // Lock this payroll week before checking its status
+            // or creating any financial records.
+            await lockPayrollWeek(tx, monday);
 
             // Prevent historical sales from changing reviewed payroll.
             const lockedPeriod = await tx.payrollPeriod.findFirst({

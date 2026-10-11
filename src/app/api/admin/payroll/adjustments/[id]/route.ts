@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { calculatePayroll } from "@/lib/payroll/calculations";
 import { addTeffDays } from "@/lib/datetime";
+import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 
 export async function DELETE(
     _request: Request,
@@ -42,6 +43,31 @@ export async function DELETE(
     try {
         const result = await prisma.$transaction(
             async (tx) => {
+                
+                // First lookup: identify which payroll week owns the adjustment.
+                const initialAdjustment =
+                    await tx.payrollAdjustment.findUnique({
+                        where: { id: adjustmentId },
+                        include: {
+                            entry: {
+                                include: {
+                                    period: true,
+                                },
+                            },
+                        },
+                    });
+
+                if (!initialAdjustment) {
+                    throw new Error("ADJUSTMENT_NOT_FOUND");
+                }
+
+                // Serialize deletion with payroll review and other changes.
+                await lockPayrollWeek(
+                    tx,
+                    initialAdjustment.entry.period.startDate
+                );
+
+                // Re-read after acquiring the lock to avoid stale data.
                 const adjustment =
                     await tx.payrollAdjustment.findUnique({
                         where: { id: adjustmentId },
@@ -60,14 +86,14 @@ export async function DELETE(
 
                 const entry = adjustment.entry;
 
-                // Both the period and statement must be drafts.
+                // Both the period and statement must remain drafts.
                 if (
                     entry.status !== "DRAFT" ||
                     entry.period.status !== "DRAFT"
                 ) {
                     throw new Error("PAYROLL_LOCKED");
                 }
-
+                
                 await tx.payrollAdjustment.delete({
                     where: { id: adjustmentId },
                 });

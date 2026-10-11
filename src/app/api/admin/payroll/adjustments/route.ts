@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { addTeffDays } from "@/lib/datetime";
 import { calculatePayroll } from "@/lib/payroll/calculations";
 import { validatePayrollAdjustment } from "@/lib/payroll/adjustments";
+import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 
 export async function POST(request: Request) {
     const session = await auth();
@@ -65,6 +66,10 @@ export async function POST(request: Request) {
     try {
         const result = await prisma.$transaction(
             async (tx) => {
+
+                // Serialize payroll adjustments with review and financial writes.
+                await lockPayrollWeek(tx, startDate);
+                
                 // Ensure the technician exists and is active.
                 const employee = await tx.employee.findUnique({
                     where: { id: employeeId },

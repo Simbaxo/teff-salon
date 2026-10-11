@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
+import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 
 export async function PATCH(
     request: Request,
@@ -248,6 +249,20 @@ export async function PATCH(
                                 throw new Error("REASSIGNMENT_APPOINTMENT_CONFLICT");
                             }
                         }
+
+                        // Lock the service week before changing financial ownership.
+                        const serviceMonday = new Date(appointment.date);
+
+                        const weekday = serviceMonday.getUTCDay();
+
+                        const daysSinceMonday =
+                            weekday === 0 ? 6 : weekday - 1;
+
+                        serviceMonday.setUTCDate(
+                            serviceMonday.getUTCDate() - daysSinceMonday
+                        );
+
+                        await lockPayrollWeek(tx, serviceMonday);
 
                         // If this appointment has already been checked out, find its sale
                         // This matters when the Owner corrects a historical technician assignment
