@@ -421,6 +421,11 @@ model PayrollPeriod {
   updatedAt DateTime @updatedAt
 
   entries PayrollEntry[]
+
+  // Tracks verification of payments made before Nómina v1.
+  reconciliationStatus PayrollReconciliationStatus @default(NOT_RECONCILED)
+
+  reconciledAt DateTime?
 }
 
 // One technician's payroll statement for one period.
@@ -458,6 +463,9 @@ model PayrollEntry {
   commissions Commission[]
   tips        Tip[]
 
+  // Payments previously made outside the payroll system.
+  historicalPayments PayrollHistoricalPayment[]
+
   // Prevent duplicate payroll entries for one technician/week.
   @@unique([payrollPeriodId, employeeId])
   @@index([employeeId, status])
@@ -478,6 +486,39 @@ model PayrollAdjustment {
   entry PayrollEntry @relation(fields: [payrollEntryId], references: [id], onDelete: Restrict)
 
   @@index([payrollEntryId])
+}
+
+// Records money already paid to a technician outside Nómina.
+// These entries do not initiate a new payment.
+model PayrollHistoricalPayment {
+  id Int @id @default(autoincrement())
+
+  payrollEntryId Int
+
+  // Amount previously delivered, in whole Colombian pesos.
+  amount Int
+
+  // Date the payment was actually made.
+  paymentDate DateTime
+
+  // CASH, TRANSFER, BOLD, or OTHER.
+  paymentMethod String
+
+  description String?
+
+  // Identifies payments entered during historical reconciliation.
+  createdAt DateTime @default(now())
+
+  entry PayrollEntry @relation(fields: [payrollEntryId], references: [id], onDelete: Restrict)
+
+  @@index([payrollEntryId])
+  @@index([paymentDate])
+}
+
+enum PayrollReconciliationStatus {
+  NOT_RECONCILED
+  PARTIALLY_RECONCILED
+  SETTLED
 }
 
 enum PayrollStatus {

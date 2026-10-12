@@ -66,3 +66,26 @@ export function validatePayrollWeek(
 
     return date;
 }
+
+type PayrollSaleRecord = {
+    sale: {
+        saleAppointments: {
+            appointment: {
+                date: Date;
+            };
+        }[];
+    };
+};
+
+// Reject sales containing services outside the selected payroll week.
+export function saleSpansPayrollWeeks(
+    record: PayrollSaleRecord,
+    serviceStart: Date,
+    serviceEnd: Date
+): boolean {
+    return record.sale.saleAppointments.some(
+        ({ appointment }) =>
+            appointment.date < serviceStart ||
+            appointment.date >= serviceEnd
+    );
+}
