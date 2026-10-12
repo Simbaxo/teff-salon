@@ -1,0 +1,467 @@
+
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
+import { getTeffToday, addTeffDays } from "@/lib/datetime";
+import { validatePayrollWeek } from "@/lib/payroll/review-validation";
+import { lockPayrollWeek } from "@/lib/payroll/period-lock";
+import {
+    hasValidPayrollAttribution,
+    workedInPayrollPeriod,
+} from "@/lib/payroll/review-validation";
+import {
+    calculateWeeklyPayrollSummary,
+} from "@/lib/payroll/weekly-summary";
+
+// Preparation only. No payroll statuses or financial records are modified.
+export async function POST(request: Request) {
+    const session = await auth();
+
+    if (!session?.user) {
+        return Response.json(
+            { error: "Unauthorized" },
+            { status: 401 }
+        );
+    }
+
+    if (session.user.role !== "OWNER") {
+        return Response.json(
+            { error: "Forbidden" },
+            { status: 403 }
+        );
+    }
+
+    let body: unknown;
+
+    try {
+        body = await request.json();
+    } catch {
+        return Response.json(
+            { error: "JSON inválido." },
+            { status: 400 }
+        );
+    }
+
+    if (
+        typeof body !== "object" ||
+        body === null ||
+        Array.isArray(body) ||
+        !("week" in body)
+    ) {
+        return Response.json(
+            { error: "Semana inválida." },
+            { status: 400 }
+        );
+    }
+
+    const serviceStart = validatePayrollWeek(body.week);
+
+    if (!serviceStart) {
+        return Response.json(
+            { error: "La semana debe comenzar un lunes válido." },
+            { status: 400 }
+        );
+    }
+
+    const week = serviceStart.toISOString().slice(0, 10);
+    const nextMonday = addTeffDays(week, 7);
+
+    // Review is allowed only after the payroll week has ended.
+    if (getTeffToday() < nextMonday) {
+        return Response.json(
+            {
+                error:
+                    "No se puede revisar una semana que todavía no ha terminado.",
+            },
+            { status: 409 }
+        );
+    }
+
+    try {
+        const result = await prisma.$transaction(
+            async (tx) => {
+                // Coordinate with checkout, historical sales,
+                // reassignment, and payroll adjustments.
+                await lockPayrollWeek(tx, serviceStart);
+
+                const period = await tx.payrollPeriod.findUnique({
+                    where: {
+                        startDate: serviceStart,
+                    },
+                    include: {
+                        entries: {
+                            include: {
+                                adjustments: true,
+                            },
+                        },
+                    },
+                });
+
+                if (period && period.status !== "DRAFT") {
+                    throw new Error("PAYROLL_LOCKED");
+                }
+
+                if (
+                    period?.entries.some(
+                        (entry) => entry.status !== "DRAFT"
+                    )
+                ) {
+                    throw new Error("PAYROLL_LOCKED");
+                }
+
+
+                // Load commissions belonging to this service week.
+                // Financial records are validated again under the lock.
+                const serviceEnd = new Date(
+                    `${nextMonday}T00:00:00.000Z`
+                );
+
+                const commissions = await tx.commission.findMany({
+                    where: {
+                        sale: {
+                            saleAppointments: {
+                                some: {
+                                    appointment: {
+                                        date: {
+                                            gte: serviceStart,
+                                            lt: serviceEnd,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    select: {
+                        id: true,
+                        employeeId: true,
+                        saleId: true,
+                        commissionBase: true,
+                        commissionAmount: true,
+                        status: true,
+                        payrollEntryId: true,
+                        sale: {
+                            select: {
+                                saleAppointments: {
+                                    select: {
+                                        appointment: {
+                                            select: {
+                                                employeeId: true,
+                                                date: true,
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                });
+
+                // Every commission must match the technician
+                // who performed a service during this payroll week.
+                const unmatchedCommissions = commissions.filter(
+                    (commission) =>
+                        !hasValidPayrollAttribution(
+                            commission,
+                            serviceStart,
+                            serviceEnd
+                        )
+                );
+
+                const invalidCommissions = commissions.filter(
+                    (commission) =>
+                        commission.status !== "PENDING" &&
+                        commission.status !== "PAID"
+                );
+
+                if (
+                    unmatchedCommissions.length > 0 ||
+                    invalidCommissions.length > 0
+                ) {
+                    throw new Error("INVALID_PAYROLL_COMMISSIONS");
+                }
+
+                // Load tips associated with services performed this week.
+                const tips = await tx.tip.findMany({
+                    where: {
+                        sale: {
+                            saleAppointments: {
+                                some: {
+                                    appointment: {
+                                        date: {
+                                            gte: serviceStart,
+                                            lt: serviceEnd,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    select: {
+                        id: true,
+                        employeeId: true,
+                        saleId: true,
+                        amount: true,
+                        status: true,
+                        paymentMethod: true,
+                        payrollEntryId: true,
+                        sale: {
+                            select: {
+                                saleAppointments: {
+                                    select: {
+                                        appointment: {
+                                            select: {
+                                                employeeId: true,
+                                                date: true,
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                });
+
+                // Every tip must match a technician's service date.
+                const unmatchedTips = tips.filter(
+                    (tip) =>
+                        !hasValidPayrollAttribution(
+                            tip,
+                            serviceStart,
+                            serviceEnd
+                        )
+                );
+
+                // Only recognized payment statuses are accepted.
+                const invalidTips = tips.filter(
+                    (tip) =>
+                        tip.status !== "PENDING" &&
+                        tip.status !== "PAID"
+                );
+
+                if (
+                    unmatchedTips.length > 0 ||
+                    invalidTips.length > 0
+                ) {
+                    throw new Error("INVALID_PAYROLL_TIPS");
+                }
+
+
+                // Include active technicians and anyone with earnings
+                // or an existing payroll statement for this week.
+                const activeEmployees = await tx.employee.findMany({
+                    where: { active: true },
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                });
+
+                const employeeIds = new Set<number>(
+                    activeEmployees.map((employee) => employee.id)
+                );
+
+                for (const entry of period?.entries ?? []) {
+                    employeeIds.add(entry.employeeId);
+                }
+
+                for (const commission of commissions) {
+                    employeeIds.add(commission.employeeId);
+                }
+
+                for (const tip of tips) {
+                    employeeIds.add(tip.employeeId);
+                }
+
+                // Load names for inactive technicians too.
+                const employees = await tx.employee.findMany({
+                    where: {
+                        id: {
+                            in: Array.from(employeeIds),
+                        },
+                    },
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                });
+
+                const employeeNames = new Map(
+                    employees.map((employee) => [
+                        employee.id,
+                        employee.name,
+                    ])
+                );
+
+                // Calculate all statements inside the locked transaction.
+                const summaries = Array.from(employeeIds).map(
+                    (employeeId) => {
+                        const entry = period?.entries.find(
+                            (item) => item.employeeId === employeeId
+                        );
+
+                        const employeeCommissions = commissions.filter(
+                            (item) =>
+                                item.employeeId === employeeId &&
+                                workedInPayrollPeriod(
+                                    employeeId,
+                                    item.sale.saleAppointments,
+                                    serviceStart,
+                                    serviceEnd
+                                )
+                        );
+
+                        const employeeTips = tips.filter(
+                            (item) =>
+                                item.employeeId === employeeId &&
+                                workedInPayrollPeriod(
+                                    employeeId,
+                                    item.sale.saleAppointments,
+                                    serviceStart,
+                                    serviceEnd
+                                )
+                        );
+
+                        const summary = calculateWeeklyPayrollSummary({
+                            employeeId,
+                            payrollEntryId: entry?.id ?? null,
+                            commissions: employeeCommissions,
+                            tips: employeeTips,
+                            adjustments: entry?.adjustments ?? [],
+                        });
+
+                        return {
+                            employeeId,
+                            employeeName:
+                                employeeNames.get(employeeId) ?? "Técnica",
+                            commissionIds: employeeCommissions.map(
+                                (item) => item.id
+                            ),
+                            tipIds: employeeTips.map(
+                                (item) => item.id
+                            ),
+                            ...summary,
+                        };
+                    }
+                );
+
+                // A statement requiring review cannot be finalized.
+                const warnings = summaries
+                    .filter((summary) => summary.requiresReview)
+                    .map((summary) => ({
+                        employeeId: summary.employeeId,
+                        employeeName: summary.employeeName,
+                        outstandingPay: summary.outstandingPay,
+                        conflictingCommissions:
+                            summary.conflictingCommissions,
+                        conflictingTips: summary.conflictingTips,
+                    }));
+
+                
+                // Do not allow payroll review when financial records
+                // belong to another payroll entry or payouts are negative.
+                const hasAssignmentConflicts = summaries.some(
+                    (summary) =>
+                        summary.conflictingCommissions > 0 ||
+                        summary.conflictingTips > 0
+                );
+
+                const hasNegativePayouts = summaries.some(
+                    (summary) => summary.outstandingPay < 0
+                );
+
+                // This stage remains read-only.
+                const financialValidationPassed =
+                    !hasAssignmentConflicts &&
+                    !hasNegativePayouts &&
+                    warnings.length === 0;
+
+                // Later steps will validate and freeze all statements.
+                return {
+                    week,
+                    endDate: addTeffDays(week, 6),
+                    payday: nextMonday,
+                    periodId: period?.id ?? null,
+                    readyForConfirmation: false,
+                    readOnly: true,
+                    commissionCount: commissions.length,
+                    unmatchedCommissionCount: unmatchedCommissions.length,
+                    tipCount: tips.length,
+                    unmatchedTipCount: unmatchedTips.length,
+                    technicianCount: summaries.length,
+                    warnings,
+                    summaries,
+                    financialValidationPassed,
+                    hasAssignmentConflicts,
+                    hasNegativePayouts,
+                };
+            },
+            {
+                isolationLevel:
+                    Prisma.TransactionIsolationLevel.Serializable,
+                maxWait: 5000,
+                timeout: 10000,
+            }
+        );
+
+        return Response.json(result);
+    } catch (error) {
+        if (
+            error instanceof Error &&
+            error.message === "INVALID_PAYROLL_COMMISSIONS"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "Existen comisiones inválidas o sin atribución correcta a la fecha del servicio.",
+                },
+                { status: 409 }
+            );
+        }
+
+        if (
+            error instanceof Error &&
+            error.message === "INVALID_PAYROLL_TIPS"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "Existen propinas inválidas o sin atribución correcta a la fecha del servicio.",
+                },
+                { status: 409 }
+            );
+        }
+
+        if (
+            error instanceof Error &&
+            error.message === "PAYROLL_LOCKED"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "Esta nómina ya fue revisada o pagada.",
+                },
+                { status: 409 }
+            );
+        }
+
+        if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2034"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "La nómina fue modificada al mismo tiempo. Inténtalo nuevamente.",
+                },
+                { status: 409 }
+            );
+        }
+
+        console.error("Payroll confirmation preparation failed:", error);
+
+        return Response.json(
+            { error: "No se pudo preparar la revisión de nómina." },
+            { status: 500 }
+        );
+    }
+}

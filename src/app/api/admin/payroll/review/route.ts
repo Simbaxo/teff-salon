@@ -137,6 +137,7 @@ export async function POST(request: Request) {
                 },
             },
             select: {
+                id: true,
                 employeeId: true,
                 commissionBase: true,
                 commissionAmount: true,
@@ -175,6 +176,7 @@ export async function POST(request: Request) {
                 },
             },
             select: {
+                id: true,
                 employeeId: true,
                 amount: true,
                 status: true,
