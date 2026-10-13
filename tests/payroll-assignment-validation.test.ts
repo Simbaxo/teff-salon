@@ -4,6 +4,7 @@ import { test } from "node:test";
 
 import {
     validatePayrollAssignments,
+    validateAssignmentUpdateCount,
 } from "../src/lib/payroll/assignment-validation";
 
 // Each financial record belongs to one technician.
@@ -90,4 +91,32 @@ test("detects repeated IDs within one statement", () => {
     assert.equal(result.valid, false);
     assert.deepEqual(result.duplicateCommissions, [10]);
     assert.deepEqual(result.duplicateTips, [20]);
+});
+
+test("accepts matching assignment update counts", () => {
+    assert.equal(
+        validateAssignmentUpdateCount(3, 3),
+        true
+    );
+});
+
+test("rejects incomplete assignment updates", () => {
+    assert.equal(
+        validateAssignmentUpdateCount(3, 2),
+        false
+    );
+});
+
+test("rejects unexpected extra updates", () => {
+    assert.equal(
+        validateAssignmentUpdateCount(3, 4),
+        false
+    );
+});
+
+test("accepts zero records when none are expected", () => {
+    assert.equal(
+        validateAssignmentUpdateCount(0, 0),
+        true
+    );
 });

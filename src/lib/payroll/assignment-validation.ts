@@ -114,3 +114,15 @@ export function validatePayrollAssignmentCompleteness(
         unexpectedTips,
     };
 }
+
+export function validateAssignmentUpdateCount(
+    expected: number,
+    actual: number
+): boolean {
+    return (
+        Number.isSafeInteger(expected) &&
+        Number.isSafeInteger(actual) &&
+        expected >= 0 &&
+        actual === expected
+    );
+}

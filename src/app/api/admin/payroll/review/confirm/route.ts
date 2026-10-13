@@ -19,6 +19,7 @@ import {
 import {
     validatePayrollAssignments,
     validatePayrollAssignmentCompleteness,
+    validateAssignmentUpdateCount,
 } from "@/lib/payroll/assignment-validation";
 
 // Preparation only. No payroll statuses or financial records are modified.
@@ -84,6 +85,10 @@ export async function POST(request: Request) {
             { status: 409 }
         );
     }
+
+    // Keep payroll approval disabled until rollback testing passes.
+    // No database writes are allowed during this stage.
+    const writeEnabled = false;
 
     try {
         const result = await prisma.$transaction(
@@ -494,14 +499,159 @@ export async function POST(request: Request) {
                     })
                     .filter((item) => item !== null);
 
+                
+                // All financial checks must pass before payroll
+                // can transition from DRAFT to REVIEWED.
+                const canConfirmReview =
+                    financialValidationPassed &&
+                    historicalReconciliationWarnings.length === 0 &&
+                    staleDrafts.length === 0 &&
+                    assignmentValidation.valid &&
+                    assignmentCompleteness.valid &&
+                    unmatchedCommissions.length === 0 &&
+                    unmatchedTips.length === 0;
+
+                // Never approve payroll when financial validation fails.
+                if (writeEnabled && !canConfirmReview) {
+                    throw new Error("PAYROLL_VALIDATION_FAILED");
+                }
+
+
+                // Assign financial records only when explicitly enabled.
+                // The entire operation runs inside the existing transaction.
+                if (writeEnabled) {
+                    if (!period) {
+                        throw new Error("PAYROLL_PERIOD_NOT_FOUND");
+                    }
+
+                    for (const summary of summaries) {
+                        const entry = period.entries.find(
+                            (item) =>
+                                item.employeeId === summary.employeeId
+                        );
+
+                        if (!entry || entry.status !== "DRAFT") {
+                            throw new Error("PAYROLL_ENTRY_NOT_DRAFT");
+                        }
+
+                        // Assign only commissions that are not yet linked.
+                        const commissionResult =
+                            await tx.commission.updateMany({
+                                where: {
+                                    id: {
+                                        in: summary.commissionIds,
+                                    },
+                                    employeeId: summary.employeeId,
+                                    payrollEntryId: null,
+                                },
+                                data: {
+                                    payrollEntryId: entry.id,
+                                },
+                            });
+
+                        const unassignedCommissionCount =
+                            commissions.filter(
+                                (item) =>
+                                    summary.commissionIds.includes(item.id) &&
+                                    item.payrollEntryId === null
+                            ).length;
+
+                        if (
+                            !validateAssignmentUpdateCount(
+                                unassignedCommissionCount,
+                                commissionResult.count
+                            )
+                        ) {
+                            throw new Error("PAYROLL_ASSIGNMENT_CONFLICT");
+                        }
+
+                        // Assign only tips that are not yet linked.
+                        const tipResult = await tx.tip.updateMany({
+                            where: {
+                                id: {
+                                    in: summary.tipIds,
+                                },
+                                employeeId: summary.employeeId,
+                                payrollEntryId: null,
+                            },
+                            data: {
+                                payrollEntryId: entry.id,
+                            },
+                        });
+
+                        const unassignedTipCount = tips.filter(
+                            (item) =>
+                                summary.tipIds.includes(item.id) &&
+                                item.payrollEntryId === null
+                        ).length;
+
+                        if (
+                            !validateAssignmentUpdateCount(
+                                unassignedTipCount,
+                                tipResult.count
+                            )
+                        ) {
+                            throw new Error("PAYROLL_ASSIGNMENT_CONFLICT");
+                        }
+                    }
+
+                    // Approve every technician statement atomically.
+                    const reviewedAt = new Date();
+
+                    for (const summary of summaries) {
+                        const entry = period.entries.find(
+                            (item) => item.employeeId === summary.employeeId
+                        );
+
+                        if (!entry) {
+                            throw new Error("PAYROLL_ENTRY_NOT_DRAFT");
+                        }
+
+                        const updated = await tx.payrollEntry.updateMany({
+                            where: {
+                                id: entry.id,
+                                status: "DRAFT",
+                            },
+                            data: {
+                                status: "REVIEWED",
+                                reviewedAt,
+                            },
+                        });
+
+                        if (updated.count !== 1) {
+                            throw new Error("PAYROLL_REVIEW_CONFLICT");
+                        }
+                    }
+
+                    // Finalize the period only after every statement succeeds.
+                    const updatedPeriod = await tx.payrollPeriod.updateMany({
+                        where: {
+                            id: period.id,
+                            status: "DRAFT",
+                        },
+                        data: {
+                            status: "REVIEWED",
+                            reviewedAt,
+                        },
+                    });
+
+                    if (updatedPeriod.count !== 1) {
+                        throw new Error("PAYROLL_REVIEW_CONFLICT");
+                    }
+                }
+
+                // Report whether this transaction approved payroll.
+                const reviewCompleted = writeEnabled && canConfirmReview;
+
                 // Later steps will validate and freeze all statements.
                 return {
                     week,
                     endDate: addTeffDays(week, 6),
                     payday: nextMonday,
                     periodId: period?.id ?? null,
-                    readyForConfirmation: false,
-                    readOnly: true,
+                    readyForConfirmation: canConfirmReview,
+                    reviewCompleted,
+                    readOnly: !writeEnabled,
                     commissionCount: commissions.length,
                     unmatchedCommissionCount: unmatchedCommissions.length,
                     tipCount: tips.length,
@@ -548,6 +698,25 @@ export async function POST(request: Request) {
 
         return Response.json(result);
     } catch (error) {
+        if (
+            error instanceof Error &&
+            [
+                "PAYROLL_ASSIGNMENT_CONFLICT",
+                "PAYROLL_REVIEW_CONFLICT",
+                "PAYROLL_ENTRY_NOT_DRAFT",
+                "PAYROLL_PERIOD_NOT_FOUND",
+                "PAYROLL_VALIDATION_FAILED",
+            ].includes(error.message)
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "No se pudo revisar la nómina porque existen cambios o conflictos pendientes.",
+                },
+                { status: 409 }
+            );
+        }
+
         if (
             error instanceof Error &&
             error.message === "CROSS_WEEK_PAYROLL_SALE"
