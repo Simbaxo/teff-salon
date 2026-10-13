@@ -53,6 +53,15 @@ export async function POST(request: Request) {
         );
     }
 
+    // Writing drafts requires explicit confirmation in development.
+    const writeRequested =
+        "write" in body && body.write === true;
+
+    // Never allow this development workflow to write in production.
+    const writeEnabled =
+        process.env.NODE_ENV !== "production" &&
+        writeRequested;
+
     const serviceStart = validatePayrollWeek(body.week);
 
     if (!serviceStart) {
@@ -362,12 +371,117 @@ export async function POST(request: Request) {
                         hasOverpayment: item.hasOverpayment,
                     }));
 
+                // Never persist drafts with unresolved financial conflicts.
+                const canPrepareDrafts = warnings.length === 0;
+
+                // Historical payments must not exceed the amount available
+                // after accounting for commissions already marked as paid.
+                const hasInvalidHistoricalBalance = statements.some(
+                    (statement) =>
+                        statement.hasOverpayment ||
+                        statement.remainingBalance < 0
+                );
+
+                if (writeEnabled && hasInvalidHistoricalBalance) {
+                    throw new Error("PAYROLL_VALIDATION_FAILED");
+                }
+
+                // Reject unsafe attempts to persist payroll drafts.
+                if (writeEnabled && !canPrepareDrafts) {
+                    throw new Error("PAYROLL_VALIDATION_FAILED");
+                }
+
+                // Collect saved payroll entries without reassigning the array
+                const savedEntries: {
+                    employeeId: number;
+                    payrollEntryId: number;
+                    action: string;
+                }[] = [];
+
+                if (writeEnabled) {
+                    // Create the period only when a write was explicitly requested.
+                    const savedPeriod = await tx.payrollPeriod.upsert({
+                        where: {
+                            startDate: serviceStart,
+                        },
+                        update: {},
+                        create: {
+                            startDate: serviceStart,
+                            endDate: new Date(
+                                `${addTeffDays(week, 6)}T00:00:00.000Z`
+                            ),
+                            payday: serviceEnd,
+                            status: "DRAFT",
+                        },
+                    });
+
+                    if (savedPeriod.status !== "DRAFT") {
+                        throw new Error("PAYROLL_LOCKED");
+                    }
+
+                    // Create missing entries or refresh existing draft totals.
+                    for (const statement of statements) {
+                        const totals = {
+                            productionTotal: statement.productionTotal,
+                            commissionTotal: statement.commissionTotal,
+                            tipsTotal: statement.tipsTotal,
+                            bonusesTotal: statement.bonusesTotal,
+                            totalEarned: statement.totalEarned,
+                            loansTotal: statement.loansTotal,
+                            uniformsTotal: statement.uniformsTotal,
+                            otherDeductions: statement.otherDeductions,
+                            tipsAlreadyPaid: statement.tipsAlreadyPaid,
+                            netPay: statement.netPay,
+                        };
+
+                        // Never overwrite an existing reviewed or paid statement.
+                        const existingEntry = period?.entries.find(
+                            (entry) => entry.employeeId === statement.employeeId
+                        );
+
+                        if (existingEntry && existingEntry.status !== "DRAFT") {
+                            throw new Error("PAYROLL_LOCKED");
+                        }
+
+                        const savedEntry = await tx.payrollEntry.upsert({
+                            where: {
+                                payrollPeriodId_employeeId: {
+                                    payrollPeriodId: savedPeriod.id,
+                                    employeeId: statement.employeeId,
+                                },
+                            },
+                            update: totals,
+                            create: {
+                                payrollPeriodId: savedPeriod.id,
+                                employeeId: statement.employeeId,
+                                status: "DRAFT",
+                                ...totals,
+                            },
+                        });
+
+                        if (savedEntry.status !== "DRAFT") {
+                            throw new Error("PAYROLL_LOCKED");
+                        }
+
+                        savedEntries.push({
+                            employeeId: statement.employeeId,
+                            payrollEntryId: savedEntry.id,
+                            action: statement.action,
+                        });
+                    }
+                }
 
                 return {
                     week,
                     endDate: addTeffDays(week, 6),
                     payday: addTeffDays(week, 7),
-                    periodId: period?.id ?? null,
+                    periodId:
+                        savedEntries.length > 0
+                            ? (await tx.payrollPeriod.findUnique({
+                                where: { startDate: serviceStart },
+                                select: { id: true },
+                            }))?.id ?? null
+                            : period?.id ?? null,
                     createCount: statements.filter(
                         (item) => item.action === "CREATE_DRAFT"
                     ).length,
@@ -375,8 +489,9 @@ export async function POST(request: Request) {
                         (item) => item.action === "UPDATE_DRAFT"
                     ).length,
                     statements,
-                    readyToWrite: false,
-                    readOnly: true,
+                    readyToWrite: canPrepareDrafts,
+                    readOnly: !writeEnabled,
+                    savedEntries,
                     warnings,
                 };
             },
@@ -392,6 +507,19 @@ export async function POST(request: Request) {
     } catch (error) {
         if (
             error instanceof Error &&
+            error.message === "PAYROLL_VALIDATION_FAILED"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "No se puede guardar la nómina porque existen conflictos financieros.",
+                },
+                { status: 409 }
+            );
+        }
+
+        if (
+            error instanceof Error &&
             error.message === "CROSS_WEEK_PAYROLL_SALE"
         ) {
             return Response.json(
@@ -403,7 +531,7 @@ export async function POST(request: Request) {
                 { status: 409 }
             );
         }
-        
+
         if (
             error instanceof Error &&
             error.message === "INVALID_PAYROLL_RECORDS"
