@@ -490,6 +490,7 @@ model PayrollAdjustment {
 
 // Records money already paid to a technician outside Nómina.
 // These entries do not initiate a new payment.
+
 model PayrollHistoricalPayment {
   id Int @id @default(autoincrement())
 
@@ -506,7 +507,12 @@ model PayrollHistoricalPayment {
 
   description String?
 
-  // Identifies payments entered during historical reconciliation.
+  // Prevent duplicate records when a request is retried.
+  idempotencyKey String @unique
+
+  // Optional bank transfer or payment receipt reference.
+  paymentReference String?
+
   createdAt DateTime @default(now())
 
   entry PayrollEntry @relation(fields: [payrollEntryId], references: [id], onDelete: Restrict)

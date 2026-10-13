@@ -15,6 +15,11 @@ export type HistoricalPaymentInput = {
     paymentDate: string;
     paymentMethod: HistoricalPaymentMethod;
     description: string | null;
+
+    idempotencyKey: string;
+    paymentReference: string | null;
+    confirmedDelivered: boolean;
+    confirmedNotPreviouslyRecorded: boolean;
 };
 
 export function validateHistoricalPayment(
@@ -104,6 +109,63 @@ export function validateHistoricalPayment(
         };
     }
 
+    // Require a unique UUID for each payment-recording operation.
+    if (
+        typeof value.idempotencyKey !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            value.idempotencyKey
+        )
+    ) {
+        return {
+            success: false,
+            error: "La clave única del pago debe ser un UUID válido.",
+        };
+    }
+
+    // The Owner must explicitly verify that money was delivered.
+    if (value.confirmedDelivered !== true) {
+        return {
+            success: false,
+            error:
+                "Debes confirmar que este pago ya fue entregado.",
+        };
+    }
+
+    // The Owner must verify this payment is not already accounted for
+    // by a paid commission, delivered tip, or historical payment.
+    if (value.confirmedNotPreviouslyRecorded !== true) {
+        return {
+            success: false,
+            error:
+                "Debes confirmar que este pago no está registrado previamente en comisiones, propinas o pagos históricos.",
+        };
+    }
+
+    // Optional reference for a bank transfer or payment receipt.
+    if (
+        value.paymentReference !== undefined &&
+        value.paymentReference !== null &&
+        typeof value.paymentReference !== "string"
+    ) {
+        return {
+            success: false,
+            error: "Referencia de pago inválida.",
+        };
+    }
+
+    const paymentReference =
+        typeof value.paymentReference === "string"
+            ? value.paymentReference.trim()
+            : "";
+
+    if (paymentReference.length > 120) {
+        return {
+            success: false,
+            error:
+                "La referencia de pago no puede superar 120 caracteres.",
+        };
+    }
+
     const description =
         typeof value.description === "string"
             ? value.description.trim()
@@ -125,6 +187,11 @@ export function validateHistoricalPayment(
             paymentMethod:
                 value.paymentMethod as HistoricalPaymentMethod,
             description: description || null,
+
+            idempotencyKey: value.idempotencyKey as string,
+            paymentReference: paymentReference || null,
+            confirmedDelivered: true,
+            confirmedNotPreviouslyRecorded: true,
         },
     };
 }

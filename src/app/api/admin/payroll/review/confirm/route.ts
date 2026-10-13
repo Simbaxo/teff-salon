@@ -3,15 +3,23 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { getTeffToday, addTeffDays } from "@/lib/datetime";
-import { validatePayrollWeek } from "@/lib/payroll/review-validation";
 import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 import {
+    validatePayrollWeek,
     hasValidPayrollAttribution,
     workedInPayrollPeriod,
+    saleSpansPayrollWeeks,
 } from "@/lib/payroll/review-validation";
 import {
     calculateWeeklyPayrollSummary,
 } from "@/lib/payroll/weekly-summary";
+import {
+    calculatePayrollReconciliation,
+} from "@/lib/payroll/reconciliation";
+import {
+    validatePayrollAssignments,
+    validatePayrollAssignmentCompleteness,
+} from "@/lib/payroll/assignment-validation";
 
 // Preparation only. No payroll statuses or financial records are modified.
 export async function POST(request: Request) {
@@ -92,12 +100,20 @@ export async function POST(request: Request) {
                         entries: {
                             include: {
                                 adjustments: true,
+                                historicalPayments: true,
                             },
                         },
                     },
                 });
 
-                if (period && period.status !== "DRAFT") {
+                // Never review an already approved, paid, or settled period.
+                if (
+                    period &&
+                    (
+                        period.status !== "DRAFT" ||
+                        period.reconciliationStatus === "SETTLED"
+                    )
+                ) {
                     throw new Error("PAYROLL_LOCKED");
                 }
 
@@ -245,6 +261,31 @@ export async function POST(request: Request) {
                     throw new Error("INVALID_PAYROLL_TIPS");
                 }
 
+                // A sale must not contribute to multiple payroll weeks.
+                const crossWeekCommissions = commissions.filter(
+                    (commission) =>
+                        saleSpansPayrollWeeks(
+                            commission,
+                            serviceStart,
+                            serviceEnd
+                        )
+                );
+
+                const crossWeekTips = tips.filter(
+                    (tip) =>
+                        saleSpansPayrollWeeks(
+                            tip,
+                            serviceStart,
+                            serviceEnd
+                        )
+                );
+
+                if (
+                    crossWeekCommissions.length > 0 ||
+                    crossWeekTips.length > 0
+                ) {
+                    throw new Error("CROSS_WEEK_PAYROLL_SALE");
+                }
 
                 // Include active technicians and anyone with earnings
                 // or an existing payroll statement for this week.
@@ -344,6 +385,18 @@ export async function POST(request: Request) {
                     }
                 );
 
+                // Prevent a financial record from appearing in multiple statements.
+                const assignmentValidation =
+                    validatePayrollAssignments(summaries);
+
+                // Every retrieved financial record must appear in a statement.
+                const assignmentCompleteness =
+                    validatePayrollAssignmentCompleteness({
+                        commissions,
+                        tips,
+                        summaries,
+                    });
+
                 // A statement requiring review cannot be finalized.
                 const warnings = summaries
                     .filter((summary) => summary.requiresReview)
@@ -375,6 +428,72 @@ export async function POST(request: Request) {
                     !hasNegativePayouts &&
                     warnings.length === 0;
 
+                // Historical payments must remain valid after recalculation.
+                const historicalReconciliationWarnings = summaries
+                    .map((summary) => {
+                        const entry = period?.entries.find(
+                            (item) => item.employeeId === summary.employeeId
+                        );
+
+                        const reconciliation = calculatePayrollReconciliation({
+                            netPay: summary.netPay,
+                            paidCommissions: summary.paidCommissions,
+                            historicalPayments: entry?.historicalPayments ?? [],
+                        });
+
+                        return {
+                            employeeId: summary.employeeId,
+                            employeeName: summary.employeeName,
+                            remainingBalance: reconciliation.remainingBalance,
+                            hasOverpayment: reconciliation.hasOverpayment,
+                        };
+                    })
+                    .filter((item) => item.hasOverpayment);
+
+                
+                // Approved payroll must match the saved draft.
+                // Never approve a stale financial snapshot.
+                const staleDrafts = summaries
+                    .map((summary) => {
+                        const entry = period?.entries.find(
+                            (item) =>
+                                item.employeeId === summary.employeeId
+                        );
+
+                        if (!entry) {
+                            return {
+                                employeeId: summary.employeeId,
+                                reason: "MISSING_DRAFT",
+                            };
+                        }
+
+                        const fields = [
+                            "productionTotal",
+                            "commissionTotal",
+                            "tipsTotal",
+                            "bonusesTotal",
+                            "totalEarned",
+                            "loansTotal",
+                            "uniformsTotal",
+                            "otherDeductions",
+                            "tipsAlreadyPaid",
+                            "netPay",
+                        ] as const;
+
+                        const changed = fields.some(
+                            (field) =>
+                                entry[field] !== summary[field]
+                        );
+
+                        return changed
+                            ? {
+                                  employeeId: summary.employeeId,
+                                  reason: "STALE_DRAFT",
+                              }
+                            : null;
+                    })
+                    .filter((item) => item !== null);
+
                 // Later steps will validate and freeze all statements.
                 return {
                     week,
@@ -393,6 +512,30 @@ export async function POST(request: Request) {
                     financialValidationPassed,
                     hasAssignmentConflicts,
                     hasNegativePayouts,
+                    historicalReconciliationWarnings,
+                    historicalReconciliationPassed:
+                        historicalReconciliationWarnings.length === 0,
+                    snapshotValidationPassed: staleDrafts.length === 0,
+                    staleDrafts,
+                    assignmentValidationPassed: assignmentValidation.valid,
+                    duplicateCommissionIds:
+                        assignmentValidation.duplicateCommissions,
+                    duplicateTipIds:
+                        assignmentValidation.duplicateTips,
+                    assignmentCompletenessPassed:
+                        assignmentCompleteness.valid,
+
+                    missingCommissionIds:
+                        assignmentCompleteness.missingCommissions,
+
+                    missingTipIds:
+                        assignmentCompleteness.missingTips,
+
+                    unexpectedCommissionIds:
+                        assignmentCompleteness.unexpectedCommissions,
+
+                    unexpectedTipIds:
+                        assignmentCompleteness.unexpectedTips,
                 };
             },
             {
@@ -405,6 +548,20 @@ export async function POST(request: Request) {
 
         return Response.json(result);
     } catch (error) {
+        if (
+            error instanceof Error &&
+            error.message === "CROSS_WEEK_PAYROLL_SALE"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "No se puede revisar esta nómina porque existen ventas con servicios en diferentes semanas.",
+                    conflictType: "CROSS_WEEK_PAYROLL_SALE",
+                },
+                { status: 409 }
+            );
+        }
+
         if (
             error instanceof Error &&
             error.message === "INVALID_PAYROLL_COMMISSIONS"
