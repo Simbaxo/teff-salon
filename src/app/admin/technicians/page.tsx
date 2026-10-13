@@ -429,7 +429,7 @@ export default async function TechniciansPage({
                 </div>
 
                 <div className="mt-6">
-                    <AdminNav />
+                    <AdminNav userRole={session.user.role} />
                 </div>
 
                 <section className="mt-8">

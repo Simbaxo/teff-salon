@@ -34,7 +34,13 @@ function AdminLink({
     );
 }
 
-export default function AdminNav() {
+type AdminNavProps = {
+    userRole: string;
+};
+
+export default function AdminNav({
+    userRole,
+}: AdminNavProps) {
     const pathname = usePathname();
 
     return (
@@ -51,11 +57,14 @@ export default function AdminNav() {
                 pathname={pathname}
             />
 
-            <AdminLink
-                href="/admin/payroll"
-                label="Nómina"
-                pathname={pathname}
-            />
+            {/* Payroll navigation is strictly OWNER-only. */}
+            {userRole === "OWNER" && (
+                <AdminLink
+                    href="/admin/payroll"
+                    label="Nómina"
+                    pathname={pathname}
+                />
+            )}
         </nav>
     );
 }

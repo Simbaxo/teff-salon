@@ -34,7 +34,7 @@ export default async function PayrollPage() {
                 </div>
 
                 <div className="mt-6">
-                    <AdminNav />
+                    <AdminNav userRole={session.user.role} />
                 </div>
 
                 <PayrollPageClient />

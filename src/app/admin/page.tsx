@@ -640,7 +640,7 @@ export default async function AdminPage() {
                 </div>
 
                 <div className="mt-6">
-                    <AdminNav />
+                    <AdminNav userRole={session.user.role} />
                 </div>
 
                 {/* Today's operating dashboard */}
