@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import imageCompression from "browser-image-compression";
+import Image from "next/image";
 
 type InventoryStatus =
     | "IN_STOCK"
@@ -511,9 +513,10 @@ export default function InventoryPageClient() {
             return;
         }
 
-        if (file.size > 5 * 1024 * 1024) {
+        // Reject unusually large source files before processing them.
+        if (file.size > 20 * 1024 * 1024) {
             setImageError(
-                "La imagen debe pesar 5 MB o menos."
+                "La imagen original es demasiado grande."
             );
             return;
         }
@@ -521,8 +524,27 @@ export default function InventoryPageClient() {
         try {
             setIsUploadingImage(true);
 
+            /*
+            * Inventory photos do not need the full resolution
+            * of an iPhone/iPad camera. Compress them in the
+            * browser before sending them to Vercel Blob.
+            */
+            const compressedFile =
+                await imageCompression(file, {
+                    maxSizeMB: 0.5,
+                    maxWidthOrHeight: 1200,
+                    useWebWorker: true,
+                    fileType: "image/webp",
+                    initialQuality: 0.8,
+                });
+
             const formData = new FormData();
-            formData.append("image", file);
+
+            formData.append(
+                "image",
+                compressedFile,
+                "inventory.webp"
+            );
 
             const response = await fetch(
                 `/api/inventory/${editingItem.id}/image`,
@@ -546,7 +568,7 @@ export default function InventoryPageClient() {
                 data.item as InventoryItem
             );
 
-            // Refresh the inventory cards with the new thumbnail.
+            // Refresh the inventory cards with the new photo.
             await loadInventory();
         } catch (error) {
             console.error(error);
@@ -1374,9 +1396,12 @@ export default function InventoryPageClient() {
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="flex min-w-0 items-start gap-3">
                                             {item.imageUrl ? (
-                                                <img
+                                                <Image
                                                     src={item.imageUrl}
                                                     alt={item.name}
+                                                    width={64}
+                                                    height={64}
+                                                    sizes="64px"
                                                     className="h-16 w-16 shrink-0 rounded-xl border border-neutral-200 object-cover"
                                                 />
                                             ) : (
