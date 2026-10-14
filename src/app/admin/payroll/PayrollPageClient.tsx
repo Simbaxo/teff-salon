@@ -132,6 +132,23 @@ export default function PayrollPageClient() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
+    // Payroll approval is strictly OWNER-only.
+    const [reviewingPayroll, setReviewingPayroll] =
+        useState(false);
+
+    // Store the result of the read-only approval validation.
+    const [reviewReady, setReviewReady] =
+        useState(false);
+
+    // Display payroll review errors separately from adjustments.
+    const [reviewError, setReviewError] =
+        useState("");
+
+    // Show the Owner confirmation dialog before approval.
+    const [showReviewConfirmation, setShowReviewConfirmation] =
+        useState(false);
+
+
     // Only one technician's adjustment form is open at a time.
     const [editingEmployeeId, setEditingEmployeeId] =
         useState<number | null>(null);
@@ -323,8 +340,148 @@ export default function PayrollPageClient() {
         }
     }
 
+    // Confirm payroll approval after the Owner reviews the figures.
+    async function handleConfirmPayrollReview() {
+        if (
+            !preview ||
+            preview.period.status !== "DRAFT" ||
+            !reviewReady ||
+            reviewingPayroll
+        ) {
+            return;
+        }
+
+        setReviewingPayroll(true);
+        setReviewError("");
+
+        try {
+            const response = await fetch(
+                "/api/admin/payroll/review/confirm",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        week,
+                        write: true,
+                        confirmReview: true,
+                    }),
+                }
+            );
+
+            const data = await response.json();
+
+            // The API must confirm the database transaction succeeded.
+            if (!response.ok || data.reviewCompleted !== true) {
+                throw new Error(
+                    data.error ??
+                    "No se pudo confirmar la revisión de nómina."
+                );
+            }
+
+            // Reload the approved payroll from the database.
+            const previewResponse = await fetch(
+                `/api/admin/payroll/preview?week=${week}`,
+                { cache: "no-store" }
+            );
+
+            if (!previewResponse.ok) {
+                throw new Error(
+                    "La nómina fue aprobada, pero no se pudo actualizar la pantalla."
+                );
+            }
+
+            const updatedPreview: PayrollPreview =
+                await previewResponse.json();
+
+            setPreview(updatedPreview);
+            setShowReviewConfirmation(false);
+            setReviewReady(false);
+
+        } catch (caught) {
+            setReviewError(
+                caught instanceof Error
+                    ? caught.message
+                    : "Ocurrió un error al aprobar la nómina."
+            );
+        } finally {
+            setReviewingPayroll(false);
+        }
+    }
+
+    // Validate payroll before asking the Owner to approve it.
+    async function handleReviewPayroll() {
+        if (!preview || preview.period.status !== "DRAFT") {
+            return;
+        }
+
+        setReviewingPayroll(true);
+        setReviewError("");
+        setReviewReady(false);
+        setShowReviewConfirmation(false);
+
+        try {
+            // Validation only: no write flag is sent.
+            const response = await fetch(
+                "/api/admin/payroll/review/confirm",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ week }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.error ??
+                    "No se pudo validar la nómina."
+                );
+            }
+
+            // Every financial safeguard must pass.
+            if (
+                data.readOnly !== true ||
+                data.readyForConfirmation !== true ||
+                data.financialValidationPassed !== true ||
+                data.historicalReconciliationPassed !== true ||
+                data.snapshotValidationPassed !== true ||
+                data.assignmentValidationPassed !== true ||
+                data.assignmentCompletenessPassed !== true
+            ) {
+                throw new Error(
+                    "La nómina tiene validaciones pendientes. Revisa los valores antes de aprobar."
+                );
+            }
+
+            // The Owner can now review the confirmation dialog.
+            setReviewReady(true);
+            setShowReviewConfirmation(true);
+
+        } catch (caught) {
+            setReviewError(
+                caught instanceof Error
+                    ? caught.message
+                    : "Ocurrió un error al validar la nómina."
+            );
+        } finally {
+            setReviewingPayroll(false);
+        }
+    }
 
     function changeWeek(days: number) {
+        if (reviewingPayroll || showReviewConfirmation) {
+            return;
+        }
+        // Prevent confirmation from carrying over to another week.
+        setReviewReady(false);
+        setReviewError("");
+        setShowReviewConfirmation(false);
+
         setLoading(true);
         setPreview(null);
         setWeek((current) => addDays(current, days));
@@ -347,6 +504,7 @@ export default function PayrollPageClient() {
             <div className="mt-6 flex flex-wrap items-center gap-3">
                 <button
                     type="button"
+                    disabled={reviewingPayroll || showReviewConfirmation}
                     onClick={() => changeWeek(-7)}
                     className="rounded-xl border border-neutral-300 bg-white px-4 py-3 font-semibold text-black hover:bg-neutral-50"
                 >
@@ -359,6 +517,7 @@ export default function PayrollPageClient() {
 
                 <button
                     type="button"
+                    disabled={reviewingPayroll || showReviewConfirmation}
                     onClick={() => changeWeek(7)}
                     className="rounded-xl border border-neutral-300 bg-white px-4 py-3 font-semibold text-black hover:bg-neutral-50"
                 >
@@ -388,6 +547,15 @@ export default function PayrollPageClient() {
                 </p>
             )}
 
+            {reviewError && (
+                <p
+                    role="alert"
+                    className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700"
+                >
+                    {reviewError}
+                </p>
+            )}
+
             {!loading && preview && (
                 <>
                     <div className="mt-6 rounded-2xl bg-white p-5 shadow-sm">
@@ -405,14 +573,31 @@ export default function PayrollPageClient() {
                                     Pago: {formatDate(preview.period.payday)}
                                 </p>
                             </div>
+                            
+                            <div className="flex flex-wrap items-center gap-3">
+                                <span className="rounded-full bg-[#B76E79]/10 px-4 py-2 text-sm font-semibold text-[#B76E79]">
+                                    {preview.period.status === "DRAFT"
+                                        ? "Borrador"
+                                        : preview.period.status === "REVIEWED"
+                                        ? "Revisado"
+                                        : "Pagado"}
+                                </span>
 
-                            <span className="rounded-full bg-[#B76E79]/10 px-4 py-2 text-sm font-semibold text-[#B76E79]">
-                                {preview.period.status === "DRAFT"
-                                    ? "Borrador"
-                                    : preview.period.status === "REVIEWED"
-                                      ? "Revisado"
-                                      : "Pagado"}
-                            </span>
+                                {/* Only draft payroll can enter the review workflow. */}
+                                {preview.period.status === "DRAFT" && (
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleReviewPayroll()}
+                                        disabled={reviewingPayroll || loading}
+                                        className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#A65D69] disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {reviewingPayroll
+                                            ? "Validando nómina..."
+                                            : "Revisar Nómina"}
+                                    </button>
+                                )}
+                            </div>
+
                         </div>
                     </div>
 
@@ -681,6 +866,72 @@ export default function PayrollPageClient() {
                         </p>
                     )}
                 </>
+            )}
+
+            {/* Owner confirmation before approving weekly payroll. */}
+            {showReviewConfirmation && reviewReady && (
+                <div
+                    role="presentation"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="payroll-review-title"
+                        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+                    >
+                        <h3
+                            id="payroll-review-title"
+                            className="text-xl font-bold text-black"
+                        >
+                            Confirmar Revisión de Nómina
+                        </h3>
+
+                        <p className="mt-4 text-sm text-neutral-600">
+                            Semana del {formatDate(week)} al{" "}
+                            {formatDate(addDays(week, 6))}
+                        </p>
+
+                        <p className="mt-3 text-sm text-neutral-700">
+                            Las validaciones financieras fueron exitosas.
+                            Al aprobar esta nómina, los valores quedarán
+                            bloqueados para evitar modificaciones.
+                        </p>
+
+                        {/* Show approval errors inside the confirmation dialog. */}
+                        {reviewError && (
+                            <p
+                                role="alert"
+                                className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700"
+                            >
+                                {reviewError}
+                            </p>
+                        )}
+
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowReviewConfirmation(false);
+                                    setReviewReady(false);
+                                }}
+                                className="rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-black"
+                            >
+                                Cancelar
+                            </button>            
+                            <button
+                                type="button"
+                                onClick={() => void handleConfirmPayrollReview()}
+                                disabled={reviewingPayroll || !reviewReady}
+                                className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#A65D69] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {reviewingPayroll
+                                    ? "Confirmando..."
+                                    : "Confirmar Revisión"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </section>
     );

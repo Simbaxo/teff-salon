@@ -77,6 +77,9 @@ model User {
   role         UserRole
   active       Boolean  @default(true)
 
+  // Manual payroll payments recorded by this user.
+  recordedPayrollPayments PayrollManualPayment[]
+
   // Not every login account has to be a salon technician
   employeeId Int?      @unique
   employee   Employee? @relation(fields: [employeeId], references: [id])
@@ -466,6 +469,9 @@ model PayrollEntry {
   // Payments previously made outside the payroll system.
   historicalPayments PayrollHistoricalPayment[]
 
+  // Payments manually completed after payroll approval.
+  manualPayments PayrollManualPayment[]
+
   // Prevent duplicate payroll entries for one technician/week.
   @@unique([payrollPeriodId, employeeId])
   @@index([employeeId, status])
@@ -519,6 +525,45 @@ model PayrollHistoricalPayment {
 
   @@index([payrollEntryId])
   @@index([paymentDate])
+}
+
+// Records payments the Owner has already made outside TEFF.
+// This model never initiates bank transfers.
+model PayrollManualPayment {
+  id Int @id @default(autoincrement())
+
+  payrollEntryId Int
+
+  // Amount delivered in whole Colombian pesos.
+  amount Int
+
+  // Actual date of payment.
+  paymentDate DateTime
+
+  // CASH, TRANSFER, or OTHER.
+  paymentMethod String
+
+  // Unique request identifier to prevent duplicate inserts.
+  idempotencyKey String @unique
+
+  // Optional bank or receipt reference.
+  paymentReference String?
+
+  description String?
+
+  // The authenticated Owner who recorded the payment.
+  recordedByUserId Int
+
+  // Preserve who recorded each payment.
+  recordedBy User @relation(fields: [recordedByUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  entry PayrollEntry @relation(fields: [payrollEntryId], references: [id], onDelete: Restrict)
+
+  @@index([payrollEntryId])
+  @@index([paymentDate])
+  @@index([recordedByUserId])
 }
 
 enum PayrollReconciliationStatus {

@@ -1,11 +1,27 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
+import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 import {
   getTeffCurrentMinutes,
   getTeffDayOfWeek,
   getTeffToday,
 } from "@/lib/datetime";
+
+function getPayrollMonday(date: Date): Date {
+    // Payroll weeks run Monday through Sunday.
+    const monday = new Date(date);
+    const weekday = monday.getUTCDay();
+
+    const daysSinceMonday =
+        weekday === 0 ? 6 : weekday - 1;
+
+    monday.setUTCDate(
+        monday.getUTCDate() - daysSinceMonday
+    );
+
+    return monday;
+}
 
 export async function PATCH(
   request: Request,
@@ -176,6 +192,122 @@ export async function PATCH(
       try {
         result = await prisma.$transaction(
           async (tx) => {
+
+            // Reload the appointment inside the transaction.
+            const currentAppointment =
+                await tx.appointment.findUnique({
+                    where: { id: appointmentId },
+                    select: {
+                        id: true,
+                        date: true,
+                        employeeId: true,
+                        status: true,
+                        saleAppointments: {
+                            select: { saleId: true },
+                        },
+                    },
+                });
+
+            if (!currentAppointment) {
+                throw new Error("APPOINTMENT_NOT_FOUND");
+            }
+
+            const originalMonday =
+                getPayrollMonday(currentAppointment.date);
+
+            const requestedMonday =
+                getPayrollMonday(
+                    new Date(`${date}T00:00:00.000Z`)
+                );
+
+            // Acquire both week locks in a consistent order.
+            const weeks = [
+                originalMonday,
+                requestedMonday,
+            ];
+
+            const uniqueWeeks = Array.from(
+                new Map(
+                    weeks.map((week) => [
+                        week.toISOString().slice(0, 10),
+                        week,
+                    ])
+                ).values()
+            ).sort(
+                (a, b) => a.getTime() - b.getTime()
+            );
+
+            for (const week of uniqueWeeks) {
+                await lockPayrollWeek(tx, week);
+            }
+
+            // Recheck after acquiring the payroll locks.
+            const lockedAppointment =
+                await tx.appointment.findUnique({
+                    where: { id: appointmentId },
+                    select: {
+                        id: true,
+                        date: true,
+                        startTime: true,
+                        employeeId: true,
+                        status: true,
+                        saleAppointments: {
+                            select: { saleId: true },
+                        },
+                    },
+                });
+
+            if (!lockedAppointment) {
+                throw new Error("APPOINTMENT_NOT_FOUND");
+            }
+
+            // Do not proceed using a stale appointment snapshot.
+            if (
+                lockedAppointment.date.getTime() !==
+                    currentAppointment.date.getTime() ||
+                lockedAppointment.employeeId !==
+                    currentAppointment.employeeId ||
+                lockedAppointment.status !==
+                    currentAppointment.status ||
+                lockedAppointment.saleAppointments.length !==
+                    currentAppointment.saleAppointments.length
+            ) {
+                throw new Error("APPOINTMENT_CHANGED");
+            }
+
+            // Verify the acquired locks still cover the appointment's week.
+            const lockedMonday =
+                getPayrollMonday(lockedAppointment.date);
+
+            if (
+                !uniqueWeeks.some(
+                    (week) =>
+                        week.getTime() === lockedMonday.getTime()
+                )
+            ) {
+                throw new Error("APPOINTMENT_CHANGED");
+            }
+
+            // A sold appointment must not be moved into or out
+            // of an approved payroll period.
+            if (lockedAppointment.saleAppointments.length > 0) {
+                const lockedPeriods =
+                    await tx.payrollPeriod.count({
+                        where: {
+                            startDate: {
+                                in: uniqueWeeks,
+                            },
+                            status: {
+                                in: ["REVIEWED", "PAID"],
+                            },
+                        },
+                    });
+
+                if (lockedPeriods > 0) {
+                    throw new Error("PAYROLL_LOCKED");
+                }
+            }
+
             const scheduleBlockingStatuses = [
               "REQUESTED",
               "BOOKED",
@@ -259,17 +391,28 @@ export async function PATCH(
                   throw new Error("APPOINTMENT_CONFLICT");
               }
             }
+            // Update only if the appointment still matches
+            // the state verified inside this transaction.
+            const updated = await tx.appointment.updateMany({
+                where: {
+                    id: lockedAppointment.id,
+                    date: lockedAppointment.date,
+                    employeeId: lockedAppointment.employeeId,
+                    status: lockedAppointment.status,
+                    startTime: lockedAppointment.startTime,
+                },
+                data: {
+                    date: new Date(`${date}T00:00:00.000Z`),
+                    startTime,
+                },
+            });
 
-            return tx.appointment.update({
-              where: {
-                id: appointment.id,
-              },
-              data: {
-                date: new Date(
-                  `${date}T00:00:00.000Z`
-                ),
-                startTime,
-              },
+            if (updated.count !== 1) {
+                throw new Error("APPOINTMENT_CHANGED");
+            }
+
+            return tx.appointment.findUniqueOrThrow({
+                where: { id: appointmentId },
             });
           },
           {
@@ -279,12 +422,16 @@ export async function PATCH(
 
         break;
       } catch (error) {
+        // Business conflicts must not be retried.
         if (
             error instanceof Error &&
-            (
-                error.message === "APPOINTMENT_CONFLICT" ||
-                error.message === "SCHEDULE_BLOCK_CONFLICT"
-            )
+            [
+                "APPOINTMENT_CONFLICT",
+                "SCHEDULE_BLOCK_CONFLICT",
+                "PAYROLL_LOCKED",
+                "APPOINTMENT_CHANGED",
+                "APPOINTMENT_NOT_FOUND",
+            ].includes(error.message)
         ) {
             throw error;
         }
@@ -313,6 +460,44 @@ export async function PATCH(
 
     return Response.json(result);
   } catch (error) {
+    if (
+        error instanceof Error &&
+        error.message === "PAYROLL_LOCKED"
+    ) {
+        return Response.json(
+            {
+                error:
+                    "No se puede modificar esta cita porque pertenece a una nómina revisada o pagada.",
+                conflictType: "PAYROLL_LOCKED",
+            },
+            { status: 409 }
+        );
+    }
+
+    if (
+        error instanceof Error &&
+        error.message === "APPOINTMENT_CHANGED"
+    ) {
+        return Response.json(
+            {
+                error:
+                    "La cita fue modificada simultáneamente. Actualiza e inténtalo nuevamente.",
+                conflictType: "APPOINTMENT_CHANGED",
+            },
+            { status: 409 }
+        );
+    }
+
+    if (
+        error instanceof Error &&
+        error.message === "APPOINTMENT_NOT_FOUND"
+    ) {
+        return Response.json(
+            { error: "Cita no encontrada." },
+            { status: 404 }
+        );
+    }
+
     if (
         error instanceof Error &&
         error.message === "APPOINTMENT_CONFLICT"

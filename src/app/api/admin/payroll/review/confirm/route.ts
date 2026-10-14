@@ -86,9 +86,16 @@ export async function POST(request: Request) {
         );
     }
 
-    // Keep payroll approval disabled until rollback testing passes.
-    // No database writes are allowed during this stage.
-    const writeEnabled = false;
+    // Payroll approval requires an explicit Owner confirmation.
+    // OWNER authorization is already checked at the start of this route.
+    const writeEnabled =
+        typeof body === "object" &&
+        body !== null &&
+        !Array.isArray(body) &&
+        "write" in body &&
+        body.write === true &&
+        "confirmReview" in body &&
+        body.confirmReview === true;
 
     try {
         const result = await prisma.$transaction(
@@ -649,9 +656,14 @@ export async function POST(request: Request) {
                     endDate: addTeffDays(week, 6),
                     payday: nextMonday,
                     periodId: period?.id ?? null,
-                    readyForConfirmation: canConfirmReview,
+                    // Approval is no longer pending after a successful review.
+                    readyForConfirmation:
+                        canConfirmReview && !reviewCompleted,
+
                     reviewCompleted,
-                    readOnly: !writeEnabled,
+
+                    // True only when no database changes were made.
+                    readOnly: !reviewCompleted,
                     commissionCount: commissions.length,
                     unmatchedCommissionCount: unmatchedCommissions.length,
                     tipCount: tips.length,
@@ -698,6 +710,21 @@ export async function POST(request: Request) {
 
         return Response.json(result);
     } catch (error) {
+        // Concurrent database changes may require retrying the request.
+        if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2034"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "La nómina fue modificada simultáneamente. Actualiza la página e inténtalo nuevamente.",
+                    conflictType: "PAYROLL_CONCURRENT_UPDATE",
+                },
+                { status: 409 }
+            );
+        }
+
         if (
             error instanceof Error &&
             [
