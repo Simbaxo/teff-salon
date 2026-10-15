@@ -113,6 +113,10 @@ export async function POST(request: Request) {
                     hasOverpayment: balance.hasOverpayment,
                 });
 
+                // Reject settlement unless the statement is reviewed and fully reconciled.
+                if (!eligible) {
+                    throw new Error("ZERO_BALANCE_NOT_ELIGIBLE");
+                }
 
                 // Keep settlement disabled until integration testing.
                 const writeEnabled = false;
@@ -189,6 +193,20 @@ export async function POST(request: Request) {
 
         return Response.json(result);
     } catch (error) {
+        if (
+            error instanceof Error &&
+            error.message === "ZERO_BALANCE_NOT_ELIGIBLE"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "Este comprobante no puede liquidarse porque no está revisado, tiene saldo pendiente o presenta un sobrepago.",
+                    conflictType: "ZERO_BALANCE_NOT_ELIGIBLE",
+                },
+                { status: 409 }
+            );
+        }
+
         if (
             error instanceof Error &&
             error.message === "PAYROLL_SETTLEMENT_CONFLICT"

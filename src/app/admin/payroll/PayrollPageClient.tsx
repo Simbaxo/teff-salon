@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type PayrollStatus = "DRAFT" | "REVIEWED" | "PAID";
 
@@ -126,7 +125,29 @@ function AmountRow({
 }
 
 export default function PayrollPageClient() {
+    // Technician selected for payment confirmation.
+    const [paymentEmployee, setPaymentEmployee] =
+        useState<PayrollSummary | null>(null);
+
+    // Require explicit confirmation before recording payment.
+    const [paymentConfirmed, setPaymentConfirmed] =
+        useState(false);
+
+    // Prevent duplicate submissions while recording.
+    const [savingPayment, setSavingPayment] =
+        useState(false);
+
+    const [paymentError, setPaymentError] =
+        useState("");
+    // Keep the same payment key when retrying an uncertain request.
+    const paymentRequestKey = useRef<string | null>(null);
+    // Preserve the original payment date for identical retries.
+    const paymentRequestDate = useRef<string | null>(null);
+    // Track whether a payment request may have reached the server.
+    const paymentRequestSubmitted = useRef(false);
     const [week, setWeek] = useState(getCurrentMonday);
+    // Refresh payroll after a successful payment.
+    const [refreshKey, setRefreshKey] = useState(0);
     const [preview, setPreview] =
         useState<PayrollPreview | null>(null);
     const [loading, setLoading] = useState(true);
@@ -209,7 +230,7 @@ export default function PayrollPageClient() {
         void fetchPreview();
 
         return () => controller.abort();
-    }, [week]);
+    }, [week, refreshKey]);
 
     async function saveAdjustment(employeeId: number) {
         const amount = Number(adjustmentAmount);
@@ -337,6 +358,100 @@ export default function PayrollPageClient() {
             );
         } finally {
             setSavingAdjustment(false);
+        }
+    }
+
+    // Record money already delivered outside TEFF.
+    async function handleConfirmPayment() {
+        if (
+            !paymentEmployee ||
+            !paymentConfirmed ||
+            savingPayment ||
+            paymentEmployee.payrollEntryId === null ||
+            paymentEmployee.outstandingPay <= 0
+        ) {
+            return;
+        }
+
+        setSavingPayment(true);
+        setPaymentError("");
+
+        try {
+            // Preserve the key across retries within this dialog.
+            const idempotencyKey =
+                paymentRequestKey.current ?? crypto.randomUUID();
+
+            paymentRequestKey.current = idempotencyKey;
+
+            // Keep the original date unchanged across payment retries.
+            const paymentDate = paymentRequestDate.current;
+
+            if (!paymentDate) {
+                throw new Error(
+                    "No se pudo identificar la fecha del pago. Actualiza la nómina."
+                );
+            }
+
+            // A network interruption may leave the payment outcome unknown.
+            paymentRequestSubmitted.current = true;
+
+            const response = await fetch(
+                "/api/admin/payroll/manual-payments",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        payrollEntryId: paymentEmployee.payrollEntryId,
+                        amount: paymentEmployee.outstandingPay,
+                        paymentDate,
+                        paymentMethod: "OTHER",
+                        idempotencyKey,
+                        paymentReference: null,
+                        description: "Pago confirmado por el propietario",
+                        confirmedDelivered: true,
+                        confirmedNotPreviouslyRecorded: true,
+                    }),
+                }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error ?? "No se pudo registrar el pago."
+                );
+            }
+
+            // Accept a newly recorded payment or a verified identical retry.
+            const paymentWasRecorded =
+                result.paymentRecorded === true &&
+                (result.alreadyRecorded === true ||
+                    (result.readOnly === false &&
+                        result.recordedPaymentId != null));
+
+            if (!paymentWasRecorded) {
+                throw new Error(
+                    "El pago no fue registrado. La función de pagos todavía puede estar deshabilitada."
+                );
+            }
+
+            // Refresh only after the server confirms recording.
+            setPaymentEmployee(null);
+            setPaymentConfirmed(false);
+            paymentRequestKey.current = null;
+            paymentRequestDate.current = null;
+            paymentRequestSubmitted.current = false;
+            setRefreshKey((current) => current + 1);
+        } catch (caught) {
+            setPaymentError(
+                caught instanceof Error
+                    ? caught.message
+                    : "No se pudo confirmar el pago."
+            );
+        } finally {
+            setSavingPayment(false);
         }
     }
 
@@ -676,6 +791,45 @@ export default function PayrollPageClient() {
                                     </span>
                                 </div>
 
+                                {/* Show the remaining amount after previously recorded payments. */}
+                                {employee.payrollStatus !== "DRAFT" && (
+                                    <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-neutral-100 p-4">
+                                        <span className="font-semibold text-black">
+                                            Saldo Pendiente
+                                        </span>
+
+                                        <span className="text-xl font-bold tabular-nums text-[#B76E79]">
+                                            {formatCOP(employee.outstandingPay)}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {/* Allow payment confirmation only for reviewed statements. */}
+                                {preview.period.status === "REVIEWED" &&
+                                    employee.payrollStatus === "REVIEWED" &&
+                                    employee.payrollEntryId !== null &&
+                                    employee.outstandingPay > 0 && (
+                                        <button
+                                            type="button"
+                                            disabled={savingPayment}
+                                            onClick={() => {
+                                                paymentRequestKey.current = crypto.randomUUID();
+                                                paymentRequestDate.current = new Intl.DateTimeFormat("en-CA", {
+                                                    timeZone: "America/Bogota",
+                                                    year: "numeric",
+                                                    month: "2-digit",
+                                                    day: "2-digit",
+                                                }).format(new Date());
+                                                setPaymentEmployee(employee);
+                                                setPaymentConfirmed(false);
+                                                setPaymentError("");
+                                            }}
+                                            className="mt-3 w-full rounded-xl bg-[#B76E79] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#A65D69] disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            Marcar como pagada
+                                        </button>
+                                    )}
+
                                 {employee.requiresReview && (
                                     <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
                                         Esta nómina requiere revisión antes de pagar.
@@ -928,6 +1082,115 @@ export default function PayrollPageClient() {
                                 {reviewingPayroll
                                     ? "Confirmando..."
                                     : "Confirmar Revisión"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Confirm money was delivered before marking payroll paid. */}
+            {paymentEmployee && (
+                <div
+                    role="presentation"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="payroll-payment-title"
+                        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+                    >
+                        <h3
+                            id="payroll-payment-title"
+                            className="text-xl font-bold text-black"
+                        >
+                            Confirmar Pago
+                        </h3>
+
+                        <p className="mt-4 text-sm text-neutral-600">
+                            Técnica: <strong>{paymentEmployee.employeeName}</strong>
+                        </p>
+
+                        <div className="mt-4 rounded-xl bg-neutral-100 p-4">
+                            <p className="text-sm text-neutral-600">
+                                Saldo pendiente
+                            </p>
+
+                            <p className="mt-1 text-2xl font-bold text-black">
+                                {formatCOP(paymentEmployee.outstandingPay)}
+                            </p>
+                        </div>
+
+                        <label className="mt-5 flex items-start gap-3 text-sm text-neutral-700">
+                            <input
+                                type="checkbox"
+                                checked={paymentConfirmed}
+                                onChange={(event) =>
+                                    setPaymentConfirmed(event.target.checked)
+                                }
+                                className="mt-1 h-4 w-4 accent-[#B76E79]"
+                            />
+
+                            <span>
+                                Confirmo que ya entregué este monto a la técnica
+                                fuera de TEFF y que no está registrado previamente.
+                            </span>
+                        </label>
+
+                        {paymentError && (
+                            <p
+                                role="alert"
+                                className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700"
+                            >
+                                {paymentError}
+                            </p>
+                        )}
+
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button
+                                type="button"
+                                disabled={savingPayment}
+                                onClick={() => {
+                                    // Never cancel while the request is actively processing.
+                                    if (savingPayment) {
+                                        return;
+                                    }
+
+                                    if (paymentRequestSubmitted.current) {
+                                        const confirmed = window.confirm(
+                                            "Esta solicitud de pago pudo haber sido registrada. " +
+                                            "Antes de intentar otro pago, verifica el estado de la nómina. " +
+                                            "¿Deseas cerrar esta ventana?"
+                                        );
+
+                                        if (!confirmed) {
+                                            return;
+                                        }
+                                    }
+
+                                    setPaymentEmployee(null);
+                                    setPaymentConfirmed(false);
+                                    setPaymentError("");
+                                    paymentRequestKey.current = null;
+                                    paymentRequestDate.current = null;
+                                    paymentRequestSubmitted.current = false;
+
+                                    // Reload payment status from the server.
+                                    setRefreshKey((current) => current + 1);
+                                }}
+                                className="rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-black"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => void handleConfirmPayment()}
+                                disabled={!paymentConfirmed || savingPayment}
+                                className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#A65D69] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {savingPayment
+                                    ? "Registrando..."
+                                    : "Confirmar y Marcar Pagada"}
                             </button>
                         </div>
                     </div>

@@ -1,6 +1,7 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { calculateManualPaymentBalance } from "@/lib/payroll/manual-payments";
 import {
     calculateWeeklyPayrollSummary,
 } from "@/lib/payroll/weekly-summary";
@@ -275,6 +276,18 @@ export async function GET(request: Request) {
                     entries: {
                         include: {
                             adjustments: true,
+
+                            // Include payments already recorded for this statement.
+                            historicalPayments: {
+                                select: {
+                                    amount: true,
+                                },
+                            },
+                            manualPayments: {
+                                select: {
+                                    amount: true,
+                                },
+                            },
                         },
                     },
                 },
@@ -350,11 +363,16 @@ export async function GET(request: Request) {
                     }
                 : weeklySummary;
 
-            // Snapshot totals remain frozen after review.
-            // Outstanding amounts remain informational, not payment authorization.
-            const outstandingPay =
-                displayedTotals.netPay -
-                weeklySummary.paidCommissions;
+            // Preserve approved totals while accounting for recorded payments.
+            const paymentBalance = calculateManualPaymentBalance({
+                netPay: displayedTotals.netPay,
+                paidCommissions: weeklySummary.paidCommissions,
+                historicalPayments: existingEntry?.historicalPayments ?? [],
+                manualPayments: existingEntry?.manualPayments ?? [],
+            });
+
+            // Informational only; payment recording rechecks the balance.
+            const outstandingPay = paymentBalance.remainingBalance;
 
             return {
                 employeeId: employee.id,
