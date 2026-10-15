@@ -1,0 +1,18 @@
+# Local environment files and database credentials
+.env
+.env.*
+!.env.example
+
+# Generated Next.js builds and caches
+.next
+.next/
+.next-payroll-test/
+tsconfig.tsbuildinfo
+
+# Local testing and development tools
+tests/
+scripts/
+.agents/
+.claude/
+.windsurf/
+.vscode/
