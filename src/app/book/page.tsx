@@ -871,11 +871,16 @@ export default function BookPage() {
                                     : "Your appointment is confirmed!"}
                             </h2>
 
+                            {/* Personalized confirmation message */}
                             <p className="mt-2 text-neutral-600">
+                                {language === "es"
+                                    ? `¡Gracias, ${customerName.trim()}! `
+                                    : `Thank you, ${customerName.trim()}! `}
+
                                 {requiresApproval
                                     ? language === "es"
-                                        ? "Te confirmaremos los servicios pendientes lo antes posible."
-                                        : "We'll confirm the pending services as soon as possible."
+                                        ? "Recibimos tu solicitud. Te confirmaremos los servicios pendientes lo antes posible."
+                                        : "We received your request. We'll confirm the pending services as soon as possible."
                                     : language === "es"
                                     ? "Tu reserva quedó registrada correctamente."
                                     : "Your booking has been registered successfully."}
@@ -884,7 +889,7 @@ export default function BookPage() {
 
                         {/* Date and starting time */}
                         <div className="mt-6 rounded-xl bg-neutral-100 p-4 text-center">
-                            <p className="font-semibold capitalize text-black">
+                            <p className="font-semibold text-black">
                                 {formatConfirmationDate(selectedDate)}
                             </p>
 
@@ -979,6 +984,74 @@ export default function BookPage() {
                                     "es-CO"
                                 )}
                             </span>
+                        </div>
+
+                        {/* Salon location and directions */}
+                        <div className="mt-6 rounded-xl border border-neutral-200 p-4">
+                            <h3 className="font-semibold text-black">
+                                📍 {language === "es" ? "Nuestra ubicación" : "Our location"}
+                            </h3>
+
+                            <p className="mt-2 font-medium text-black">
+                                TEFF Beauty Salon
+                            </p>
+
+                            <p className="mt-1 text-sm text-neutral-600">
+                                Cra. 43A #11-73, El Poblado, Medellín
+                            </p>
+
+                            {/* Lightweight static map of TEFF's location */}
+                            {process.env.NEXT_PUBLIC_GOOGLE_MAPS_STATIC_API_KEY && (
+                                <a
+                                    href="https://maps.app.goo.gl/gWzsFDtvYW3TQ9Rd7"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label={
+                                        language === "es"
+                                            ? "Ver ubicación de TEFF en Google Maps"
+                                            : "View TEFF's location on Google Maps"
+                                    }
+                                    className="mt-4 block overflow-hidden rounded-xl border border-neutral-200"
+                                >
+                                    {/* Google serves the map directly with its attribution. */}
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={
+                                            "https://maps.googleapis.com/maps/api/staticmap?" +
+                                            new URLSearchParams({
+                                                center: "6.212023,-75.5703099",
+                                                zoom: "16",
+                                                size: "600x360",
+                                                scale: "2",
+                                                maptype: "roadmap",
+                                                markers: "color:red|6.212023,-75.5703099",
+                                                key: process.env.NEXT_PUBLIC_GOOGLE_MAPS_STATIC_API_KEY,
+                                            }).toString()
+                                        }
+                                        alt={
+                                            language === "es"
+                                                ? "Mapa de ubicación de TEFF Beauty Salon"
+                                                : "Location map of TEFF Beauty Salon"
+                                        }
+                                        loading="lazy"
+                                        decoding="async"
+                                        width={600}
+                                        height={360}
+                                        className="h-auto w-full object-contain"
+                                    />
+                                </a>
+                            )}
+
+                            <a
+                                href="https://maps.app.goo.gl/gWzsFDtvYW3TQ9Rd7"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-4 flex w-full items-center justify-center rounded-xl border border-black px-5 py-3 font-semibold text-black transition hover:bg-neutral-100"
+                            >
+                                {language === "es"
+                                    ? "Cómo llegar con Google Maps ↗"
+                                    : "Get directions with Google Maps ↗"}
+                            </a>
                         </div>
                         
                         <button

@@ -147,6 +147,35 @@ Appointment services and add-ons store price and duration snapshots so historica
 - `Reservar otra cita` action available after successful booking
 
 
+### Booking Confirmation v2 — October 2026
+
+**Status:** Implemented and tested locally. Production deployment pending.
+
+- [x] Personalized confirmation greeting using the customer's name
+- [x] Spanish and English confirmation messages
+- [x] Clear distinction between confirmed bookings and approval-required requests
+- [x] Correct Spanish date capitalization
+- [x] TEFF's verified address: Cra. 43A #11-73, El Poblado, Medellín
+- [x] Google Maps Static API preview centered on TEFF
+- [x] Clickable map and directions link to the official Google Maps listing
+- [x] Responsive map with Google attribution preserved
+- [x] Lazy-loaded map image to minimize unnecessary loading
+- [x] Restricted Google Maps API key for approved domains
+- [x] Google Cloud monthly budget alerts configured at $5 USD
+- [x] Local desktop and mobile testing completed
+- [x] Existing multi-service confirmation and technician details preserved
+
+**Google Maps configuration:**
+- Environment variable: `NEXT_PUBLIC_GOOGLE_MAPS_STATIC_API_KEY`
+- API: Google Maps Static API
+- Production key configured in Vercel
+- Google Cloud budget alerts monitor spending but do not enforce a hard spending limit
+
+**Pending:**
+- [ ] Final production deployment
+- [ ] Verify Google Maps rendering on teffbeauty.com
+- [ ] Complete production confirmation-screen smoke test
+
 ---
 
 # ✅ Phase 4 — Scheduling & Availability
