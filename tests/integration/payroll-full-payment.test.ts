@@ -17,7 +17,8 @@ test("records full payroll payment and prevents duplicates", async () => {
 
     assert.equal(
         endpoint,
-        "ep-misty-bird-ax2o1u0v.c-4.us-east-2.aws.neon.tech"
+        // Only allow this financial test on Neon development.
+        "ep-ancient-cherry-ax0y0y4q.c-4.us-east-2.aws.neon.tech"
     );
 
     const prisma = new PrismaClient({

@@ -15,7 +15,7 @@ test("rolls back a payroll payment when the transaction fails", async () => {
 
     assert.equal(
         endpoint,
-        "ep-misty-bird-ax2o1u0v.c-4.us-east-2.aws.neon.tech"
+        "ep-ancient-cherry-ax0y0y4q.c-4.us-east-2.aws.neon.tech"
     );
 
     const prisma = new PrismaClient({

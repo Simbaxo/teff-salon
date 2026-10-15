@@ -3,12 +3,12 @@ import { test } from "node:test";
 
 import { getSafeTestDatabaseUrl } from "./helpers/test-database";
 
-// Dummy credentials only — no real database connections.
+// Dummy credentials only — these tests never connect to PostgreSQL.
 const productionUrl =
-    "postgresql://user:password@ep-ancient-cherry-ax0y0y4q-pooler.c-4.us-east-2.aws.neon.tech/neondb";
+    "postgresql://user:password@ep-misty-bird-ax2o1u0v-pooler.c-4.us-east-2.aws.neon.tech/neondb";
 
 const developmentUrl =
-    "postgresql://user:password@ep-misty-bird-ax2o1u0v-pooler.c-4.us-east-2.aws.neon.tech/neondb";
+    "postgresql://user:password@ep-ancient-cherry-ax0y0y4q-pooler.c-4.us-east-2.aws.neon.tech/neondb";
 
 // Run each check with a controlled environment and restore it afterward.
 function checkConnection(

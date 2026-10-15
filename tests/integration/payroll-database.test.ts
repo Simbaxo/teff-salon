@@ -15,7 +15,7 @@ test("connects to the isolated payroll test database", async () => {
 
     assert.equal(
         hostname,
-        "ep-misty-bird-ax2o1u0v.c-4.us-east-2.aws.neon.tech"
+        "ep-ancient-cherry-ax0y0y4q.c-4.us-east-2.aws.neon.tech"
     );
 
     const adapter = new PrismaPg({ connectionString });
@@ -50,7 +50,7 @@ test("rejects payment for a nonexistent payroll entry", async () => {
 
     assert.equal(
         hostname,
-        "ep-misty-bird-ax2o1u0v.c-4.us-east-2.aws.neon.tech"
+        "ep-ancient-cherry-ax0y0y4q.c-4.us-east-2.aws.neon.tech"
     );
 
     const prisma = new PrismaClient({
@@ -117,7 +117,7 @@ test("rejects payroll payment access for a receptionist", async () => {
 
     assert.equal(
         endpoint,
-        "ep-misty-bird-ax2o1u0v.c-4.us-east-2.aws.neon.tech"
+        "ep-ancient-cherry-ax0y0y4q.c-4.us-east-2.aws.neon.tech"
     );
 
     const prisma = new PrismaClient({

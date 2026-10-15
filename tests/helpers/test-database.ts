@@ -13,10 +13,16 @@ export function getSafeTestDatabaseUrl(): string {
     const endpoint = new URL(connectionString).hostname
         .replace(/-pooler(?=\.)/, "");
 
-    // Only the designated Neon development endpoint is permitted.
+    // Financial tests must never connect to the Neon production branch.
+    const productionEndpoint =
+        "ep-misty-bird-ax2o1u0v.c-4.us-east-2.aws.neon.tech";
+
+    const developmentEndpoint =
+        "ep-ancient-cherry-ax0y0y4q.c-4.us-east-2.aws.neon.tech";
+
     if (
-        endpoint !==
-        "ep-misty-bird-ax2o1u0v.c-4.us-east-2.aws.neon.tech"
+        endpoint === productionEndpoint ||
+        endpoint !== developmentEndpoint
     ) {
         throw new Error("Unsafe integration test database.");
     }

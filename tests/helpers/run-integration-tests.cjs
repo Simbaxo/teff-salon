@@ -15,11 +15,18 @@ if (!productionUrl || !testUrl) {
 const endpoint = (value) =>
     new URL(value).hostname.replace(/-pooler(?=\.)/, "");
 
+// Only allow financial integration tests on Neon development.
 const expectedEndpoint =
+    "ep-ancient-cherry-ax0y0y4q.c-4.us-east-2.aws.neon.tech";
+
+// Explicitly block the Neon production branch.
+const forbiddenProductionEndpoint =
     "ep-misty-bird-ax2o1u0v.c-4.us-east-2.aws.neon.tech";
 
 // Never allow integration tests to target production.
 if (
+    endpoint(productionUrl) !== forbiddenProductionEndpoint ||
+    endpoint(testUrl) === forbiddenProductionEndpoint ||
     endpoint(productionUrl) === endpoint(testUrl) ||
     endpoint(testUrl) !== expectedEndpoint
 ) {
