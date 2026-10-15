@@ -35,6 +35,7 @@ const result = spawnSync(
         "--import",
         "tsx",
         "--test",
+        "--test-concurrency=1",
         "tests/integration/*.test.ts",
     ],
     {

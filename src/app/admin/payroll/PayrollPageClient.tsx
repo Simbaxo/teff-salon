@@ -139,6 +139,19 @@ export default function PayrollPageClient() {
 
     const [paymentError, setPaymentError] =
         useState("");
+    // Technician selected for zero-balance settlement.
+    const [zeroBalanceEmployee, setZeroBalanceEmployee] =
+        useState<PayrollSummary | null>(null);
+
+    // Require the Owner to confirm that nothing remains owed.
+    const [zeroBalanceConfirmed, setZeroBalanceConfirmed] =
+        useState(false);
+
+    const [zeroBalanceError, setZeroBalanceError] =
+        useState("");
+    // Prevent duplicate settlement submissions.
+    const [settlingZeroBalance, setSettlingZeroBalance] =
+        useState(false);
     // Keep the same payment key when retrying an uncertain request.
     const paymentRequestKey = useRef<string | null>(null);
     // Preserve the original payment date for identical retries.
@@ -358,6 +371,71 @@ export default function PayrollPageClient() {
             );
         } finally {
             setSavingAdjustment(false);
+        }
+    }
+
+    // Settle a reviewed statement without recording another payment
+    async function handleConfirmZeroBalance() {
+        if (
+            !zeroBalanceEmployee ||
+            !zeroBalanceConfirmed ||
+            settlingZeroBalance ||
+            zeroBalanceEmployee.payrollEntryId === null ||
+            zeroBalanceEmployee.outstandingPay !== 0
+        ) {
+            return;
+        }
+
+        setSettlingZeroBalance(true);
+        setZeroBalanceError("");
+
+        try {
+            const response = await fetch(
+                "/api/admin/payroll/settle-zero-balance",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        payrollEntryId:
+                            zeroBalanceEmployee.payrollEntryId,
+                    }),
+                }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error ??
+                        "No se pudo liquidar el comprobante."
+                );
+            }
+
+            // HTTP 200 alone does not confirm settlement.
+            if (
+                result.settlementCompleted !== true ||
+                result.readOnly === true
+            ) {
+                throw new Error(
+                    "La liquidación todavía está deshabilitada."
+                );
+            }
+
+            // Refresh only after the server confirms settlement.
+            setZeroBalanceEmployee(null);
+            setZeroBalanceConfirmed(false);
+            setZeroBalanceError("");
+            setRefreshKey((current) => current + 1);
+        } catch (caught) {
+            setZeroBalanceError(
+                caught instanceof Error
+                    ? caught.message
+                    : "No se pudo confirmar la liquidación."
+            );
+        } finally {
+            setSettlingZeroBalance(false);
         }
     }
 
@@ -830,6 +908,24 @@ export default function PayrollPageClient() {
                                         </button>
                                     )}
 
+                                {/* Settle a reviewed statement with no money outstanding. */}
+                                {preview.period.status === "REVIEWED" &&
+                                    employee.payrollStatus === "REVIEWED" &&
+                                    employee.payrollEntryId !== null &&
+                                    employee.outstandingPay === 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setZeroBalanceEmployee(employee);
+                                                setZeroBalanceConfirmed(false);
+                                                setZeroBalanceError("");
+                                            }}
+                                            className="mt-3 w-full rounded-xl border border-[#B76E79] px-4 py-3 text-sm font-semibold text-[#B76E79] transition-colors hover:bg-rose-50"
+                                        >
+                                            Liquidar saldo cero
+                                        </button>
+                                    )}
+
                                 {employee.requiresReview && (
                                     <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
                                         Esta nómina requiere revisión antes de pagar.
@@ -1191,6 +1287,98 @@ export default function PayrollPageClient() {
                                 {savingPayment
                                     ? "Registrando..."
                                     : "Confirmar y Marcar Pagada"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Confirm reconciliation without creating a payment. */}
+            {zeroBalanceEmployee && (
+                <div
+                    role="presentation"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="zero-balance-title"
+                        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+                    >
+                        <h3
+                            id="zero-balance-title"
+                            className="text-xl font-bold text-black"
+                        >
+                            Confirmar Liquidación
+                        </h3>
+
+                        <p className="mt-4 text-sm text-neutral-600">
+                            Técnica:{" "}
+                            <strong>{zeroBalanceEmployee.employeeName}</strong>
+                        </p>
+
+                        <div className="mt-4 rounded-xl bg-neutral-100 p-4">
+                            <p className="text-sm text-neutral-600">
+                                Saldo Pendiente
+                            </p>
+
+                            <p className="mt-1 text-2xl font-bold text-black">
+                                {formatCOP(zeroBalanceEmployee.outstandingPay)}
+                            </p>
+                        </div>
+
+                        <p className="mt-4 text-sm text-neutral-600">
+                            Esta operación marcará el comprobante como pagado
+                            sin registrar un nuevo desembolso.
+                        </p>
+
+                        <label className="mt-5 flex items-start gap-3 text-sm text-neutral-700">
+                            <input
+                                type="checkbox"
+                                checked={zeroBalanceConfirmed}
+                                onChange={(event) =>
+                                    setZeroBalanceConfirmed(event.target.checked)
+                                }
+                                className="mt-1 h-4 w-4 accent-[#B76E79]"
+                            />
+
+                            <span>
+                                Confirmo que esta nómina está completamente
+                                conciliada y no existe ningún saldo pendiente
+                                por pagar.
+                            </span>
+                        </label>
+
+                        {zeroBalanceError && (
+                            <p
+                                role="alert"
+                                className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700"
+                            >
+                                {zeroBalanceError}
+                            </p>
+                        )}
+
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setZeroBalanceEmployee(null);
+                                    setZeroBalanceConfirmed(false);
+                                    setZeroBalanceError("");
+                                }}
+                                className="rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-black"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => void handleConfirmZeroBalance()}
+                                disabled={!zeroBalanceConfirmed || settlingZeroBalance}
+                                className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#A65D69] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {settlingZeroBalance
+                                    ? "Liquidando..."
+                                    : "Confirmar Liquidación"}
                             </button>
                         </div>
                     </div>

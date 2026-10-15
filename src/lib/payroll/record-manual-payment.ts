@@ -14,18 +14,31 @@ export type RecordManualPaymentOptions = {
     database?: typeof prisma;
 };
 
-// Database writes remain disabled during the refactor.
-const writeEnabled = false;
-
-// Execute the validated payroll transaction.
-// Caller must supply the authenticated Owner ID.
-export async function recordManualPayment({
+// Internal transaction logic shared by validation and recording.
+async function executeManualPayment({
     input,
     ownerId,
     database = prisma,
-}: RecordManualPaymentOptions) {
+}: RecordManualPaymentOptions, writeEnabled: boolean) {
         const result = await database.$transaction(
             async (tx) => {
+                // Independently verify the Owner before any financial operation.
+                const authorizedOwner = await tx.user.findUnique({
+                    where: { id: ownerId },
+                    select: {
+                        id: true,
+                        role: true,
+                        active: true,
+                    },
+                });
+
+                if (
+                    !authorizedOwner ||
+                    !authorizedOwner.active ||
+                    authorizedOwner.role !== "OWNER"
+                ) {
+                    throw new Error("PAYROLL_OWNER_REQUIRED");
+                }
                 // Find the payroll week before acquiring its lock.
                 const initialEntry =
                     await tx.payrollEntry.findUnique({
@@ -187,13 +200,18 @@ export async function recordManualPayment({
                 const projectedRemainingBalance =
                     balance.remainingBalance - input.amount;
 
-                // Never record payments exceeding the outstanding balance.
+                // Reject invalid balances and prevent overpayment
                 if (
                     balance.hasOverpayment ||
                     balance.remainingBalance <= 0 ||
                     projectedRemainingBalance < 0
                 ) {
                     throw new Error("INVALID_PAYMENT_BALANCE");
+                }
+
+                // Full-payment confirmation must match the server balance.
+                if (projectedRemainingBalance !== 0) {
+                    throw new Error("PAYROLL_BALANCE_CHANGED");
                 }
 
 
@@ -291,7 +309,12 @@ export async function recordManualPayment({
                     payrollEntryId: entry.id,
                     periodId: entry.payrollPeriodId,
                     ownerId: ownerId,
-                    payrollStatus: entry.status,
+                    // Report PAID only when this transaction actually settles the entry.
+                    payrollStatus:
+                        recordedPaymentId !== null &&
+                        projectedRemainingBalance === 0
+                            ? "PAID"
+                            : entry.status,
                     currentBalance: balance.remainingBalance,
                     proposedPayment: {
                         amount: input.amount,
@@ -323,4 +346,12 @@ export async function recordManualPayment({
         );
 
     return result;
+}
+
+// Record a payment already delivered by the Owner.
+// Authorization and balance checks run inside the transaction.
+export async function recordManualPayment(
+    options: RecordManualPaymentOptions
+) {
+    return executeManualPayment(options, true);
 }

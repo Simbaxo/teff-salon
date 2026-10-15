@@ -44,7 +44,7 @@ test("rejects payment for a nonexistent payroll entry", async () => {
 
     assert.ok(connectionString, "DATABASE_URL is missing");
 
-    // Verify isolation before calling the real payment transaction.
+    // Never allow this test to connect to production.
     const hostname = new URL(connectionString).hostname
         .replace(/-pooler(?=\.)/, "");
 
@@ -53,14 +53,31 @@ test("rejects payment for a nonexistent payroll entry", async () => {
         "ep-misty-bird-ax2o1u0v.c-4.us-east-2.aws.neon.tech"
     );
 
-    const adapter = new PrismaPg({ connectionString });
-    const prisma = new PrismaClient({ adapter });
+    const prisma = new PrismaClient({
+        adapter: new PrismaPg({ connectionString }),
+    });
+
+    let ownerId: number | null = null;
 
     try {
-        // An invalid entry must be rejected before any payment is created.
+        // Create a dedicated active Owner for this test.
+        const owner = await prisma.user.create({
+            data: {
+                name: "Payroll Integration Test Owner",
+                email: `payroll-test-${crypto.randomUUID()}@example.invalid`,
+                passwordHash: "test-only-no-login",
+                role: "OWNER",
+                active: true,
+            },
+        });
+
+        ownerId = owner.id;
+
+        // Verify the real transaction rejects a missing entry.
         await assert.rejects(
             recordManualPayment({
-                ownerId: 1,
+                ownerId: owner.id,
+                database: prisma,
                 input: {
                     payrollEntryId: 2_147_483_647,
                     amount: 150000,
@@ -76,6 +93,80 @@ test("rejects payment for a nonexistent payroll entry", async () => {
             /ENTRY_NOT_FOUND/
         );
     } finally {
-        await prisma.$disconnect();
+        // Remove only the Owner created by this test.
+        try {
+            if (ownerId !== null) {
+                await prisma.user.delete({
+                    where: { id: ownerId },
+                });
+            }
+        } finally {
+            await prisma.$disconnect();
+        }
+    }
+});
+
+test("rejects payroll payment access for a receptionist", async () => {
+    const connectionString = process.env.DATABASE_URL;
+
+    assert.ok(connectionString, "DATABASE_URL is missing");
+
+    // Ensure this test runs only against the approved development branch.
+    const endpoint = new URL(connectionString).hostname
+        .replace(/-pooler(?=\.)/, "");
+
+    assert.equal(
+        endpoint,
+        "ep-misty-bird-ax2o1u0v.c-4.us-east-2.aws.neon.tech"
+    );
+
+    const prisma = new PrismaClient({
+        adapter: new PrismaPg({ connectionString }),
+    });
+
+    let receptionistId: number | null = null;
+
+    try {
+        const receptionist = await prisma.user.create({
+            data: {
+                name: "Payroll Test Receptionist",
+                email: `payroll-reception-${crypto.randomUUID()}@example.invalid`,
+                passwordHash: "test-only-no-login",
+                role: "RECEPTIONIST",
+                active: true,
+            },
+        });
+
+        receptionistId = receptionist.id;
+
+        // A receptionist must be rejected before financial operations.
+        await assert.rejects(
+            recordManualPayment({
+                ownerId: receptionist.id,
+                database: prisma,
+                input: {
+                    payrollEntryId: 2_147_483_647,
+                    amount: 400000,
+                    paymentDate: "2026-10-15",
+                    paymentMethod: "OTHER",
+                    idempotencyKey: crypto.randomUUID(),
+                    paymentReference: null,
+                    description: "Prueba de autorización",
+                    confirmedDelivered: true,
+                    confirmedNotPreviouslyRecorded: true,
+                },
+            }),
+            /PAYROLL_OWNER_REQUIRED/
+        );
+    } finally {
+        try {
+            if (receptionistId !== null) {
+                await prisma.user.delete({
+                    where: { id: receptionistId },
+                });
+            }
+        } finally {
+            await prisma.$disconnect();
+        }
     }
 });

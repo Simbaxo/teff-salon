@@ -45,6 +45,20 @@ export async function POST(request: Request) {
 
         return Response.json(result);
     } catch (error) {
+        // Reject payment recording by inactive or non-Owner accounts.
+        if (
+            error instanceof Error &&
+            error.message === "PAYROLL_OWNER_REQUIRED"
+        ) {
+            return Response.json(
+                {
+                    error: "Solo el propietario puede registrar pagos de nómina.",
+                    conflictType: "PAYROLL_OWNER_REQUIRED",
+                },
+                { status: 403 }
+            );
+        }
+
         if (
             error instanceof Error &&
             error.message === "PAYROLL_SETTLEMENT_CONFLICT"
@@ -68,6 +82,21 @@ export async function POST(request: Request) {
                     error:
                         "Esta clave de pago ya fue utilizada para registrar un pago diferente.",
                     conflictType: "IDEMPOTENCY_CONFLICT",
+                },
+                { status: 409 }
+            );
+        }
+
+        // Reject full-payment confirmation if the outstanding balance changed.
+        if (
+            error instanceof Error &&
+            error.message === "PAYROLL_BALANCE_CHANGED"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "El saldo pendiente cambió o el monto no coincide. Actualiza la nómina y verifica el valor antes de confirmar el pago.",
+                    conflictType: "PAYROLL_BALANCE_CHANGED",
                 },
                 { status: 409 }
             );

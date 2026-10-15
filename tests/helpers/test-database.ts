@@ -1,37 +1,25 @@
-// Prevent integration tests from connecting to production.
+// Validate the isolated database used by payroll integration tests.
 export function getSafeTestDatabaseUrl(): string {
-    const productionUrl = process.env.DATABASE_URL;
-    const testUrl = process.env.TEST_DATABASE_URL;
-
-    if (!productionUrl || !testUrl) {
-        throw new Error("Missing database configuration.");
+    if (process.env.NODE_ENV !== "test") {
+        throw new Error("Integration tests require NODE_ENV=test.");
     }
 
-    const production = new URL(productionUrl);
-    const test = new URL(testUrl);
+    const connectionString = process.env.DATABASE_URL;
 
-    // Treat pooled and direct connections as the same endpoint.
-    const endpoint = (url: URL) =>
-        url.hostname.replace(/-pooler(?=\.)/, "");
-
-    if (
-        endpoint(production) === endpoint(test) &&
-        production.pathname === test.pathname
-    ) {
-        throw new Error(
-            "TEST_DATABASE_URL points to the production database."
-        );
+    if (!connectionString) {
+        throw new Error("Test database is not configured.");
     }
 
-    // Only allow the designated Neon development endpoint.
+    const endpoint = new URL(connectionString).hostname
+        .replace(/-pooler(?=\.)/, "");
+
+    // Only the designated Neon development endpoint is permitted.
     if (
-        endpoint(test) !==
+        endpoint !==
         "ep-misty-bird-ax2o1u0v.c-4.us-east-2.aws.neon.tech"
     ) {
-        throw new Error(
-            "Unexpected test database endpoint."
-        );
+        throw new Error("Unsafe integration test database.");
     }
 
-    return testUrl;
+    return connectionString;
 }

@@ -1,48 +1,53 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-    getSafeTestDatabaseUrl,
-} from "./helpers/test-database";
+import { getSafeTestDatabaseUrl } from "./helpers/test-database";
 
+// Dummy credentials only — no real database connections.
 const productionUrl =
     "postgresql://user:password@ep-ancient-cherry-ax0y0y4q-pooler.c-4.us-east-2.aws.neon.tech/neondb";
 
 const developmentUrl =
     "postgresql://user:password@ep-misty-bird-ax2o1u0v-pooler.c-4.us-east-2.aws.neon.tech/neondb";
 
+// Run each check with a controlled environment and restore it afterward.
 function checkConnection(
-    production: string,
-    development: string
+    databaseUrl: string,
+    nodeEnv = "test"
 ) {
-    const previousProduction = process.env.DATABASE_URL;
-    const previousTest = process.env.TEST_DATABASE_URL;
+    const environment = process.env as Record<
+        string,
+        string | undefined
+    >;
+
+    const previousDatabase = environment.DATABASE_URL;
+    const previousNodeEnv = environment.NODE_ENV;
 
     try {
-        process.env.DATABASE_URL = production;
-        process.env.TEST_DATABASE_URL = development;
+        environment.DATABASE_URL = databaseUrl;
+        environment.NODE_ENV = nodeEnv;
 
         return getSafeTestDatabaseUrl();
     } finally {
-        // Restore environment variables after each test.
-        if (previousProduction === undefined) {
-            delete process.env.DATABASE_URL;
+        // Restore the original environment after each test.
+        if (previousDatabase === undefined) {
+            delete environment.DATABASE_URL;
         } else {
-            process.env.DATABASE_URL = previousProduction;
+            environment.DATABASE_URL = previousDatabase;
         }
 
-        if (previousTest === undefined) {
-            delete process.env.TEST_DATABASE_URL;
+        if (previousNodeEnv === undefined) {
+            delete environment.NODE_ENV;
         } else {
-            process.env.TEST_DATABASE_URL = previousTest;
+            environment.NODE_ENV = previousNodeEnv;
         }
     }
 }
 
 test("rejects a test URL pointing to production", () => {
     assert.throws(
-        () => checkConnection(productionUrl, productionUrl),
-        /production database/
+        () => checkConnection(productionUrl),
+        /Unsafe integration test database/
     );
 });
 
@@ -51,14 +56,21 @@ test("rejects an unauthorized database endpoint", () => {
         "postgresql://user:password@ep-other-branch.c-4.us-east-2.aws.neon.tech/neondb";
 
     assert.throws(
-        () => checkConnection(productionUrl, unauthorizedUrl),
-        /Unexpected test database endpoint/
+        () => checkConnection(unauthorizedUrl),
+        /Unsafe integration test database/
     );
 });
 
 test("accepts the designated development endpoint", () => {
     assert.equal(
-        checkConnection(productionUrl, developmentUrl),
+        checkConnection(developmentUrl),
         developmentUrl
+    );
+});
+
+test("rejects execution outside the test environment", () => {
+    assert.throws(
+        () => checkConnection(developmentUrl, "production"),
+        /Integration tests require NODE_ENV=test/
     );
 });

@@ -803,14 +803,36 @@ Future inventory expansion:
 - Generate individual weekly technician commission/pay images
 - Generate TEFF-branded monthly summary images
 
+
 ### Payroll & Commissions
 
-- Employee-specific commission rates and pay structures
-- Payroll period tracking
-- Commission payout tracking
-- Tip payout tracking
-- Employee deductions and loans
-- Payroll summaries and reports
+**Nómina v1 — Implemented and tested in development; production deployment pending.**
+
+- ✅ OWNER-only payroll dashboard, API access, and financial operations. RECEPTIONIST and TECHNICIAN roles cannot access payroll information.
+- ✅ Weekly payroll periods: Monday through Sunday, with payday on Monday.
+- ✅ Employee-specific payroll statements with production totals, commissions, tips, bonuses, loans, uniform deductions, other deductions, and net pay.
+- ✅ Payroll adjustments for bonuses, loans, uniforms, and other deductions.
+- ✅ Payroll review and approval, with financial snapshots locked after review.
+- ✅ Manual payment confirmation: the Owner pays the technician outside TEFF, confirms the full outstanding amount, and records the payment.
+- ✅ Zero-balance settlement: mark a fully reconciled statement PAID without creating a fictitious payment.
+- ✅ Server-side outstanding-balance verification and overpayment prevention.
+- ✅ Idempotency keys, duplicate-payment protection, payroll-week locking, and transactional settlement.
+- ✅ Payroll statements and periods transition to PAID when their settlement requirements are satisfied.
+- ✅ Development integration tests for payment recording, duplicate protection, authorization, rollback, and zero-balance settlement.
+
+**Payment policy:** TEFF records payments already delivered by the Owner. The application does not initiate bank transfers or automatically send money to technicians.
+
+**Testing:** Financial integration tests run against a designated isolated Neon development database. A separate Next.js build directory can be enabled using `TEFF_PAYROLL_TEST=true`.
+
+**Pending production release:**
+- Verify production payroll migrations and deployment configuration.
+- Complete final production release checks.
+- Deploy and smoke-test OWNER-only payroll workflows.
+
+**Post-MVP improvements:**
+- Recovery and reconciliation for interrupted payment requests.
+- Expanded historical payroll reporting and exports.
+- Additional employee compensation structures and commission rules.
 
 ### Integrations & Automation
 
