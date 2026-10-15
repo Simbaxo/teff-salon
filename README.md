@@ -733,11 +733,28 @@ Inventory Management v1 is complete and ready for production operational testing
 - [x] OWNER and RECEPTIONIST access
 - [x] Inventory item catalog
 - [x] Create and edit inventory products
-- [x] Archive and reactivate inventory products
 - [x] Controlled inventory categories
 - [x] Category and stock-status filtering
 - [x] Search by product name or category
 - [x] iPad-friendly operational interface
+- [x] Archive and reactivate inventory products
+- [x] Product removal with confirmation and product-name identification
+- [x] OWNER and RECEPTIONIST permission to remove products
+- [x] Soft deletion: removed products become inactive instead of being permanently deleted
+- [x] One-click product restoration from the inactive inventory view
+- [x] Preserve stock quantities and movement history when products are removed or restored
+
+**New inventory categories — implemented and tested in development; production deployment pending:**
+
+- Limpieza Spa
+- Herramientas Spa
+- Decoración Uñas
+- Adicional Uñas
+- Papelería
+
+**Removal policy:** "Eliminar producto" requires confirmation and archives the product. It does not permanently erase the product or its inventory history.
+
+**Testing:** Product creation, removal, and restoration were verified using a temporary product while authenticated as RECEPTIONIST against the isolated Neon development database.
 
 #### Stock Management
 
@@ -806,7 +823,11 @@ Future inventory expansion:
 
 ### Payroll & Commissions
 
-**Nómina v1 — Implemented and tested in development; production deployment pending.**
+**Nómina v1 — Deployed to production October 15, 2026.**
+
+OWNER-only payroll management, manual payment recording, and zero-balance settlement are available in production. Authorization, database integration, and deployment smoke tests passed.
+
+The first genuine production payroll payment has not yet been verified end-to-end.
 
 - ✅ OWNER-only payroll dashboard, API access, and financial operations. RECEPTIONIST and TECHNICIAN roles cannot access payroll information.
 - ✅ Weekly payroll periods: Monday through Sunday, with payday on Monday.
@@ -824,10 +845,13 @@ Future inventory expansion:
 
 **Testing:** Financial integration tests run against a designated isolated Neon development database. A separate Next.js build directory can be enabled using `TEFF_PAYROLL_TEST=true`.
 
-**Pending production release:**
-- Verify production payroll migrations and deployment configuration.
-- Complete final production release checks.
-- Deploy and smoke-test OWNER-only payroll workflows.
+**Production release verification:**
+- [x] Production database migrations verified.
+- [x] OWNER payroll dashboard verified.
+- [x] Unauthenticated payroll API requests return HTTP 401.
+- [x] Development authorization and integration tests passed.
+- [x] Production deployment completed.
+- [ ] Verify the first genuine production payroll payment end-to-end.
 
 **Post-MVP improvements:**
 - Recovery and reconciliation for interrupted payment requests.

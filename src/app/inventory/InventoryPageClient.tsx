@@ -37,6 +37,11 @@ const INVENTORY_CATEGORIES = [
     "Limpieza",
     "Desechables",
     "Oficina",
+    "Limpieza Spa",
+    "Herramientas Spa",
+    "Decoración Uñas",
+    "Adicional Uñas",
+    "Papelería",
     "Otros",
 ] as const;
 
@@ -284,7 +289,13 @@ export default function InventoryPageClient() {
     }
 
     useEffect(() => {
-        loadInventory();
+        // Start the initial inventory request after the effect begins.
+        const timeoutId = window.setTimeout(() => {
+            void loadInventory();
+        }, 0);
+
+        // Avoid starting the request if the component unmounts first.
+        return () => window.clearTimeout(timeoutId);
     }, []);
 
     async function changeFilter(
@@ -643,6 +654,56 @@ export default function InventoryPageClient() {
         }
     }
 
+    // Restore an inactive product without changing its stock history.
+    async function restoreInventoryItem() {
+        if (!editingItem || editingItem.active || isUpdatingItem) {
+            return;
+        }
+
+        try {
+            setIsUpdatingItem(true);
+            setEditError("");
+
+            const response = await fetch(
+                `/api/inventory/${editingItem.id}`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        name: editingItem.name,
+                        category: editingItem.category,
+                        unit: editingItem.unit,
+                        lowStockThreshold: editingItem.lowStockThreshold,
+                        notes: editingItem.notes,
+                        active: true,
+                    }),
+                }
+            );
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(
+                    data.error || "No se pudo restaurar el producto."
+                );
+            }
+
+            // Return to the inactive list after restoring the product.
+            setEditingItem(null);
+            await loadInventory({ inactive: true });
+        } catch (error) {
+            console.error(error);
+            setEditError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo restaurar el producto."
+            );
+        } finally {
+            setIsUpdatingItem(false);
+        }
+    }
+
     async function updateInventoryItem() {
         if (!editingItem) {
             return;
@@ -730,6 +791,75 @@ export default function InventoryPageClient() {
                 error instanceof Error
                     ? error.message
                     : "No se pudo actualizar el producto."
+            );
+        } finally {
+            setIsUpdatingItem(false);
+        }
+    }
+
+    // Remove a product from active inventory while preserving its history.
+    async function removeInventoryItem() {
+        if (!editingItem || isUpdatingItem) {
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `¿Estás segura de que deseas eliminar "${editingItem.name}" del inventario?\n\n` +
+            "El producto dejará de aparecer en el inventario activo, " +
+            "pero conservará su historial de movimientos."
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            setIsUpdatingItem(true);
+            setEditError("");
+
+            // Reuse the existing authenticated inventory update endpoint.
+            const response = await fetch(
+                `/api/inventory/${editingItem.id}`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        name: editingItem.name,
+                        category: editingItem.category,
+                        unit: editingItem.unit,
+                        lowStockThreshold:
+                            editingItem.lowStockThreshold,
+                        notes: editingItem.notes,
+                        active: false,
+                    }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.error ||
+                        "No se pudo eliminar el producto."
+                );
+            }
+
+            // Close the editor and refresh the current inventory view.
+            setEditingItem(null);
+            setEditError("");
+
+            await loadInventory({
+                inactive: filter === "INACTIVE",
+            });
+        } catch (error) {
+            console.error(error);
+
+            setEditError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo eliminar el producto."
             );
         } finally {
             setIsUpdatingItem(false);
@@ -1859,16 +1989,41 @@ export default function InventoryPageClient() {
                         </p>
                     )}
 
-                    <button
-                        type="button"
-                        onClick={updateInventoryItem}
-                        disabled={isUpdatingItem}
-                        className="mt-5 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
-                    >
-                        {isUpdatingItem
-                            ? "Guardando..."
-                            : "Guardar cambios"}
-                    </button>
+                    {/* Product actions */}
+                    <div className="mt-5 flex flex-wrap items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (!editingItem.active) {
+                                    void restoreInventoryItem();
+                                } else {
+                                    void updateInventoryItem();
+                                }
+                            }}
+                            disabled={isUpdatingItem}
+                            className="rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                            {isUpdatingItem
+                                ? "Procesando..."
+                                : editingItem.active
+                                ? "Guardar cambios"
+                                : "Restaurar producto"}
+                        </button>
+
+                        {/* Removing a product preserves its stock movement history. */}
+                        {editingItem.active && (
+                            <button
+                                type="button"
+                                onClick={removeInventoryItem}
+                                disabled={isUpdatingItem}
+                                className="rounded-xl border border-red-300 bg-white px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                            >
+                                {isUpdatingItem
+                                    ? "Procesando..."
+                                    : "Eliminar producto"}
+                            </button>
+                        )}
+                    </div>
                 </div>
                 </div>
             )}
