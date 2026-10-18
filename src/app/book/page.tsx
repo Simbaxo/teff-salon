@@ -834,7 +834,6 @@ export default function BookPage() {
                 weekday: "long",
                 day: "numeric",
                 month: "long",
-                year: "numeric",
                 timeZone: "UTC",
             }
         ).format(
@@ -847,149 +846,236 @@ export default function BookPage() {
     return (
         <main className="min-h-screen bg-neutral-100 px-6 py-12">
             {bookingSuccess && (
-                <div className="mx-auto mt-8 max-w-xl">
-                    <div className="rounded-2xl bg-white p-6 shadow-sm sm:p-8">
-                        {/* Confirmation status */}
+                <div className="mx-auto mt-8 max-w-2xl">
+                    <div className="rounded-3xl bg-white p-5 sm:p-8">
+                        {/* TEFF branding */}
+                        <div className="mb-5 text-center sm:mb-8">
+                            <p className="text-3xl font-bold tracking-[0.2em] text-black">
+                                TEFF
+                            </p>
+                            <p className="mt-1 text-xs font-medium uppercase tracking-[0.3em] text-neutral-500">
+                                Beauty Salon
+                            </p>
+                        </div>
+
+                        {/* Confirmation status icon */}
                         <div
-                            className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl font-bold ${
+                            className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${
                                 requiresApproval
                                     ? "bg-amber-100 text-amber-700"
                                     : "bg-green-100 text-green-700"
                             }`}
                         >
-                            {requiresApproval ? "⏳" : "✓"}
+                            {requiresApproval ? (
+                                <span className="text-3xl">⏳</span>
+                            ) : (
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="h-9 w-9"
+                                    aria-hidden="true"
+                                >
+                                    <path d="M5 12.5l4.5 4.5L19 7" />
+                                </svg>
+                            )}
                         </div>
 
                         <div className="mt-5 text-center">
-                            <h2 className="text-2xl font-bold text-black">
+                            <h2 className="text-2xl font-bold tracking-tight text-black sm:text-3xl">
                                 {requiresApproval
                                     ? language === "es"
-                                        ? "Solicitud recibida"
-                                        : "Request received"
+                                        ? "¡Solicitud recibida!"
+                                        : "Request received!"
                                     : language === "es"
-                                    ? "¡Tu cita está confirmada!"
-                                    : "Your appointment is confirmed!"}
+                                    ? `¡Gracias, ${customerName.trim().split(/\s+/)[0]}! 💗`
+                                    : `Thank you, ${customerName.trim().split(/\s+/)[0]}! 💗`}
                             </h2>
 
-                            {/* Personalized confirmation message */}
-                            <p className="mt-2 text-neutral-600">
-                                {language === "es"
-                                    ? `¡Gracias, ${customerName.trim()}! `
-                                    : `Thank you, ${customerName.trim()}! `}
-
+                            {/* Show the appropriate message based on booking approval status. */}
+                            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-neutral-600 sm:text-base">
                                 {requiresApproval
                                     ? language === "es"
-                                        ? "Recibimos tu solicitud. Te confirmaremos los servicios pendientes lo antes posible."
-                                        : "We received your request. We'll confirm the pending services as soon as possible."
+                                        ? `¡Gracias, ${customerName.trim().split(/\s+/)[0]}! 💗 Recibimos tu solicitud y te avisaremos cuando sea confirmada.`
+                                        : `Thank you, ${customerName.trim().split(/\s+/)[0]}! 💗 We received your request and will let you know when it is confirmed.`
                                     : language === "es"
-                                    ? "Tu reserva quedó registrada correctamente."
-                                    : "Your booking has been registered successfully."}
+                                    ? "Tu cita ha sido reservada con éxito. ¡Te esperamos!"
+                                    : "Your appointment has been booked successfully. We look forward to seeing you!"}
                             </p>
                         </div>
 
                         {/* Date and starting time */}
-                        <div className="mt-6 rounded-xl bg-neutral-100 p-4 text-center">
-                            <p className="font-semibold text-black">
-                                {formatConfirmationDate(selectedDate)}
-                            </p>
+                        <div className="mt-6 rounded-2xl bg-neutral-100 p-4 text-center sm:mt-8 sm:p-6">
+                            {/* Appointment summary heading */}
+                            <h3 className="mb-5 text-left text-xl font-bold text-black">
+                                {language === "es" ? "Tu próxima cita" : "Your upcoming appointment"}
+                            </h3>
 
-                            <p className="mt-1 text-xl font-bold text-black">
-                                {formatTime(selectedTime)}
-                            </p>
-                        </div>
-
-                        {/* Complete booking itinerary */}
-                        <div className="mt-6 space-y-4">
-                            {confirmationServices.map((item, index) => {
-                                const createdAppointment =
-                                    confirmationAppointments.find(
-                                        (appointment) =>
-                                            appointment.appointmentServices.some(
-                                                (appointmentService) =>
-                                                    appointmentService.serviceId ===
-                                                    item.service.id
-                                            )
-                                    );
-
-                                return (
-                                <div
-                                    key={item.service.id}
-                                    className="border-b border-neutral-200 pb-4 last:border-b-0"
+                            {/* Appointment date and starting time */}
+                            <div className="flex items-start gap-3 text-left">
+                                <svg
+                                    className="mt-0.5 h-5 w-5 shrink-0 text-neutral-500"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    aria-hidden="true"
                                 >
-                                    {confirmationServices.length > 1 && (
-                                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                                            {language === "es"
-                                                ? `Servicio ${index + 1} de ${confirmationServices.length}`
-                                                : `Service ${index + 1} of ${confirmationServices.length}`}
-                                        </p>
-                                    )}
+                                    <rect x="3" y="5" width="18" height="16" rx="2" />
+                                    <path d="M7 3v4M17 3v4M3 10h18" />
+                                </svg>
 
-                                    <div className="flex items-start justify-between gap-4">
-                                        <p className="font-semibold text-black">
-                                            {language === "es"
-                                                ? item.service.nameEs
-                                                : item.service.nameEn}
-                                        </p>
+                                <p className="font-medium leading-6 text-black">
+                                    {formatConfirmationDate(selectedDate)}
+                                    <span className="mx-2 text-neutral-400">·</span>
+                                    {formatTime(selectedTime)}
+                                </p>
+                            </div>
 
-                                        <p className="whitespace-nowrap font-semibold text-black">
-                                            $
-                                            {item.service.price.toLocaleString(
-                                                "es-CO"
-                                            )}
-                                        </p>
-                                    </div>
+                            {/* Services, add-ons, and assigned technicians */}
+                            <div className="mt-6 space-y-5 border-t border-neutral-200 pt-5 text-left">
+                                {confirmationServices.map((item, index) => {
+                                    const createdAppointment =
+                                        confirmationAppointments.find(
+                                            (appointment) =>
+                                                appointment.appointmentServices.some(
+                                                    (appointmentService) =>
+                                                        appointmentService.serviceId ===
+                                                        item.service.id
+                                                )
+                                        );
 
-                                    {createdAppointment && (
-                                        <p className="mt-1 text-sm text-neutral-500">
-                                            {createdAppointment.employee.name}
-                                            {" · "}
-                                            {formatTime(createdAppointment.startTime)}
-                                        </p>
-                                    )}
-
-                                    {item.addons.map((addon) => (
-                                        <div
-                                            key={addon.id}
-                                            className="mt-2 flex items-start justify-between gap-4 text-sm text-neutral-500"
-                                        >
-                                            <span>
-                                                +{" "}
+                                    return (
+                                    <div
+                                        key={item.service.id}
+                                        className="border-b border-neutral-200 pb-4 last:border-b-0"
+                                    >
+                                        {confirmationServices.length > 1 && (
+                                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
                                                 {language === "es"
-                                                    ? addon.nameEs
-                                                    : addon.nameEn}
-                                            </span>
+                                                    ? `Servicio ${index + 1} de ${confirmationServices.length}`
+                                                    : `Service ${index + 1} of ${confirmationServices.length}`}
+                                            </p>
+                                        )}
 
-                                            <span>
+                                        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 sm:flex-nowrap">
+                                            {/* Service name with decorative icon */}
+                                            <div className="flex min-w-0 items-start gap-3">
+                                                <svg
+                                                    className="mt-0.5 h-5 w-5 shrink-0 text-neutral-500"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.8"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    aria-hidden="true"
+                                                >
+                                                    <path d="M12 2l2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5L12 2z" />
+                                                </svg>
+
+                                                <p className="font-semibold text-black">
+                                                    {language === "es"
+                                                        ? item.service.nameEs
+                                                        : item.service.nameEn}
+                                                </p>
+                                            </div>
+
+                                            <p className="whitespace-nowrap font-semibold text-black">
                                                 $
-                                                {addon.price.toLocaleString(
+                                                {item.service.price.toLocaleString(
                                                     "es-CO"
                                                 )}
-                                            </span>
+                                            </p>
                                         </div>
-                                    ))}
-                                </div>
-                                );
-                            })}
-                        </div>
 
-                        {/* Booking total */}
-                        <div className="mt-2 flex items-center justify-between border-t border-neutral-200 pt-5">
-                            <span className="font-bold text-black">
-                                Total
-                            </span>
+                                        {/* Display the assigned technician and individual service time. */}
+                                        {createdAppointment && (
+                                            <div className="mt-3 flex items-start gap-3">
+                                                <svg
+                                                    className="mt-0.5 h-5 w-5 shrink-0 text-neutral-500"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.8"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    aria-hidden="true"
+                                                >
+                                                    <circle cx="12" cy="8" r="4" />
+                                                    <path d="M4 21v-2a8 8 0 0 1 16 0v2" />
+                                                </svg>
 
-                            <span className="text-xl font-bold text-black">
-                                $
-                                {confirmationTotal.toLocaleString(
-                                    "es-CO"
-                                )}
-                            </span>
+                                                <p className="text-sm leading-6 text-neutral-600">
+                                                    {language === "es" ? "Profesional: " : "Professional: "}
+                                                    <span className="font-medium text-black">
+                                                        {createdAppointment.employee.name}
+                                                    </span>
+                                                    {/* Keep the individual service time together on narrow screens. */}
+                                                    <span
+                                                        className={`whitespace-nowrap text-neutral-400 ${
+                                                            confirmationServices.length === 1 ? "hidden sm:inline-block" : "inline-block"
+                                                        }`}
+                                                    >
+                                                        {" · "}
+                                                        {formatTime(createdAppointment.startTime)}
+                                                    </span>
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {item.addons.map((addon) => (
+                                            <div
+                                                key={addon.id}
+                                                className="mt-2 flex items-start justify-between gap-4 text-sm text-neutral-500"
+                                            >
+                                                <span>
+                                                    +{" "}
+                                                    {language === "es"
+                                                        ? addon.nameEs
+                                                        : addon.nameEn}
+                                                </span>
+
+                                                <span>
+                                                    $
+                                                    {addon.price.toLocaleString(
+                                                        "es-CO"
+                                                    )}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Booking total */}
+                            <div className="mt-6 flex items-center justify-between border-t border-neutral-300 pt-5">
+                                <span className="font-bold text-black">
+                                    Total
+                                </span>
+
+                                <span className="text-2xl font-bold tracking-tight text-black">
+                                    $
+                                    {confirmationTotal.toLocaleString(
+                                        "es-CO"
+                                    )}
+                                </span>
+                            </div>
                         </div>
 
                         {/* Salon location and directions */}
-                        <div className="mt-6 rounded-xl border border-neutral-200 p-4">
-                            <h3 className="font-semibold text-black">
-                                📍 {language === "es" ? "Nuestra ubicación" : "Our location"}
+                        <div className="mt-8">
+                            {/* Location heading */}
+                            <h3 className="text-xl font-bold tracking-tight text-black sm:text-2xl">
+                                {language === "es"
+                                    ? "Te esperamos en TEFF 📍"
+                                    : "We look forward to seeing you at TEFF 📍"}
                             </h3>
 
                             <p className="mt-2 font-medium text-black">
@@ -1011,7 +1097,7 @@ export default function BookPage() {
                                             ? "Ver ubicación de TEFF en Google Maps"
                                             : "View TEFF's location on Google Maps"
                                     }
-                                    className="mt-4 block overflow-hidden rounded-xl border border-neutral-200"
+                                    className="mt-5 block overflow-hidden rounded-2xl border border-neutral-200"
                                 >
                                     {/* Google serves the map directly with its attribution. */}
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1037,7 +1123,7 @@ export default function BookPage() {
                                         decoding="async"
                                         width={600}
                                         height={360}
-                                        className="h-auto w-full object-contain"
+                                        className="aspect-[5/3] w-full object-cover"
                                     />
                                 </a>
                             )}
@@ -1046,7 +1132,7 @@ export default function BookPage() {
                                 href="https://maps.app.goo.gl/gWzsFDtvYW3TQ9Rd7"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="mt-4 flex w-full items-center justify-center rounded-xl border border-black px-5 py-3 font-semibold text-black transition hover:bg-neutral-100"
+                                className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-black px-5 py-4 font-semibold text-white transition hover:bg-neutral-800"
                             >
                                 {language === "es"
                                     ? "Cómo llegar con Google Maps ↗"
@@ -1057,7 +1143,7 @@ export default function BookPage() {
                         <button
                             type="button"
                             onClick={() => window.location.reload()}
-                            className="mt-6 w-full rounded-xl bg-black px-5 py-4 font-semibold text-white hover:bg-neutral-800"
+                            className="mt-3 w-full rounded-2xl border border-neutral-300 bg-white px-5 py-4 font-semibold text-black transition hover:bg-neutral-100"
                         >
                             {language === "es"
                                 ? "Reservar otra cita"
