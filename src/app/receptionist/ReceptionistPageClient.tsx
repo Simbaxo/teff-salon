@@ -247,6 +247,10 @@ export default function ReceptionistPageClient({
     // Keep the schedule-blocking form collapsed until needed.
     const [showBlockForm, setShowBlockForm] = useState(false);
 
+    // Track which customer groups have their appointment controls expanded.
+    const [expandedCustomerIds, setExpandedCustomerIds] =
+        useState<number[]>([]);
+
     // Load the current appointment data for Reception.
     async function loadAppointments() {
         try {
@@ -725,6 +729,29 @@ export default function ReceptionistPageClient({
             a.startTime.localeCompare(b.startTime)
         );
     
+    // Group the selected day's appointments by customer.
+    // Keep individual appointments intact for scheduling and checkout.
+    const groupedCustomerAppointments = Array.from(
+        selectedDateAppointments.reduce(
+            (groups, appointment) => {
+                const customerId = appointment.customer.id;
+
+                if (!groups.has(customerId)) {
+                    groups.set(customerId, []);
+                }
+
+                groups.get(customerId)!.push(appointment);
+
+                return groups;
+            },
+            new Map<number, Appointment[]>()
+        )
+    ).map(([customerId, customerAppointments]) => ({
+        customerId,
+        customer: customerAppointments[0].customer,
+        appointments: customerAppointments,
+    }));
+
     // Reception snapshot for today's salon activity.
     const todaysAppointmentCount = todaysAppointments.filter(
         (appointment) =>
@@ -1285,277 +1312,348 @@ export default function ReceptionistPageClient({
                     </div>
                 ) : (
                     <div className="mt-4 space-y-3">
-                        {selectedDateAppointments.map((appointment) => (
-                            <div
-                                key={appointment.id}
-                                className="rounded-xl bg-white p-5 shadow-sm"
-                            >
-                                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                                    <div>
-                                        <p className="text-lg font-bold text-black">
-                                            {formatTime(appointment.startTime)}
-                                        </p>
-
-                                        <Link
-                                            href={`/staff/customers/${appointment.customer.id}`}
-                                            className="mt-1 inline-block font-semibold text-black hover:underline"
-                                        >
-                                            {appointment.customer.name}
-                                        </Link>
-
-                                        <p className="mt-1 text-sm text-neutral-500">
-                                            {appointment.appointmentServices
-                                                .map(
-                                                    (item) =>
-                                                        item.service.nameEs
-                                                )
-                                                .join(", ")}
-                                        </p>
-                                    </div>
-
-                                    <div className="md:min-w-48 md:text-right">
-                                        <p className="text-sm text-neutral-500">
-                                            Técnica
-                                        </p>
-
-                                        <select
-                                            value={appointment.employee.id}
-                                            disabled={
-                                                reassigningAppointmentId === appointment.id ||
-                                                ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(
-                                                    appointment.status
-                                                )
-                                            }
-                                            onChange={(event) =>
-                                                reassignEmployee(
-                                                    appointment.id,
-                                                    Number(event.target.value)
-                                                )
-                                            }
-                                            className="mt-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-black disabled:opacity-50"
-                                        >
-                                            {employees.map((employee) => (
-                                                <option
-                                                    key={employee.id}
-                                                    value={employee.id}
+                        {groupedCustomerAppointments.map((group) => (
+                            <div key={group.customerId} className="space-y-3">
+                                {/* Compact summary for customers with multiple appointments. */}
+                                {group.appointments.length > 1 && (
+                                    <div className="rounded-xl bg-white p-5 shadow-sm">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                            <div>
+                                                <Link
+                                                    href={`/staff/customers/${group.customerId}`}
+                                                    className="text-lg font-bold text-black hover:underline"
                                                 >
-                                                    {employee.name}
-                                                </option>
-                                            ))}
-                                        </select>
+                                                    {group.customer.name}
+                                                </Link>
 
-                                        <div className="mt-2">
-                                            {reassigningAppointmentId === appointment.id ? (
-                                                <span className="text-sm text-neutral-500">
-                                                    Actualizando...
-                                                </span>
-                                            ) : (
-                                                <span
-                                                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(
-                                                        appointment.status
-                                                    )}`}
-                                                >
-                                                    {getStatusLabel(appointment.status)}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
+                                                <p className="mt-1 text-sm text-neutral-500">
+                                                    {group.appointments.length} citas · Desde{" "}
+                                                    {formatTime(group.appointments[0].startTime)}
+                                                </p>
+                                            </div>
 
-                                <div className="mt-4 border-t border-neutral-200 pt-4">
-                                    <p className="text-sm font-medium text-neutral-500">
-                                        Cambiar horario
-                                    </p>
-
-                                    <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                                        <input
-                                            type="date"
-                                            defaultValue={appointment.date.slice(0, 10)}
-                                            disabled={
-                                                reschedulingAppointmentId === appointment.id ||
-                                                ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(
-                                                    appointment.status
-                                                )
-                                            }
-                                            id={`date-${appointment.id}`}
-                                            className="rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-black disabled:opacity-50"
-                                        />
-
-                                        <select
-                                            defaultValue={appointment.startTime.slice(0, 5)}
-                                            disabled={
-                                                reschedulingAppointmentId === appointment.id ||
-                                                ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(
-                                                    appointment.status
-                                                )
-                                            }
-                                            id={`time-${appointment.id}`}
-                                            className="rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-black disabled:opacity-50"
-                                        >
-                                            {!receptionTimeOptions.includes(
-                                                appointment.startTime.slice(0, 5)
-                                            ) && (
-                                                <option value={appointment.startTime.slice(0, 5)}>
-                                                    {formatTime(appointment.startTime)}
-                                                </option>
-                                            )}
-
-                                            {receptionTimeOptions.map((time) => (
-                                                <option key={time} value={time}>
-                                                    {formatTime(time)}
-                                                </option>
-                                            ))}
-                                        </select>
-
-                                        <button
-                                            type="button"
-                                            disabled={
-                                                reschedulingAppointmentId === appointment.id ||
-                                                ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(
-                                                    appointment.status
-                                                )
-                                            }
-                                            onClick={() => {
-                                                const dateInput = document.getElementById(
-                                                    `date-${appointment.id}`
-                                                ) as HTMLInputElement;
-
-                                                const timeInput = document.getElementById(
-                                                    `time-${appointment.id}`
-                                                ) as HTMLSelectElement;
-
-                                                rescheduleAppointment(
-                                                    appointment.id,
-                                                    dateInput.value,
-                                                    timeInput.value
-                                                );
-                                            }}
-                                            className="rounded-lg bg-black px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-                                        >
-                                            {reschedulingAppointmentId === appointment.id
-                                                ? "Actualizando..."
-                                                : "Guardar horario"}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Appointment workflow actions */}
-                                <div className="mt-4 flex flex-wrap gap-2 border-t border-neutral-200 pt-4">
-                                    {appointment.status === "REQUESTED" && (
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                updateAppointmentStatus(
-                                                    appointment.id,
-                                                    "BOOKED"
-                                                )
-                                            }
-                                            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
-                                        >
-                                            Confirmar Cita
-                                        </button>
-                                    )}
-
-                                    {appointment.status === "BOOKED" && (
-                                        <div className="flex flex-wrap gap-2">
                                             <button
                                                 type="button"
                                                 onClick={() =>
-                                                    updateAppointmentStatus(
-                                                        appointment.id,
-                                                        "CHECKED_IN"
+                                                    setExpandedCustomerIds((current) =>
+                                                        current.includes(group.customerId)
+                                                            ? current.filter((id) => id !== group.customerId)
+                                                            : [...current, group.customerId]
                                                     )
                                                 }
-                                                className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
+                                                aria-expanded={expandedCustomerIds.includes(group.customerId)}
+                                                className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-black"
                                             >
-                                                Cliente Llegó
-                                            </button>
-
-                                            {canMarkNoShow(
-                                                appointment.date,
-                                                appointment.startTime
-                                            ) && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const confirmed = window.confirm(
-                                                            "¿Marcar esta cita como No Asistió?"
-                                                        );
-
-                                                        if (confirmed) {
-                                                            updateAppointmentStatus(
-                                                                appointment.id,
-                                                                "NO_SHOW"
-                                                            );
-                                                        }
-                                                    }}
-                                                    className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black"
-                                                >
-                                                    No Asistió
-                                                </button>
-                                            )}
-
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    const confirmed = window.confirm(
-                                                        "¿Seguro que deseas cancelar esta cita?"
-                                                    );
-
-                                                    if (confirmed) {
-                                                        updateAppointmentStatus(
-                                                            appointment.id,
-                                                            "CANCELLED"
-                                                        );
-                                                    }
-                                                }}
-                                                className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black"
-                                            >
-                                                Cancelar Cita
+                                                {expandedCustomerIds.includes(group.customerId)
+                                                    ? "Ocultar gestión −"
+                                                    : "Gestionar servicios +"}
                                             </button>
                                         </div>
-                                    )}
 
-                                    {appointment.status === "CHECKED_IN" && (
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                updateAppointmentStatus(
-                                                    appointment.id,
-                                                    "IN_PROGRESS"
-                                                )
-                                            }
-                                            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
-                                        >
-                                            Iniciar Servicio
-                                        </button>
-                                    )}
+                                        {/* Show all services without expanding management controls. */}
+                                        <div className="mt-4 space-y-2 border-t border-neutral-200 pt-4">
+                                            {group.appointments.map((item) => (
+                                                <div key={item.id} className="flex gap-3 text-sm">
+                                                    <span className="shrink-0 font-semibold text-black">
+                                                        {formatTime(item.startTime)}
+                                                    </span>
 
-                                    {appointment.status === "IN_PROGRESS" && (
-                                        <Link
-                                            href={`/staff/checkout/${appointment.id}`}
-                                            className="inline-block rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
+                                                    <div className="min-w-0">
+                                                        <p className="text-black">
+                                                            {item.appointmentServices
+                                                                .map((entry) => entry.service.nameEs)
+                                                                .join(", ")}
+                                                        </p>
+
+                                                        <p className="text-neutral-500">
+                                                            {item.employee.name} · {getStatusLabel(item.status)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Keep individual appointment controls available when expanded. */}
+                                {(group.appointments.length === 1 ||
+                                    expandedCustomerIds.includes(group.customerId)) && (
+                                    <div className="space-y-3">
+                                        {group.appointments.map((appointment) => (
+                                        <div
+                                            key={appointment.id}
+                                            className="rounded-xl bg-white p-5 shadow-sm"
                                         >
-                                            Finalizar Servicio
-                                        </Link>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            deleteAppointment(
-                                                appointment.id,
-                                                appointment.status
-                                            )
-                                        }
-                                        className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700"
-                                    >
-                                        Eliminar Cita
-                                    </button>
+                                            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                                <div>
+                                                    <p className="text-lg font-bold text-black">
+                                                        {formatTime(appointment.startTime)}
+                                                    </p>
+
+                                                    <Link
+                                                        href={`/staff/customers/${appointment.customer.id}`}
+                                                        className="mt-1 inline-block font-semibold text-black hover:underline"
+                                                    >
+                                                        {appointment.customer.name}
+                                                    </Link>
+
+                                                    <p className="mt-1 text-sm text-neutral-500">
+                                                        {appointment.appointmentServices
+                                                            .map(
+                                                                (item) =>
+                                                                    item.service.nameEs
+                                                            )
+                                                            .join(", ")}
+                                                    </p>
+                                                </div>
+
+                                                <div className="md:min-w-48 md:text-right">
+                                                    <p className="text-sm text-neutral-500">
+                                                        Técnica
+                                                    </p>
+
+                                                    <select
+                                                        value={appointment.employee.id}
+                                                        disabled={
+                                                            reassigningAppointmentId === appointment.id ||
+                                                            ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(
+                                                                appointment.status
+                                                            )
+                                                        }
+                                                        onChange={(event) =>
+                                                            reassignEmployee(
+                                                                appointment.id,
+                                                                Number(event.target.value)
+                                                            )
+                                                        }
+                                                        className="mt-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-black disabled:opacity-50"
+                                                    >
+                                                        {employees.map((employee) => (
+                                                            <option
+                                                                key={employee.id}
+                                                                value={employee.id}
+                                                            >
+                                                                {employee.name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+
+                                                    <div className="mt-2">
+                                                        {reassigningAppointmentId === appointment.id ? (
+                                                            <span className="text-sm text-neutral-500">
+                                                                Actualizando...
+                                                            </span>
+                                                        ) : (
+                                                            <span
+                                                                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(
+                                                                    appointment.status
+                                                                )}`}
+                                                            >
+                                                                {getStatusLabel(appointment.status)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-4 border-t border-neutral-200 pt-4">
+                                                <p className="text-sm font-medium text-neutral-500">
+                                                    Cambiar horario
+                                                </p>
+
+                                                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                                                    <input
+                                                        type="date"
+                                                        defaultValue={appointment.date.slice(0, 10)}
+                                                        disabled={
+                                                            reschedulingAppointmentId === appointment.id ||
+                                                            ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(
+                                                                appointment.status
+                                                            )
+                                                        }
+                                                        id={`date-${appointment.id}`}
+                                                        className="rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-black disabled:opacity-50"
+                                                    />
+
+                                                    <select
+                                                        defaultValue={appointment.startTime.slice(0, 5)}
+                                                        disabled={
+                                                            reschedulingAppointmentId === appointment.id ||
+                                                            ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(
+                                                                appointment.status
+                                                            )
+                                                        }
+                                                        id={`time-${appointment.id}`}
+                                                        className="rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-black disabled:opacity-50"
+                                                    >
+                                                        {!receptionTimeOptions.includes(
+                                                            appointment.startTime.slice(0, 5)
+                                                        ) && (
+                                                            <option value={appointment.startTime.slice(0, 5)}>
+                                                                {formatTime(appointment.startTime)}
+                                                            </option>
+                                                        )}
+
+                                                        {receptionTimeOptions.map((time) => (
+                                                            <option key={time} value={time}>
+                                                                {formatTime(time)}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+
+                                                    <button
+                                                        type="button"
+                                                        disabled={
+                                                            reschedulingAppointmentId === appointment.id ||
+                                                            ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(
+                                                                appointment.status
+                                                            )
+                                                        }
+                                                        onClick={() => {
+                                                            const dateInput = document.getElementById(
+                                                                `date-${appointment.id}`
+                                                            ) as HTMLInputElement;
+
+                                                            const timeInput = document.getElementById(
+                                                                `time-${appointment.id}`
+                                                            ) as HTMLSelectElement;
+
+                                                            rescheduleAppointment(
+                                                                appointment.id,
+                                                                dateInput.value,
+                                                                timeInput.value
+                                                            );
+                                                        }}
+                                                        className="rounded-lg bg-black px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                                                    >
+                                                        {reschedulingAppointmentId === appointment.id
+                                                            ? "Actualizando..."
+                                                            : "Guardar horario"}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Appointment workflow actions */}
+                                            <div className="mt-4 flex flex-wrap gap-2 border-t border-neutral-200 pt-4">
+                                                {appointment.status === "REQUESTED" && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            updateAppointmentStatus(
+                                                                appointment.id,
+                                                                "BOOKED"
+                                                            )
+                                                        }
+                                                        className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
+                                                    >
+                                                        Confirmar Cita
+                                                    </button>
+                                                )}
+
+                                                {appointment.status === "BOOKED" && (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                updateAppointmentStatus(
+                                                                    appointment.id,
+                                                                    "CHECKED_IN"
+                                                                )
+                                                            }
+                                                            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
+                                                        >
+                                                            Cliente Llegó
+                                                        </button>
+
+                                                        {canMarkNoShow(
+                                                            appointment.date,
+                                                            appointment.startTime
+                                                        ) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const confirmed = window.confirm(
+                                                                        "¿Marcar esta cita como No Asistió?"
+                                                                    );
+
+                                                                    if (confirmed) {
+                                                                        updateAppointmentStatus(
+                                                                            appointment.id,
+                                                                            "NO_SHOW"
+                                                                        );
+                                                                    }
+                                                                }}
+                                                                className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black"
+                                                            >
+                                                                No Asistió
+                                                            </button>
+                                                        )}
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const confirmed = window.confirm(
+                                                                    "¿Seguro que deseas cancelar esta cita?"
+                                                                );
+
+                                                                if (confirmed) {
+                                                                    updateAppointmentStatus(
+                                                                        appointment.id,
+                                                                        "CANCELLED"
+                                                                    );
+                                                                }
+                                                            }}
+                                                            className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-black"
+                                                        >
+                                                            Cancelar Cita
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {appointment.status === "CHECKED_IN" && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            updateAppointmentStatus(
+                                                                appointment.id,
+                                                                "IN_PROGRESS"
+                                                            )
+                                                        }
+                                                        className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
+                                                    >
+                                                        Iniciar Servicio
+                                                    </button>
+                                                )}
+
+                                                {appointment.status === "IN_PROGRESS" && (
+                                                    <Link
+                                                        href={`/staff/checkout/${appointment.id}`}
+                                                        className="inline-block rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
+                                                    >
+                                                        Finalizar Servicio
+                                                    </Link>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        deleteAppointment(
+                                                            appointment.id,
+                                                            appointment.status
+                                                        )
+                                                    }
+                                                    className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700"
+                                                >
+                                                    Eliminar Cita
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
             </div>
 
             {/* Weekly salon performance */}
