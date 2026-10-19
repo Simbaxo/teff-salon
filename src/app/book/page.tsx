@@ -1,12 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useLanguage } from "@/context/LanguageContext";
 import {
   getTeffCurrentMinutes,
   getTeffDayOfWeek,
   getTeffToday,
 } from "@/lib/datetime";
+
+// Temporary service photos, mapped by database service ID.
+// Replace these files with real TEFF photography as it becomes available.
+const SERVICE_IMAGES: Record<number, string> = {
+    1: "/images/services/manicure.webp",
+    2: "/images/services/pedicure.webp",
+    12: "/images/services/extensions.webp",
+    21: "/images/services/lashes.webp",
+    40: "/images/services/brows.webp",
+    46: "/images/services/facial.webp",
+};
 
 // Generate available start times based on TEFF's business hours
 function getTimeSlots(date: string) {
@@ -1123,7 +1135,7 @@ export default function BookPage() {
                                         decoding="async"
                                         width={600}
                                         height={360}
-                                        className="aspect-[5/3] w-full object-cover"
+                                        className="aspect-5/3 w-full object-cover"
                                     />
                                 </a>
                             )}
@@ -1216,19 +1228,38 @@ export default function BookPage() {
                                                         : "border-neutral-200 bg-white"
                                                 }`}
                                             >
-                                                <h3 className="font-semibold text-black">
-                                                    {language === "es"
-                                                        ? service.nameEs
-                                                        : service.nameEn}
-                                                </h3>
+                                            <div className="flex items-center gap-4">
+                                                {/* Show a temporary photo when one is available for this service. */}
+                                                {SERVICE_IMAGES[service.id] && (
+                                                    <Image
+                                                        src={SERVICE_IMAGES[service.id]}
+                                                        alt={
+                                                            language === "es"
+                                                                ? `Imagen ilustrativa de ${service.nameEs}`
+                                                                : `Illustrative image for ${service.nameEn}`
+                                                        }
+                                                        width={88}
+                                                        height={88}
+                                                        sizes="88px"
+                                                        className="h-[88px] w-[88px] shrink-0 rounded-lg object-cover"
+                                                    />
+                                                )}
+                                                <div className="min-w-0 flex-1">
+                                                    <h3 className="font-semibold text-black">
+                                                        {language === "es"
+                                                            ? service.nameEs
+                                                            : service.nameEn}
+                                                    </h3>
 
-                                                <p className="mt-1 text-sm text-neutral-600">
-                                                    ${service.price.toLocaleString("es-CO")} COP
-                                                </p>
+                                                    <p className="mt-1 text-sm text-neutral-600">
+                                                        ${service.price.toLocaleString("es-CO")} COP
+                                                    </p>
 
-                                                <p className="text-sm text-neutral-500">
-                                                    {service.estimatedDuration} min
-                                                </p>
+                                                    <p className="text-sm text-neutral-500">
+                                                        {service.estimatedDuration} min
+                                                    </p>
+                                                </div>
+                                            </div>
                                             </button>
                                         ))}
                                     </div>

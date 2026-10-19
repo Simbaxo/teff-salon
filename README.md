@@ -149,7 +149,9 @@ Appointment services and add-ons store price and duration snapshots so historica
 
 ### Booking Confirmation v2 — October 2026
 
-**Status:** Implemented and tested locally. Production deployment pending.
+**Status:** Deployed to production October 15, 2026.
+
+Production deployment verified on teffbeauty.com. Local desktop and mobile testing completed. Google Maps rendering after a genuine production booking remains to be verified.
 
 - [x] Personalized confirmation greeting using the customer's name
 - [x] Spanish and English confirmation messages
@@ -177,6 +179,43 @@ Appointment services and add-ons store price and duration snapshots so historica
 - [ ] Complete production confirmation-screen smoke test
 
 ---
+
+### Service Photography v1 — October 2026
+
+**Status:** Implemented and tested locally. Production deployment pending.
+
+#### Temporary Service Photography
+
+- [x] Add service thumbnails to the existing booking catalog
+- [x] Preserve service selection, pricing, and durations
+- [x] Use Next.js Image for optimized rendering
+- [x] Create six 400 × 400 WebP thumbnails
+- [x] Map images by database service ID
+- [x] Preserve existing cards for services without photographs
+- [x] Verify thumbnails locally on the booking page
+
+| Service ID | Service | Image | Original Pexels filename |
+|---|---|---|---|
+| 1 | Manicura Gel | manicure.webp | pexels-kpaukshtite-1839711.jpg |
+| 2 | Pedicura Gel | pedicure.webp | pexels-karola-g-4963840.jpg |
+| 12 | Acrílico Esculpido | extensions.webp | pexels-svliiim-34871555.jpg |
+| 21 | Clásico / Natural | lashes.webp | pexels-estoymhrb-20765765.jpg |
+| 40 | Laminado de Cejas | brows.webp | pexels-shiny-diamond-3373735.jpg |
+| 46 | Limpieza facial profunda | facial.webp | pexels-joaojesusdesign-28783928.jpg |
+
+**Image storage:** `public/images/services/`
+
+**Image mapping:** `SERVICE_IMAGES` in `src/app/book/page.tsx`.
+
+**Photography policy:** These are temporary illustrative stock photographs, not examples of work performed by TEFF. Replace them with actual salon photography as Angy provides approved images.
+
+**Licensing:** Original filenames are retained for source tracking. Verify each photograph's source page and applicable commercial-use license before production release.
+
+**Pending:**
+- [ ] Complete licensing verification
+- [ ] Final production build and deployment
+- [ ] Verify thumbnails on teffbeauty.com
+- [ ] Gradually replace stock photographs with real TEFF work
 
 # ✅ Phase 4 — Scheduling & Availability
 
