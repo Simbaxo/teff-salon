@@ -182,7 +182,14 @@ Production deployment verified on teffbeauty.com. Local desktop and mobile testi
 
 ### Service Photography v1 — October 2026
 
-**Status:** Implemented and tested locally. Production deployment pending.
+**Status:** Deployed to production October 19, 2026.
+
+Production deployment verified on teffbeauty.com.
+All six service thumbnails and service selection were visually tested.
+No runtime errors were reported during the final deployment check.
+
+Git commit: 4a802d8
+Vercel deployment: dpl_EVXjqPhRGUZyGx2gLWu3h2XLSfng
 
 #### Temporary Service Photography
 
