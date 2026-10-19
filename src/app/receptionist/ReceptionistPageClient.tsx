@@ -244,6 +244,9 @@ export default function ReceptionistPageClient({
 
     const [blockError, setBlockError] = useState("");
 
+    // Keep the schedule-blocking form collapsed until needed.
+    const [showBlockForm, setShowBlockForm] = useState(false);
+
     // Load the current appointment data for Reception.
     async function loadAppointments() {
         try {
@@ -998,15 +1001,37 @@ export default function ReceptionistPageClient({
 
             {/* Technician schedule blocking */}
             <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
-                <div>
-                    <h2 className="text-xl font-bold text-black">
-                        Bloquear horario
-                    </h2>
+                {/* Click to expand or collapse the schedule-blocking form. */}
+                <button
+                    type="button"
+                    onClick={() => setShowBlockForm((current) => !current)}
+                    disabled={isSavingBlock}
+                    aria-expanded={showBlockForm}
+                    aria-controls="receptionist-block-form"
+                    className="flex w-full items-center justify-between gap-4 text-left"
+                >
+                    <div>
+                        <h2 className="text-xl font-bold text-black">
+                            Bloquear horario
+                        </h2>
 
-                    <p className="mt-1 text-sm text-neutral-500">
-                        Marca períodos en los que una técnica no estará disponible.
-                    </p>
-                </div>
+                        <p className="mt-1 text-sm text-neutral-500">
+                            Gestionar disponibilidad de técnicas
+                        </p>
+                    </div>
+
+                    <span
+                        aria-hidden="true"
+                        className="text-xl font-semibold text-neutral-500"
+                    >
+                        {showBlockForm ? "−" : "+"}
+                    </span>
+                </button>
+                {/* Only display the blocking form when expanded. */}
+                <div
+                    id="receptionist-block-form"
+                    hidden={!showBlockForm}
+                >
 
                 <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-5">
                     <div>
@@ -1131,6 +1156,7 @@ export default function ReceptionistPageClient({
                         ? "Bloqueando..."
                         : "Bloquear horario"}
                 </button>
+            </div>
             </div>
 
             {/* Schedule blocks for the selected block date */}
