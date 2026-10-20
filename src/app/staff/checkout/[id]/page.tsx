@@ -115,13 +115,22 @@ export default async function CheckoutPage({
                     <p className="mt-2 text-neutral-500">
                         Esta cita ya fue finalizada y no puede volver a cobrarse.
                     </p>
+                    {/* Allow staff to navigate away without reopening checkout. */}
+                    <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+                        <a
+                            href="/staff"
+                            className="rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white"
+                        >
+                            ← Volver a Citas
+                        </a>
 
-                    <a 
-                        href="/staff"
-                        className="mt-6 inline-block rounded-lg bg-black px-4 py-2 text-white"
-                    >
-                        Volver a las citas
-                    </a>
+                        <a
+                            href="/receptionist"
+                            className="rounded-xl border border-neutral-300 px-5 py-3 text-sm font-semibold"
+                        >
+                            Ir a Recepción
+                        </a>
+                    </div>
                 </div>
             </main>
         )
@@ -130,11 +139,19 @@ export default async function CheckoutPage({
     return (
         <main className="min-h-screen bg-neutral-100 p-6">
             <div className="mx-auto max-w-3xl">
-                <h1 className="text-3xl font-bold text-black">
-                    Finalizar Servicio
-                </h1>
+                        <h1 className="text-3xl font-bold text-black">
+                            Finalizar Servicio
+                        </h1>
 
-                <div className="mt-6 rounded-xl bg-white p-6 shadow-sm">
+                        {/* Return to appointments without submitting checkout. */}
+                        <a
+                            href="/staff"
+                            className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black"
+                        >
+                            ← Volver a las citas
+                        </a>
+
+                        <div className="mt-6 rounded-xl bg-white p-6 shadow-sm">
                     <h2 className="text-xl font-bold text-black">
                         {appointment.customer.name}
                     </h2>

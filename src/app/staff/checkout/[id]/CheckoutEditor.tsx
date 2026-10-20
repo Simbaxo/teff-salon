@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type CheckoutService = {
     bookedPrice: number;
@@ -469,15 +470,31 @@ export default function CheckoutEditor({
                 <p className="mt-2 text-sm text-neutral-500">
                     La venta fue guardada correctamente.
                 </p>
-
                 <div className="mt-6 rounded-xl bg-neutral-100 p-4">
                     <p className="text-sm text-neutral-500">
                         Venta #{completedSale.saleId}
                     </p>
 
-                    <p className="mt01 text-2xl font-bold text-black">
+                    <p className="mt-1 text-2xl font-bold text-black">
                         ${completedSale.finalTotal.toLocaleString("es-CO")}
                     </p>
+                </div>
+
+                {/* Keep navigation available after a successful checkout. */}
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                    <Link
+                        href="/staff"
+                        className="rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white hover:bg-neutral-800"
+                    >
+                        ← Volver a Citas
+                    </Link>
+
+                    <Link
+                        href="/receptionist"
+                        className="rounded-xl border border-neutral-300 bg-white px-5 py-3 text-sm font-semibold text-black hover:bg-neutral-100"
+                    >
+                        Ir a Recepción
+                    </Link>
                 </div>
             </div>
         );

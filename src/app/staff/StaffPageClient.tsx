@@ -153,7 +153,7 @@ export default  function StaffPage({
 }: StaffPageClientProps) {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     // Active technicians available for appointment reassignment
-    const [employees, setEmployees] = useState<Employee[]>([]); 
+    const [employees, setEmployees] = useState<Employee[]>([]);
     // Track which appointment is currently being reassigned
     const [reassigningAppointmentId, setReassigningAppointmentId] =
         useState<number | null>(null);
@@ -164,6 +164,9 @@ export default  function StaffPage({
     const [isLoading, setIsLoading] = useState(true);
     // Show a useful message if appointment data cannot be loaded.
     const [loadError, setLoadError] = useState(false);
+    // Track expanded reservations independently for each technician.
+    const [expandedBookingGroups, setExpandedBookingGroups] =
+        useState<string[]>([]);
     // Default the staff calendar to today's date in Medellin.
     const [selectedDate, setSelectedDate] = useState(
         getTeffToday()
@@ -195,7 +198,7 @@ export default  function StaffPage({
     async function loadEmployees() {
         try {
             const response = await fetch("/api/employees");
-            
+
             if (!response.ok) {
                 throw new Error("No se pudieron cargar las técnicas");
             }
@@ -270,6 +273,51 @@ export default  function StaffPage({
         {} as Record<string, Appointment[]>
     );
 
+    // Group each technician's appointments by reservation.
+    // Appointments without a booking ID remain independent.
+    const reservationGroupsByEmployee = Object.fromEntries(
+        Object.entries(appointmentsByEmployee).map(
+            ([employeeName, employeeAppointments]) => {
+                const groups = new Map<string, Appointment[]>();
+
+                const sortedAppointments = [...employeeAppointments].sort(
+                    (a, b) => a.startTime.localeCompare(b.startTime)
+                );
+
+                for (const appointment of sortedAppointments) {
+                    const groupKey =
+                        appointment.bookingId !== null
+                            ? `booking-${appointment.bookingId}`
+                            : `appointment-${appointment.id}`;
+
+                    if (!groups.has(groupKey)) {
+                        groups.set(groupKey, []);
+                    }
+
+                    groups.get(groupKey)!.push(appointment);
+                }
+
+                return [
+                    employeeName,
+                    Array.from(groups, ([key, groupAppointments]) => ({
+                        key,
+                        bookingId: groupAppointments[0].bookingId,
+                        customer: groupAppointments[0].customer,
+                        appointments: groupAppointments,
+                    })),
+                ];
+            }
+        )
+    ) as Record<
+        string,
+        {
+            key: string;
+            bookingId: number | null;
+            customer: Appointment["customer"];
+            appointments: Appointment[];
+        }[]
+    >;
+
     // Add the status update function
     async function updateAppointmentStatus(
         appointmentId: number,
@@ -291,8 +339,8 @@ export default  function StaffPage({
                 throw new Error("No se pudo actualizar la cita");
             }
 
-            setAppointments((current) => 
-                current.map((appointment) => 
+            setAppointments((current) =>
+                current.map((appointment) =>
                     appointment.id === appointmentId
                         ? {...appointment, status }
                         : appointment
@@ -472,7 +520,7 @@ export default  function StaffPage({
                         <h1 className="text-3xl font-bold text-black">
                             TEFF Staff
                         </h1>
-                        
+
                         <p className="mt-2 text-neutral-600">
                             Gestión de Citas
                         </p>
@@ -494,7 +542,7 @@ export default  function StaffPage({
                     </button>
                 </div>
                 <div className="mt-6">
-                    <label 
+                    <label
                         htmlFor="staff-date"
                         className="block text-sm font-semibold text-black"
                     >
@@ -502,7 +550,7 @@ export default  function StaffPage({
                     </label>
 
                     <input
-                        id="staff-date" 
+                        id="staff-date"
                         type="date"
                         value={selectedDate}
                         onChange={(event) => setSelectedDate(event.target.value)}
@@ -548,321 +596,403 @@ export default  function StaffPage({
                         </div>
                     )}
 
-                    {Object.entries(appointmentsByEmployee).map(
-                        ([employeeName, employeeAppointments]) => (
+                    {Object.entries(reservationGroupsByEmployee).map(
+                        ([employeeName, reservationGroups]) => (
                             <section key={employeeName}>
                                 <h2 className="mb-4 text-xl font-bold text-black">
                                     {employeeName}
                                 </h2>
 
                                 <div className="space-y-4">
-                                    {employeeAppointments
-                                        .sort((a, b) => a.startTime.localeCompare(b.startTime))
-                                        .map((appointment) => (
-                                        <div
-                                            key={appointment.id}
-                                            className={`rounded-xl p-5 shadow-sm ${
-                                                appointment.bookingId !== null &&
-                                                getBookingAppointmentCount(
-                                                    appointment.bookingId
-                                                ) > 1
-                                                    ? "border-l-4 border-violet-400 bg-violet-50/40"
-                                                    : "bg-white"
-                                            }`}
-                                        >
-                                            <div className="flex items-start justify-between">
-                                                <div>
-                                                    <h3 className="text-lg font-semibold text-black">
-                                                        <Link
-                                                            href={`/staff/customers/${appointment.customer.id}`}
-                                                            className="underline-offset-4 hover:underline"
-                                                        >
-                                                            {appointment.customer.name}
-                                                        </Link>
-                                                    </h3>
+                                    {reservationGroups.map((group) => (
+                                        <div key={group.key} className="space-y-3">
+                                            {/* Compact summary for reservations with multiple services. */}
+                                                {group.bookingId !== null && group.appointments.length > 1 && (
+                                                    <div className="rounded-xl border-l-4 border-violet-400 bg-white p-5 shadow-sm">
+                                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                                            <div>
+                                                                <Link
+                                                                    href={`/staff/customers/${group.customer.id}`}
+                                                                    className="text-lg font-bold text-black hover:underline"
+                                                                >
+                                                                    {group.customer.name}
+                                                                </Link>
 
-                                                    <p className="text-sm text-neutral-500">
-                                                        {appointment.customer.phone}
-                                                    </p>
-                                                    {appointment.bookingId !== null &&
-                                                        getBookingAppointmentCount(
-                                                            appointment.bookingId
-                                                        ) > 1 && (
-                                                            <div className="mt-3 flex flex-wrap items-center gap-2">
-                                                                <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-800">
-                                                                    Servicio{" "}
-                                                                    {getBookingAppointmentPosition(
-                                                                        appointment.id,
-                                                                        appointment.bookingId
-                                                                    )}{" "}
-                                                                    de{" "}
-                                                                    {getBookingAppointmentCount(
-                                                                        appointment.bookingId
-                                                                    )}
-                                                                </span>
-
-                                                                <span className="text-xs font-semibold text-neutral-500">
-                                                                    Misma Reserva #{appointment.bookingId}
-                                                                </span>
+                                                                <p className="mt-1 text-sm text-neutral-500">
+                                                                    Reserva #{group.bookingId} · {group.appointments.length} servicios
+                                                                </p>
                                                             </div>
-                                                        )}
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const key = `${group.appointments[0].employeeId}-${group.key}`;
+
+                                                                    setExpandedBookingGroups((current) =>
+                                                                        current.includes(key)
+                                                                            ? current.filter((item) => item !== key)
+                                                                            : [...current, key]
+                                                                    );
+                                                                }}
+                                                                aria-expanded={expandedBookingGroups.includes(
+                                                                    `${group.appointments[0].employeeId}-${group.key}`
+                                                                )}
+                                                                className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-black"
+                                                            >
+                                                                {expandedBookingGroups.includes(
+                                                                    `${group.appointments[0].employeeId}-${group.key}`
+                                                                )
+                                                                    ? "Ocultar gestión −"
+                                                                    : "Gestionar servicios +"}
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Each service keeps its own time and status. */}
+                                                        <div className="mt-4 space-y-3 border-t border-neutral-200 pt-4">
+                                                            {group.appointments.map((item) => (
+                                                                <div key={item.id} className="flex gap-3 text-sm">
+                                                                    <span className="shrink-0 font-semibold text-black">
+                                                                        {formatTime(item.startTime)}
+                                                                    </span>
+
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-black">
+                                                                            {item.appointmentServices
+                                                                                .map((entry) => entry.service.nameEs)
+                                                                                .join(", ")}
+                                                                        </p>
+
+                                                                        <p className="text-neutral-500">
+                                                                            {item.employee.name} · {getStatusLabel(item.status)}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {/* Single appointments stay visible; multi-service controls expand on demand. */}
+                                                {(group.appointments.length === 1 ||
+                                                    expandedBookingGroups.includes(
+                                                        `${group.appointments[0].employeeId}-${group.key}`
+                                                    )) && (
+                                                    <div className="space-y-3">
+
+                                                {group.appointments.map((appointment) => (
+                                                    <div
+                                                        key={appointment.id}
+                                                        className={`rounded-xl p-5 shadow-sm ${
+                                                    appointment.bookingId !== null &&
+                                                    getBookingAppointmentCount(
+                                                        appointment.bookingId
+                                                    ) > 1
+                                                        ? "border-l-4 border-violet-400 bg-violet-50/40"
+                                                        : "bg-white"
+                                                }`}
+                                            >
+                                                <div className="flex items-start justify-between">
+                                                    <div>
+                                                        <h3 className="text-lg font-semibold text-black">
+                                                            <Link
+                                                                href={`/staff/customers/${appointment.customer.id}`}
+                                                                className="underline-offset-4 hover:underline"
+                                                            >
+                                                                {appointment.customer.name}
+                                                            </Link>
+                                                        </h3>
+
+                                                        <p className="text-sm text-neutral-500">
+                                                            {appointment.customer.phone}
+                                                        </p>
+                                                        {appointment.bookingId !== null &&
+                                                            getBookingAppointmentCount(
+                                                                appointment.bookingId
+                                                            ) > 1 && (
+                                                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                                                    <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-800">
+                                                                        Servicio{" "}
+                                                                        {getBookingAppointmentPosition(
+                                                                            appointment.id,
+                                                                            appointment.bookingId
+                                                                        )}{" "}
+                                                                        de{" "}
+                                                                        {getBookingAppointmentCount(
+                                                                            appointment.bookingId
+                                                                        )}
+                                                                    </span>
+
+                                                                    <span className="text-xs font-semibold text-neutral-500">
+                                                                        Misma Reserva #{appointment.bookingId}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                    </div>
+
+                                                    <span
+                                                        className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(
+                                                            appointment.status
+                                                        )}`}
+                                                    >
+                                                        {getStatusLabel(appointment.status)}
+                                                    </span>
                                                 </div>
 
-                                                <span
-                                                    className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(
-                                                        appointment.status
-                                                    )}`}
-                                                >
-                                                    {getStatusLabel(appointment.status)}
-                                                </span>
-                                            </div>
+                                                <div className="mt-4 text-sm text-neutral-700">
+                                                    <p>
+                                                        <strong>Hora:</strong> {formatTime(appointment.startTime)}
+                                                    </p>
 
-                                            <div className="mt-4 text-sm text-neutral-700">
-                                                <p>
-                                                    <strong>Hora:</strong> {formatTime(appointment.startTime)}
-                                                </p>
+                                                    <p>
+                                                        <strong>Duración:</strong> {appointment.duration} min
+                                                    </p>
 
-                                                <p>
-                                                    <strong>Duración:</strong> {appointment.duration} min
-                                                </p>
-                                                
+                                                    {(
+                                                        userRole === "OWNER" ||
+                                                        (
+                                                            userRole === "RECEPTIONIST" &&
+                                                            ["REQUESTED", "BOOKED", "CHECKED_IN"].includes(
+                                                                appointment.status
+                                                            )
+                                                        )
+                                                    ) && (
+                                                        <div className="mt-4">
+                                                            <label
+                                                                htmlFor={`time-${appointment.id}`}
+                                                                className="block text-sm font-semibold text-black"
+                                                            >
+                                                                Hora del servicio
+                                                            </label>
+
+                                                            <select
+                                                                id={`time-${appointment.id}`}
+                                                                value={appointment.startTime}
+                                                                disabled={
+                                                                    reschedulingAppointmentId === appointment.id
+                                                                }
+                                                                onChange={(event) => {
+                                                                    const newStartTime = event.target.value;
+
+                                                                    if (newStartTime !== appointment.startTime) {
+                                                                        rescheduleAppointment(
+                                                                            appointment.id,
+                                                                            appointment.date.slice(0, 10),
+                                                                            newStartTime
+                                                                        );
+                                                                    }
+                                                                }}
+                                                                className="mt-2 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm text-black"
+                                                            >
+                                                                {Array.from(
+                                                                    new Set([
+                                                                        ...staffTimeOptions,
+                                                                        appointment.startTime,
+                                                                    ])
+                                                                )
+                                                                    .sort((a, b) => a.localeCompare(b))
+                                                                    .map((time) => (
+                                                                        <option key={time} value={time}>
+                                                                            {formatTime(time)}
+                                                                        </option>
+                                                                    ))}
+                                                            </select>
+
+                                                            {reschedulingAppointmentId === appointment.id && (
+                                                                <p className="mt-2 text-sm text-neutral-500">
+                                                                    Cambiando horario...
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="mt-4">
+                                                    <p className="text-sm font-semibold text-black">
+                                                        Servicios
+                                                    </p>
+
+                                                    {appointment.appointmentServices.map((item) => (
+                                                        <p
+                                                            key={item.service.id}
+                                                            className="mt-1 text-sm text-neutral-600"
+                                                        >
+                                                            {item.service.nameEs} - $
+                                                            {item.bookedPrice.toLocaleString("es-CO")}
+                                                        </p>
+                                                    ))}
+                                                </div>
+
+                                                {appointment.appointmentAddons.length > 0 && (
+                                                    <div className="mt-4">
+                                                        <p className="text-sm font-semibold text-black">
+                                                            Adicionales
+                                                        </p>
+
+                                                        {appointment.appointmentAddons.map((item) => (
+                                                            <p
+                                                                key={item.addon.id}
+                                                                className="mt-1 text-sm text-neutral-600"
+                                                            >
+                                                                {item.addon.nameEs} - $
+                                                                {item.bookedPrice.toLocaleString("es-CO")}
+                                                            </p>
+                                                        ))}
+                                                    </div>
+                                                )}
+
                                                 {(
                                                     userRole === "OWNER" ||
                                                     (
                                                         userRole === "RECEPTIONIST" &&
-                                                        ["REQUESTED", "BOOKED", "CHECKED_IN"].includes(
-                                                            appointment.status
-                                                        )
+                                                        ["REQUESTED", "BOOKED", "CHECKED_IN"].includes(appointment.status)
                                                     )
                                                 ) && (
-                                                    <div className="mt-4">
+                                                    <div className="mt-5">
                                                         <label
-                                                            htmlFor={`time-${appointment.id}`}
+                                                            htmlFor={`employee-${appointment.id}`}
                                                             className="block text-sm font-semibold text-black"
                                                         >
-                                                            Hora del servicio
+                                                            Técnica
                                                         </label>
 
                                                         <select
-                                                            id={`time-${appointment.id}`}
-                                                            value={appointment.startTime}
-                                                            disabled={
-                                                                reschedulingAppointmentId === appointment.id
-                                                            }
+                                                            id={`employee-${appointment.id}`}
+                                                            value={appointment.employeeId}
+                                                            disabled={reassigningAppointmentId === appointment.id}
                                                             onChange={(event) => {
-                                                                const newStartTime = event.target.value;
+                                                                const newEmployeeId = Number(event.target.value);
 
-                                                                if (newStartTime !== appointment.startTime) {
-                                                                    rescheduleAppointment(
+                                                                if (newEmployeeId !== appointment.employeeId) {
+                                                                    reassignEmployee(
                                                                         appointment.id,
-                                                                        appointment.date.slice(0, 10),
-                                                                        newStartTime
+                                                                        newEmployeeId
                                                                     );
                                                                 }
                                                             }}
                                                             className="mt-2 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm text-black"
                                                         >
-                                                            {staffTimeOptions.map((time) => (
-                                                                <option key={time} value={time}>
-                                                                    {formatTime(time)}
+                                                            {employees.map((employee) => (
+                                                                <option
+                                                                    key={employee.id}
+                                                                    value={employee.id}
+                                                                >
+                                                                    {employee.name}
                                                                 </option>
                                                             ))}
                                                         </select>
-
-                                                        {reschedulingAppointmentId === appointment.id && (
+                                                        {reassigningAppointmentId === appointment.id && (
                                                             <p className="mt-2 text-sm text-neutral-500">
-                                                                Cambiando horario...
+                                                                Cambiando Técnica...
                                                             </p>
                                                         )}
                                                     </div>
                                                 )}
-                                            </div>
 
-                                            <div className="mt-4">
-                                                <p className="text-sm font-semibold text-black">
-                                                    Servicios
-                                                </p>
-
-                                                {appointment.appointmentServices.map((item) => (
-                                                    <p
-                                                        key={item.service.id}
-                                                        className="mt-1 text-sm text-neutral-600"
-                                                    >
-                                                        {item.service.nameEs} - $
-                                                        {item.bookedPrice.toLocaleString("es-CO")}
-                                                    </p>
-                                                ))}
-                                            </div>
-
-                                            {appointment.appointmentAddons.length > 0 && (
-                                                <div className="mt-4">
-                                                    <p className="text-sm font-semibold text-black">
-                                                        Adicionales
-                                                    </p>
-
-                                                    {appointment.appointmentAddons.map((item) => (
-                                                        <p
-                                                            key={item.addon.id}
-                                                            className="mt-1 text-sm text-neutral-600"
-                                                        >
-                                                            {item.addon.nameEs} - $
-                                                            {item.bookedPrice.toLocaleString("es-CO")}
-                                                        </p>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            {(
-                                                userRole === "OWNER" ||
-                                                (
-                                                    userRole === "RECEPTIONIST" &&
-                                                    ["REQUESTED", "BOOKED", "CHECKED_IN"].includes(appointment.status)
-                                                )
-                                            ) && (
-                                                <div className="mt-5">
-                                                    <label 
-                                                        htmlFor={`employee-${appointment.id}`}
-                                                        className="block text-sm font-semibold text-black"
-                                                    >
-                                                        Técnica
-                                                    </label>
-
-                                                    <select 
-                                                        id={`employee-${appointment.id}`}
-                                                        value={appointment.employeeId}
-                                                        disabled={reassigningAppointmentId === appointment.id}
-                                                        onChange={(event) => {
-                                                            const newEmployeeId = Number(event.target.value);
-
-                                                            if (newEmployeeId !== appointment.employeeId) {
-                                                                reassignEmployee(
-                                                                    appointment.id,
-                                                                    newEmployeeId
-                                                                );
-                                                            }
-                                                        }}
-                                                        className="mt-2 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm text-black"
-                                                    >
-                                                        {employees.map((employee) => (
-                                                            <option
-                                                                key={employee.id} 
-                                                                value={employee.id}
-                                                            >
-                                                                {employee.name}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    {reassigningAppointmentId === appointment.id && (
-                                                        <p className="mt-2 text-sm text-neutral-500">
-                                                            Cambiando Técnica...
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {appointment.status === "REQUESTED" && (
-                                                <div className="mt-5">
-                                                    <button
-                                                        onClick={() =>
-                                                            updateAppointmentStatus(
-                                                                appointment.id,
-                                                                "BOOKED"
-                                                            )
-                                                        }
-                                                        className="rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white"
-                                                    >
-                                                        Confirmar Cita
-                                                    </button>
-                                                </div>
-                                            )}
-
-                                            {appointment.status === "BOOKED" && (
-                                                <div className="mt-5 flex gap-3">
-                                                    <button
-                                                        onClick={() =>
-                                                            updateAppointmentStatus(
-                                                                appointment.id,
-                                                                "CHECKED_IN"
-                                                            )
-                                                        }
-                                                        className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
-                                                    >
-                                                        Cliente Llegó
-                                                    </button>
-
-                                                    {canMarkNoShow(
-                                                        appointment.date,
-                                                        appointment.startTime
-                                                    ) && (
+                                                {appointment.status === "REQUESTED" && (
+                                                    <div className="mt-5">
                                                         <button
-                                                        onClick={() => {
-                                                            const confirmed = window.confirm(
-                                                                "¿Marcar esta cita como No Asistió?"
-                                                            );
-                                                            
-                                                            if (confirmed) {
+                                                            onClick={() =>
                                                                 updateAppointmentStatus(
                                                                     appointment.id,
-                                                                    "NO_SHOW"
-                                                                );
+                                                                    "BOOKED"
+                                                                )
                                                             }
-                                                        }}
+                                                            className="rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white"
+                                                        >
+                                                            Confirmar Cita
+                                                        </button>
+                                                    </div>
+                                                )}
 
-                                                        className="rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black"
-                                                    >
-                                                        No Asistió
-                                                    </button>
-                                                    )}
+                                                {appointment.status === "BOOKED" && (
+                                                    <div className="mt-5 flex gap-3">
+                                                        <button
+                                                            onClick={() =>
+                                                                updateAppointmentStatus(
+                                                                    appointment.id,
+                                                                    "CHECKED_IN"
+                                                                )
+                                                            }
+                                                            className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+                                                        >
+                                                            Cliente Llegó
+                                                        </button>
 
+                                                        {canMarkNoShow(
+                                                            appointment.date,
+                                                            appointment.startTime
+                                                        ) && (
+                                                            <button
+                                                            onClick={() => {
+                                                                const confirmed = window.confirm(
+                                                                    "¿Marcar esta cita como No Asistió?"
+                                                                );
+
+                                                                if (confirmed) {
+                                                                    updateAppointmentStatus(
+                                                                        appointment.id,
+                                                                        "NO_SHOW"
+                                                                    );
+                                                                }
+                                                            }}
+
+                                                            className="rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black"
+                                                        >
+                                                            No Asistió
+                                                        </button>
+                                                        )}
+
+                                                        <button
+                                                            onClick={() => {
+                                                                const confirmed = window.confirm(
+                                                                    "¿Seguro que deseas cancelar esta cita?"
+                                                                );
+
+                                                                if (confirmed) {
+                                                                    updateAppointmentStatus(
+                                                                        appointment.id,
+                                                                        "CANCELLED"
+                                                                    );
+                                                                }
+                                                            }}
+                                                            className="rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black"
+                                                        >
+                                                            Cancelar Cita
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {appointment.status === "CHECKED_IN" && (
                                                     <button
-                                                        onClick={() => {
-                                                            const confirmed = window.confirm(
-                                                                "¿Seguro que deseas cancelar esta cita?"
-                                                            );
-                                                            
-                                                            if (confirmed) {
-                                                                updateAppointmentStatus(
-                                                                    appointment.id,
-                                                                    "CANCELLED"
-                                                                );
-                                                            }
-                                                        }}
-                                                        className="rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black"
+                                                        onClick={() =>
+                                                            updateAppointmentStatus(
+                                                                appointment.id,
+                                                                "IN_PROGRESS"
+                                                            )
+                                                        }
+                                                        className="mt-5 rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold text-white hover:bg-purple-700"
                                                     >
-                                                        Cancelar Cita
+                                                        Iniciar Servicio
                                                     </button>
+                                                )}
+
+                                                {appointment.status === "IN_PROGRESS" && (
+                                                    <Link
+                                                        href={`/staff/checkout/${appointment.id}`}
+                                                        className="mt-5 inline-block rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white hover:bg-green-700"
+                                                    >
+                                                        Finalizar Servicio
+                                                    </Link>
+                                                )}
                                                 </div>
-                                            )}
-
-                                            {appointment.status === "CHECKED_IN" && (
-                                                <button
-                                                    onClick={() =>
-                                                        updateAppointmentStatus(
-                                                            appointment.id,
-                                                            "IN_PROGRESS"
-                                                        )
-                                                    }
-                                                    className="mt-5 rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold text-white hover:bg-purple-700"
-                                                >
-                                                    Iniciar Servicio
-                                                </button>
-                                            )}
-
-                                            {appointment.status === "IN_PROGRESS" && (
-                                                <Link
-                                                    href={`/staff/checkout/${appointment.id}`}
-                                                    className="mt-5 inline-block rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white hover:bg-green-700"
-                                                >
-                                                    Finalizar Servicio
-                                                </Link>
-                                            )}
-
-                                            </div>
-                                        ))}
-                                    </div>
-                                </section>
-                            )
-                        )}
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                    )
+                )}
                 </div>
             </div>
         </main>
