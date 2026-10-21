@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
 import { lockPayrollWeek } from "@/lib/payroll/period-lock";
+import { assertAppointmentNotSold } from "@/lib/appointments/reassignment-safety";
+import { getReassignmentErrorResponse } from "@/lib/appointments/reassignment-errors";
 
 export async function PATCH(
     request: Request,
@@ -145,15 +147,6 @@ export async function PATCH(
             );
         }
 
-        // If the appointment is already assigned to this technician
-        // there is nothing to change
-        if (appointment.employeeId === employeeId) {
-            return Response.json({
-                message: "Appointment is already assigned to this employee",
-                appointment,
-            });
-        }
-
         const maxAttempts = 3;
         let result = null;
 
@@ -161,96 +154,8 @@ export async function PATCH(
             try {
                 result = await prisma.$transaction(
                     async (tx) => {
-                        // Only appointments that currently occupy the schedule need
-                        // availability protection when changing technicians
-                        const scheduleBlockingStatuses = [
-                            "REQUESTED",
-                            "BOOKED",
-                            "CHECKED_IN",
-                            "IN_PROGRESS",
-                        ]
-
-                        if (scheduleBlockingStatuses.includes(appointment.status)) {
-                            const existingAppointments = await tx.appointment.findMany({
-                                where: {
-                                    employeeId,
-                                    date: appointment.date,
-    
-                                    // Never let the appointment conflict with itself
-                                    id: {
-                                        not: appointment.id,
-                                    },
-    
-                                    status: {
-                                        in: scheduleBlockingStatuses,
-                                    },
-                                },
-                            });
-
-                            const existingScheduleBlocks =
-                                await tx.employeeScheduleBlock.findMany({
-                                    where: {
-                                        employeeId,
-                                        date: appointment.date,
-                                    },
-                                });
-
-                            // Convert "10:30" into minutes from midnight
-                            function timeToMinutes(time: string) {
-                                const [hours, minutes] = time.split(":").map(Number);
-                                return hours * 60 + minutes;
-                            }
-                            
-                            const requestedStart = timeToMinutes(appointment.startTime);
-                            const requestedEnd =
-                                requestedStart + appointment.duration;
-                            
-                            const hasConflict = existingAppointments.some(
-                                (existingAppointment) => {
-                                    const existingStart = timeToMinutes(
-                                        existingAppointment.startTime
-                                    );
-    
-                                    const existingEnd =
-                                        existingStart + existingAppointment.duration;
-                                    
-                                    return (
-                                        requestedStart < existingEnd &&
-                                        requestedEnd > existingStart
-                                    );
-                                }
-                            );
-
-                            const hasScheduleBlockConflict =
-                                existingScheduleBlocks.some(
-                                    (scheduleBlock) => {
-                                        const blockedStart = timeToMinutes(
-                                            scheduleBlock.startTime
-                                        );
-
-                                        const blockedEnd = timeToMinutes(
-                                            scheduleBlock.endTime
-                                        );
-
-                                        return (
-                                            requestedStart < blockedEnd &&
-                                            requestedEnd > blockedStart
-                                        );
-                                    }
-                                );
-    
-                            // Schedule blocks such as vacation or late arrival cannot be overridden.
-                            if (hasScheduleBlockConflict) {
-                                throw new Error("REASSIGNMENT_BLOCK_CONFLICT");
-                            }
-
-                            // Staff may intentionally assign an overlapping appointment after confirmation.
-                            if (hasConflict && !overrideOverlap) {
-                                throw new Error("REASSIGNMENT_APPOINTMENT_CONFLICT");
-                            }
-                        }
-
-                        // Lock the service week before changing financial ownership.
+                        // Serialize reassignment with payroll operations
+                        // before checking schedule or financial records.
                         const serviceMonday = new Date(appointment.date);
 
                         const weekday = serviceMonday.getUTCDay();
@@ -263,6 +168,89 @@ export async function PATCH(
                         );
 
                         await lockPayrollWeek(tx, serviceMonday);
+
+                        // Reload the appointment after acquiring the payroll lock.
+                        // Do not rely on appointment details read before the transaction.
+                        const currentAppointment =
+                            await tx.appointment.findUnique({
+                                where: {
+                                    id: appointmentId,
+                                },
+                                select: {
+                                    id: true,
+                                    status: true,
+                                    employeeId: true,
+                                    date: true,
+                                    startTime: true,
+                                    duration: true,
+                                    appointmentServices: {
+                                        select: {
+                                            serviceId: true,
+                                        },
+                                    },
+                                },
+                            });
+
+                        if (!currentAppointment) {
+                            throw new Error("APPOINTMENT_NOT_FOUND");
+                        }
+
+                        // Recheck receptionist permissions using current status.
+                        // A service may have started after the initial request.
+                        if (
+                            session.user.role === "RECEPTIONIST" &&
+                            !["REQUESTED", "BOOKED", "CHECKED_IN"].includes(
+                                currentAppointment.status
+                            )
+                        ) {
+                            throw new Error("REASSIGNMENT_STATUS_FORBIDDEN");
+                        }
+
+                        // If the appointment moved to another service date,
+                        // retry with a fresh request instead of using the old week.
+                        if (
+                            currentAppointment.date.getTime() !==
+                            appointment.date.getTime()
+                        ) {
+                            throw new Error("APPOINTMENT_CHANGED");
+                        }
+
+                        // Verify the technician is qualified for the
+                        // appointment's current services, not stale data.
+                        const currentEmployee =
+                            await tx.employee.findUnique({
+                                where: {
+                                    id: employeeId,
+                                },
+                                select: {
+                                    active: true,
+                                    employeeServices: {
+                                        select: {
+                                            serviceId: true,
+                                        },
+                                    },
+                                },
+                            });
+
+                        if (!currentEmployee?.active) {
+                            throw new Error("REASSIGNMENT_EMPLOYEE_INVALID");
+                        }
+
+                        const qualifiedServiceIds = new Set(
+                            currentEmployee.employeeServices.map(
+                                (item) => item.serviceId
+                            )
+                        );
+
+                        const qualifiedForCurrentServices =
+                            currentAppointment.appointmentServices.every(
+                                (item) =>
+                                    qualifiedServiceIds.has(item.serviceId)
+                            );
+
+                        if (!qualifiedForCurrentServices) {
+                            throw new Error("REASSIGNMENT_EMPLOYEE_INVALID");
+                        }
 
                         // If this appointment has already been checked out, find its sale
                         // This matters when the Owner corrects a historical technician assignment
@@ -315,11 +303,12 @@ export async function PATCH(
                         // Also protect appointments belonging to a reviewed payroll week,
                         // even if no commission or tip has been assigned yet.
                         if (saleAppointment) {
-                            const appointmentDate = appointment.date
+                            // Use the appointment date verified inside this transaction.
+                            const appointmentDate = currentAppointment.date
                                 .toISOString()
                                 .slice(0, 10);
 
-                            const weekday = appointment.date.getUTCDay();
+                            const weekday = currentAppointment.date.getUTCDay();
 
                             const daysSinceMonday =
                                 weekday === 0 ? 6 : weekday - 1;
@@ -349,37 +338,136 @@ export async function PATCH(
                             }
                         }
 
-                        // A completed sale may already have commission and tip records assigned
-                        // to the original technician. Keep those records consistent with the correction
-                        if (saleAppointment) {
-                            await tx.commission.updateMany({
-                                where: {
-                                    saleId: saleAppointment.saleId,
-                                    employeeId: appointment.employeeId,
-                                },
-                                data: {
-                                    employeeId,
-                                },
-                            });
+                        // Preserve payroll-lock errors, then verify the sale relationship
+                        // directly inside this transaction before changing the technician.
+                        await assertAppointmentNotSold(tx, appointment.id);
 
-                            await tx.tip.updateMany({
+                        // Check the current technician only after financial safeguards.
+                        // A no-op must not bypass sold-appointment protection.
+                        if (currentAppointment.employeeId === employeeId) {
+                            return tx.appointment.findUniqueOrThrow({
                                 where: {
-                                    saleId: saleAppointment.saleId,
-                                    employeeId: appointment.employeeId,
+                                    id: currentAppointment.id,
                                 },
-                                data: {
-                                    employeeId,
+                                include: {
+                                    employee: true,
                                 },
                             });
                         }
 
-                        // Change the technician assigned to the appointment
-                        return tx.appointment.update({
+                        // Only appointments that currently occupy the schedule need
+                        // availability protection when changing technicians
+                        const scheduleBlockingStatuses = [
+                            "REQUESTED",
+                            "BOOKED",
+                            "CHECKED_IN",
+                            "IN_PROGRESS",
+                        ]
+
+                        if (scheduleBlockingStatuses.includes(currentAppointment.status)) {
+                            const existingAppointments = await tx.appointment.findMany({
+                                where: {
+                                    employeeId,
+                                    date: currentAppointment.date,
+
+                                    // Never let the appointment conflict with itself
+                                    id: {
+                                        not: currentAppointment.id,
+                                    },
+
+                                    status: {
+                                        in: scheduleBlockingStatuses,
+                                    },
+                                },
+                            });
+
+                            const existingScheduleBlocks =
+                                await tx.employeeScheduleBlock.findMany({
+                                    where: {
+                                        employeeId,
+                                        date: currentAppointment.date
+                                    },
+                                });
+
+                            // Convert "10:30" into minutes from midnight
+                            function timeToMinutes(time: string) {
+                                const [hours, minutes] = time.split(":").map(Number);
+                                return hours * 60 + minutes;
+                            }
+
+                            const requestedStart = timeToMinutes(currentAppointment.startTime);
+                            const requestedEnd =
+                                requestedStart + currentAppointment.duration;
+
+                            const hasConflict = existingAppointments.some(
+                                (existingAppointment) => {
+                                    const existingStart = timeToMinutes(
+                                        existingAppointment.startTime
+                                    );
+
+                                    const existingEnd =
+                                        existingStart + existingAppointment.duration;
+
+                                    return (
+                                        requestedStart < existingEnd &&
+                                        requestedEnd > existingStart
+                                    );
+                                }
+                            );
+
+                            const hasScheduleBlockConflict =
+                                existingScheduleBlocks.some(
+                                    (scheduleBlock) => {
+                                        const blockedStart = timeToMinutes(
+                                            scheduleBlock.startTime
+                                        );
+
+                                        const blockedEnd = timeToMinutes(
+                                            scheduleBlock.endTime
+                                        );
+
+                                        return (
+                                            requestedStart < blockedEnd &&
+                                            requestedEnd > blockedStart
+                                        );
+                                    }
+                                );
+
+                            // Schedule blocks such as vacation or late arrival cannot be overridden.
+                            if (hasScheduleBlockConflict) {
+                                throw new Error("REASSIGNMENT_BLOCK_CONFLICT");
+                            }
+
+                            // Staff may intentionally assign an overlapping appointment after confirmation.
+                            if (hasConflict && !overrideOverlap) {
+                                throw new Error("REASSIGNMENT_APPOINTMENT_CONFLICT");
+                            }
+                        }
+
+                        // Update only if the appointment still matches
+                        // the details validated inside this transaction.
+                        const updateResult = await tx.appointment.updateMany({
                             where: {
-                                id: appointment.id,
+                                id: currentAppointment.id,
+                                employeeId: currentAppointment.employeeId,
+                                status: currentAppointment.status,
+                                date: currentAppointment.date,
+                                startTime: currentAppointment.startTime,
+                                duration: currentAppointment.duration,
                             },
                             data: {
                                 employeeId,
+                            },
+                        });
+
+                        if (updateResult.count !== 1) {
+                            throw new Error("APPOINTMENT_CHANGED");
+                        }
+
+                        // Return the updated appointment with its technician.
+                        return tx.appointment.findUniqueOrThrow({
+                            where: {
+                                id: currentAppointment.id,
                             },
                             include: {
                                 employee: true,
@@ -400,7 +488,11 @@ export async function PATCH(
                     (
                         error.message === "REASSIGNMENT_APPOINTMENT_CONFLICT" ||
                         error.message === "REASSIGNMENT_BLOCK_CONFLICT" ||
-                        error.message === "PAYROLL_LOCKED"
+                        error.message === "PAYROLL_LOCKED" ||
+                        error.message === "SOLD_APPOINTMENT_REASSIGNMENT_BLOCKED" ||
+                        error.message === "APPOINTMENT_CHANGED" ||
+                        error.message === "REASSIGNMENT_EMPLOYEE_INVALID" ||
+                        error.message === "REASSIGNMENT_STATUS_FORBIDDEN"
                     )
                 ) {
                     throw error;
@@ -429,64 +521,26 @@ export async function PATCH(
         return Response.json(result);
     
     } catch (error) {
-        if (
-            error instanceof Error &&
-            error.message === "REASSIGNMENT_APPOINTMENT_CONFLICT"
-        ) {
+        // Convert known business-rule errors into their HTTP responses.
+        const knownError = getReassignmentErrorResponse(error);
+
+        if (knownError) {
             return Response.json(
-                {
-                    error: "Appointment overlaps another appointment",
-                    conflictType: "APPOINTMENT",
-                },
-                { status: 409 }
+                knownError.body,
+                { status: knownError.status }
             );
         }
 
-        if (
-            error instanceof Error &&
-            error.message === "REASSIGNMENT_BLOCK_CONFLICT"
-        ) {
-            return Response.json(
-                {
-                    error: "Employee has a schedule block during this time",
-                    conflictType: "SCHEDULE_BLOCK",
-                },
-                { status: 409 }
-            );
-        }
-
-        // Prevent changes to technician assignments after payroll review.
-        if (
-            error instanceof Error &&
-            error.message === "PAYROLL_LOCKED"
-        ) {
-            return Response.json(
-                {
-                    error:
-                        "No se puede cambiar la técnica porque la nómina de esta fecha ya fue revisada o pagada.",
-                    conflictType: "PAYROLL_LOCKED",
-                },
-                { status: 409 }
-            );
-        }
-
-        if (
-            error instanceof Error &&
-            error.message === "REASSIGNMENT_CONFLICT"
-            ) {
-            return Response.json(
-                {
-                error:
-                    "Employee is not available for the full appointment time",
-                },
-                { status: 409 }
-            );
-        }
-
-        console.error("Failed to reassign appointment technician:", error)
+        // Unexpected errors must not expose internal database details.
+        console.error(
+            "Failed to reassign appointment technician:",
+            error
+        );
 
         return Response.json(
-            { error: "Unable to reassign appointment technician" },
+            {
+                error: "Unable to reassign appointment technician",
+            },
             { status: 500 }
         );
     }

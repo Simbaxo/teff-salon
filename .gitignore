@@ -44,3 +44,5 @@ next-env.d.ts
 
 # Isolated Next.js payroll testing build
 .next-payroll-test/
+
+.teff-test-fixtures/

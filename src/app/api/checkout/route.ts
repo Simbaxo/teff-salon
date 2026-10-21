@@ -3,6 +3,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { auth } from "@/auth";
 import { canCheckout } from "@/lib/auth-roles";
 import { lockPayrollWeek } from "@/lib/payroll/period-lock";
+import { assertCheckoutVisitUnchanged } from "@/lib/checkout/validate-visit-snapshot";
 
 // Payment methods currently accepted by TEFF
 const allowedPaymentMethods = ["CASH", "BOLD", "TRANSFER"];
@@ -774,6 +775,76 @@ export async function POST(request: Request) {
             // Serialize checkout and payroll review for this service week.
             await lockPayrollWeek(tx, monday);
 
+            // Lock appointment rows before validating financial ownership.
+            // Under Serializable isolation, a concurrent technician change
+            // must cause a safe serialization failure rather than stale checkout.
+            const lockedAppointments = await tx.$queryRaw<
+                { id: number }[]
+            >`
+                SELECT id
+                FROM "Appointment"
+                WHERE id IN (${Prisma.join(uniqueAppointmentIds)})
+                ORDER BY id
+                FOR UPDATE
+            `;
+
+            if (
+                lockedAppointments.length !== uniqueAppointmentIds.length
+            ) {
+                throw new Error("CHECKOUT_VISIT_CHANGED");
+            }
+
+            // Reload the visit after acquiring the payroll-week lock.
+            // Reject checkout if technician ownership or booked items changed.
+            const currentVisitAppointments =
+                await tx.appointment.findMany({
+                    where: {
+                        id: {
+                            in: uniqueAppointmentIds,
+                        },
+                    },
+                    select: {
+                        id: true,
+                        employeeId: true,
+                        bookingId: true,
+                        date: true,
+                        status: true,
+                        startTime: true,
+                        duration: true,
+                        appointmentServices: {
+                            select: {
+                                serviceId: true,
+                                bookedPrice: true,
+                            },
+                        },
+                        appointmentAddons: {
+                            select: {
+                                addonId: true,
+                                bookedPrice: true,
+                            },
+                        },
+                    },
+                });
+
+            assertCheckoutVisitUnchanged(
+                visitAppointments,
+                currentVisitAppointments
+            );
+
+            // Prevent duplicate sales before creating financial records.
+            const existingSaleLinks =
+                await tx.saleAppointment.count({
+                    where: {
+                        appointmentId: {
+                            in: uniqueAppointmentIds,
+                        },
+                    },
+                });
+
+            if (existingSaleLinks > 0) {
+                throw new Error("CHECKOUT_ALREADY_SOLD");
+            }
+
             // Prevent checkout from changing reviewed or paid payroll.
             const lockedPeriod = await tx.payrollPeriod.findFirst({
                 where: {
@@ -946,6 +1017,33 @@ export async function POST(request: Request) {
         );
 
     } catch (error) {
+        if (
+            error instanceof Error &&
+            error.message === "CHECKOUT_VISIT_CHANGED"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "La cita cambió mientras se procesaba el cobro. Actualiza la página y revisa los servicios y la técnica antes de continuar.",
+                    conflictType: "CHECKOUT_VISIT_CHANGED",
+                },
+                { status: 409 }
+            );
+        }
+
+        if (
+            error instanceof Error &&
+            error.message === "CHECKOUT_ALREADY_SOLD"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "Esta cita ya tiene una venta registrada. No se puede cobrar nuevamente.",
+                    conflictType: "CHECKOUT_ALREADY_SOLD",
+                },
+                { status: 409 }
+            );
+        }
 
         // The service week has already been reviewed or paid.
         if (
