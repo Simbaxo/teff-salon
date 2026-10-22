@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canCheckout } from "@/lib/auth-roles";
+import { isAttributedCheckoutEnabled } from "@/lib/checkout/is-attributed-checkout-enabled";
 import {
     authorizeAttributedCheckoutTest,
     authorizeAttributedFixtureAppointments,
@@ -102,12 +103,16 @@ export default async function CheckoutPage({
     const visitAppointments =
         appointment.booking?.appointments ?? [appointment];
 
-    // Enable attributed checkout only for the authorized test visit.
+    // Production uses role-based authorization and a server-side flag.
+    // Development remains restricted to the isolated test fixture.
     const attributedCheckoutEnabled =
-        authorizeAttributedCheckoutTest(session.user) &&
-        authorizeAttributedFixtureAppointments(
-            visitAppointments.map((item) => item.id),
-            visitAppointments
+        isAttributedCheckoutEnabled(session.user.role) ||
+        (
+            authorizeAttributedCheckoutTest(session.user) &&
+            authorizeAttributedFixtureAppointments(
+                visitAppointments.map((item) => item.id),
+                visitAppointments
+            )
         );
 
     // Load active technicians and their qualified services.

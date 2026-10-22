@@ -5,6 +5,7 @@ import { canCheckout } from "@/lib/auth-roles";
 import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 import { assertCheckoutVisitUnchanged } from "@/lib/checkout/validate-visit-snapshot";
 import { getAssignmentPayloadError } from "@/lib/checkout/assignment-payload-guard";
+import { isAttributedCheckoutEnabled } from "@/lib/checkout/is-attributed-checkout-enabled";
 import {
     authorizeAttributedCheckoutTest,
     authorizeAttributedFixtureAppointments,
@@ -56,16 +57,23 @@ export async function POST(request: Request) {
             addonAssignments,
         } = body;
 
-        // Only the isolated test OWNER may pass the assignment guard.
-        // Production and all other users retain the disabled behavior.
+        // Production authorization is controlled by a server-side flag.
+        // The isolated Development test authorization remains supported.
         const allowAttributedTest = authorizeAttributedCheckoutTest(
             session.user
         );
 
+        const allowAttributedProduction = isAttributedCheckoutEnabled(
+            session.user.role
+        );
+
+        const allowAttributedCheckout =
+            allowAttributedTest || allowAttributedProduction;
+
         const assignmentError = getAssignmentPayloadError(
             serviceAssignments,
             addonAssignments,
-            allowAttributedTest
+            allowAttributedCheckout
         );
 
         if (assignmentError) {
@@ -270,7 +278,8 @@ export async function POST(request: Request) {
         // customer visit. Never permit unrelated Development appointments.
         if (
             usesAttributedCheckout &&
-            !authorizeAttributedFixtureAppointments(
+                !allowAttributedProduction &&
+                !authorizeAttributedFixtureAppointments(
                 appointmentIds,
                 visitAppointments
             )
@@ -924,7 +933,8 @@ export async function POST(request: Request) {
             // Never allow attributed testing on unrelated Development visits.
             if (
                 usesAttributedCheckout &&
-                !authorizeAttributedFixtureAppointments(
+                    !allowAttributedProduction &&
+                    !authorizeAttributedFixtureAppointments(
                     appointmentIds,
                     currentVisitAppointments
                 )
@@ -1014,11 +1024,9 @@ export async function POST(request: Request) {
             const transactionCommissions =
                 transactionFinancials.commissions;
 
-            // Attributed checkout remains disabled except for the
-            // explicitly authorized isolated Development test fixture.
             if (
                 attributedCheckout !== null &&
-                !allowAttributedTest
+                !allowAttributedCheckout
             ) {
                 throw new Error("ASSIGNMENTS_NOT_ENABLED");
             }
