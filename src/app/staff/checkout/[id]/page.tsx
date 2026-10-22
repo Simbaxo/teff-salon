@@ -2,7 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canCheckout } from "@/lib/auth-roles";
-
+import {
+    authorizeAttributedCheckoutTest,
+    authorizeAttributedFixtureAppointments,
+} from "@/lib/checkout/authorize-attributed-test";
 import CheckoutEditor from "./CheckoutEditor";
 
 // Display appointment times in AM/PM format.
@@ -98,6 +101,36 @@ export default async function CheckoutPage({
     // Legacy appointments without a Booking continue to checkout normally.
     const visitAppointments =
         appointment.booking?.appointments ?? [appointment];
+
+    // Enable attributed checkout only for the authorized test visit.
+    const attributedCheckoutEnabled =
+        authorizeAttributedCheckoutTest(session.user) &&
+        authorizeAttributedFixtureAppointments(
+            visitAppointments.map((item) => item.id),
+            visitAppointments
+        );
+
+    // Load active technicians and their qualified services.
+    // Only needed for the isolated attributed-checkout interface.
+    const qualifiedTechnicians = attributedCheckoutEnabled
+        ? await prisma.employee.findMany({
+            where: {
+                active: true,
+            },
+            select: {
+                id: true,
+                name: true,
+                employeeServices: {
+                    select: {
+                        serviceId: true,
+                    },
+                },
+            },
+            orderBy: {
+                name: "asc",
+            },
+        })
+        : [];
 
     const visitAlreadyCompleted = visitAppointments.some(
         (visitAppointment) =>
@@ -232,6 +265,8 @@ export default async function CheckoutPage({
                     <CheckoutEditor
                         appointmentId={appointment.id}
                         visitAppointments={visitAppointments}
+                        attributedCheckoutEnabled={attributedCheckoutEnabled}
+                        qualifiedTechnicians={qualifiedTechnicians}
                     />
                 </div>
             </div>

@@ -181,3 +181,58 @@ test("temporarily rejects repeats of an already booked service", () => {
         /Existing booked service must reference its appointment/
     );
 });
+
+
+test("rejects duplicate services on the same appointment", () => {
+    const services = [
+        validServices[0],
+        { ...validServices[0] },
+    ];
+
+    assert.throws(
+        () => validateCheckoutAssignments(services, [], context),
+        /Duplicate checkout service assignment/
+    );
+});
+
+test("rejects duplicate newly added services", () => {
+    const services = [
+        validServices[1],
+        { ...validServices[1] },
+    ];
+
+    assert.throws(
+        () => validateCheckoutAssignments(services, [], context),
+        /Duplicate checkout service assignment/
+    );
+});
+
+test("allows the same service on different appointments", () => {
+    const services = [
+        validServices[0],
+        {
+            ...validServices[0],
+            appointmentId: 102,
+        },
+    ];
+
+    const multiAppointmentContext = {
+        ...context,
+        bookedServices: [
+            ...context.bookedServices,
+            {
+                appointmentId: 102,
+                serviceId: 10,
+                employeeId: 1,
+            },
+        ],
+    };
+
+    assert.doesNotThrow(() =>
+        validateCheckoutAssignments(
+            services,
+            [],
+            multiAppointmentContext
+        )
+    );
+});

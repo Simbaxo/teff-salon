@@ -41,6 +41,21 @@ export function validateCheckoutAssignments(
         throw new Error("Checkout requires at least one service");
     }
 
+    // Prevent duplicate financial attribution for the same service.
+    // The same service may appear on different appointment blocks.
+    const assignmentKeys = new Set<string>();
+
+    for (const service of services) {
+        const key = `${service.appointmentId ?? "NEW"}:${service.serviceId}`;
+
+        if (assignmentKeys.has(key)) {
+            throw new Error("Duplicate checkout service assignment");
+        }
+
+        assignmentKeys.add(key);
+    }
+
+    // Validate each individual service assignment.
     for (const service of services) {
         if (
             !Number.isSafeInteger(service.serviceId) ||

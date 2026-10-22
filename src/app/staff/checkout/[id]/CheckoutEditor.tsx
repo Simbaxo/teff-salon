@@ -3,12 +3,19 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type CheckoutService = {
+// Service data received from the original appointment.
+type BookedCheckoutService = {
     bookedPrice: number;
     service: {
         id: number;
         nameEs: string;
     };
+};
+
+// Service selected for checkout, including technician attribution.
+type CheckoutService = BookedCheckoutService & {
+    appointmentId: number | null;
+    employeeId: number;
 };
 
 // Represents an active service available in the salon enu
@@ -33,12 +40,19 @@ type ServiceAddonRelation = {
     addonId: number;
 };
 
-type CheckoutAddon = {
+// Add-on data received from the original appointment.
+type BookedCheckoutAddon = {
     bookedPrice: number;
     addon: {
         id: number;
         nameEs: string;
     };
+};
+
+// Add-on selected during checkout.
+// Its parent service determines technician attribution.
+type CheckoutAddon = BookedCheckoutAddon & {
+    parentServiceId: number | null;
 };
 
 type CheckoutVisitAppointment = {
@@ -50,13 +64,23 @@ type CheckoutVisitAppointment = {
         name: string;
     };
 
-    appointmentServices: CheckoutService[];
-    appointmentAddons: CheckoutAddon[];
+    appointmentServices: BookedCheckoutService[];
+    appointmentAddons: BookedCheckoutAddon[];
+};
+
+type QualifiedTechnician = {
+    id: number;
+    name: string;
+    employeeServices: {
+        serviceId: number;
+    }[];
 };
 
 type CheckoutEditorProps = {
     appointmentId: number;
     visitAppointments: CheckoutVisitAppointment[];
+    attributedCheckoutEnabled: boolean;
+    qualifiedTechnicians: QualifiedTechnician[];
 };
 
 // Payment methods currently accepted by TEFF
@@ -72,23 +96,31 @@ type CompletedSale = {
 export default function CheckoutEditor({
     appointmentId,
     visitAppointments,
+    attributedCheckoutEnabled,
+    qualifiedTechnicians,
 }: CheckoutEditorProps) {
     const [isEditing, setIsEditing] = useState(false);
-    // Start checkout with every service from the complete customer visit.
+    // Preserve the appointment and original technician for each service.
     const [selectedServices, setSelectedServices] =
         useState<CheckoutService[]>(
-            visitAppointments.flatMap(
-                (visitAppointment) =>
-                    visitAppointment.appointmentServices
+            visitAppointments.flatMap((visitAppointment) =>
+                visitAppointment.appointmentServices.map((item) => ({
+                    ...item,
+                    appointmentId: visitAppointment.id,
+                    employeeId: visitAppointment.employeeId,
+                }))
             )
         );
 
-    // Start checkout with every add-on from the complete customer visit.
+    // Existing add-ons need an explicit parent service
+    // before service-level attribution can be submitted.
     const [selectedAddons, setSelectedAddons] =
         useState<CheckoutAddon[]>(
-            visitAppointments.flatMap(
-                (visitAppointment) =>
-                    visitAppointment.appointmentAddons
+            visitAppointments.flatMap((visitAppointment) =>
+                visitAppointment.appointmentAddons.map((item) => ({
+                    ...item,
+                    parentServiceId: null,
+                }))
             )
         );
     // Full active service menu used when staff needs to add something
@@ -259,6 +291,20 @@ export default function CheckoutEditor({
         }
     }
 
+    // Change the technician credited for one checkout service.
+    function updateServiceTechnician(
+        serviceId: number,
+        employeeId: number
+    ) {
+        setSelectedServices((current) =>
+            current.map((item) =>
+                item.service.id === serviceId
+                    ? { ...item, employeeId }
+                    : item
+            )
+        );
+    }
+
     // Add a service to the final checkout selection
     function addService(service: AvailableService) {
         const alreadySelected = selectedServices.some(
@@ -270,9 +316,22 @@ export default function CheckoutEditor({
             return;
         }
 
+        // New services are not tied to an original appointment.
+        // Default to the checkout appointment's technician.
+        const defaultEmployeeId = visitAppointments.find(
+            (item) => item.id === appointmentId
+        )?.employeeId;
+
+        if (defaultEmployeeId === undefined) {
+            setCheckoutError("No se pudo identificar la técnica de la cita.");
+            return;
+        }
+
         setSelectedServices((current) => [
             ...current,
             {
+                appointmentId: null,
+                employeeId: defaultEmployeeId,
                 bookedPrice: service.price,
                 service: {
                     id: service.id,
@@ -307,6 +366,20 @@ export default function CheckoutEditor({
         )
     }
 
+    // Assign an add-on to the service that performed it.
+    function updateAddonParent(
+        addonId: number,
+        parentServiceId: number | null
+    ) {
+        setSelectedAddons((current) =>
+            current.map((item) =>
+                item.addon.id === addonId
+                    ? { ...item, parentServiceId }
+                    : item
+            )
+        );
+    }
+
     // Add an add-on to the final checkout selection
     function addAddon(addon: AvailableAddon) {
         const alreadySelected = selectedAddons.some(
@@ -321,6 +394,8 @@ export default function CheckoutEditor({
         setSelectedAddons((current) => [
             ...current,
             {
+                // Require an explicit parent before attributed checkout.
+                parentServiceId: null,
                 bookedPrice: addon.price,
                 addon: {
                     id: addon.id,
@@ -378,6 +453,51 @@ export default function CheckoutEditor({
         if (!canCompleteCheckout || isSubmitting) {
             return;
         }
+        // Verify technician eligibility before attributed checkout.
+        // The backend independently validates these assignments.
+        if (attributedCheckoutEnabled) {
+            const hasInvalidTechnician = selectedServices.some(
+                (service) =>
+                    !qualifiedTechnicians.some(
+                        (technician) =>
+                            technician.id === service.employeeId &&
+                            technician.employeeServices.some(
+                                (qualification) =>
+                                    qualification.serviceId === service.service.id
+                            )
+                    )
+            );
+
+            if (hasInvalidTechnician) {
+                setCheckoutError(
+                    "Una o más técnicas no están habilitadas para los servicios seleccionados. Revisa las asignaciones antes de cobrar."
+                );
+                return;
+            }
+        }
+            // Ensure each add-on belongs to a selected, compatible service.
+            const hasInvalidAddonParent = selectedAddons.some((addon) => {
+                const parent = selectedServices.find(
+                    (service) =>
+                        service.service.id === addon.parentServiceId
+                );
+
+                return (
+                    !parent ||
+                    !serviceAddonRelations.some(
+                        (relation) =>
+                            relation.serviceId === parent.service.id &&
+                            relation.addonId === addon.addon.id
+                    )
+                );
+            });
+
+            if (attributedCheckoutEnabled && hasInvalidAddonParent) {
+                setCheckoutError(
+                    "Selecciona un servicio asociado válido para cada adicional."
+                );
+                return;
+            }
 
         setIsSubmitting(true);
         setCheckoutError("");
@@ -393,6 +513,24 @@ export default function CheckoutEditor({
                     amount,
                 }));
 
+                // Attribute each service to its selected technician.
+                const serviceAssignments = selectedServices.map((item) => ({
+                    serviceId: item.service.id,
+                    appointmentId: item.appointmentId,
+                    employeeId: item.employeeId,
+                    price: item.bookedPrice,
+                }));
+
+                // Add-ons inherit the technician of their parent service.
+                const addonAssignments = selectedAddons.map((item) => ({
+                    addonId: item.addon.id,
+                    serviceIndex: selectedServices.findIndex(
+                        (service) =>
+                            service.service.id === item.parentServiceId
+                    ),
+                    price: item.bookedPrice,
+                }));
+
                 const response = await fetch("/api/checkout", {
                     method: "POST",
                     headers: {
@@ -400,6 +538,13 @@ export default function CheckoutEditor({
                     },
                     body: JSON.stringify({
                         appointmentId,
+                        // Send attribution only when the new checkout mode is enabled.
+                        ...(attributedCheckoutEnabled
+                            ? {
+                                serviceAssignments,
+                                addonAssignments,
+                            }
+                            : {}),
 
                         // Every appointment block belonging to this customer visit
                         appointmentIds: visitAppointments.map(
@@ -531,14 +676,69 @@ export default function CheckoutEditor({
                             {selectedServices.map((item) => (
                                 <div
                                     key={item.service.id}
-                                    className="flex items-center justify-between rounded-lg bg-white px-3 py-2"
+                                    className="flex flex-col gap-3 rounded-lg bg-white p-4"
                                 >
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-sm text-neutral-700">
+                                    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <span className="col-span-full min-w-0 break-words text-sm font-semibold text-neutral-800">
                                             {item.service.nameEs}
                                         </span>
 
-                                        <label className="flex items-center gap-2">
+                                        {attributedCheckoutEnabled && (
+                                        <label className="flex min-w-0 flex-col gap-1">
+                                            <span className="text-xs text-neutral-500">
+                                                Técnica responsable
+                                            </span>
+
+                                            <select
+                                                value={item.employeeId}
+                                                onChange={(event) =>
+                                                    updateServiceTechnician(
+                                                        item.service.id,
+                                                        Number(event.target.value)
+                                                    )
+                                                }
+                                                className="w-full min-w-0 max-w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-black"
+                                                aria-label={`Técnica responsable de ${item.service.nameEs}`}
+                                            >
+                                                {(() => {
+                                                    // Only show active technicians qualified for this service.
+                                                    const eligibleTechnicians = qualifiedTechnicians.filter(
+                                                        (technician) =>
+                                                            technician.employeeServices.some(
+                                                                (qualification) =>
+                                                                    qualification.serviceId === item.service.id
+                                                            )
+                                                    );
+
+                                                    const selectedIsEligible = eligibleTechnicians.some(
+                                                        (technician) => technician.id === item.employeeId
+                                                    );
+
+                                                    return (
+                                                        <>
+                                                            {/* Never silently reassign an ineligible technician. */}
+                                                            {!selectedIsEligible && (
+                                                                <option value={item.employeeId} disabled>
+                                                                    Técnica actual no habilitada — seleccionar otra
+                                                                </option>
+                                                            )}
+
+                                                            {eligibleTechnicians.map((technician) => (
+                                                                <option
+                                                                    key={technician.id}
+                                                                    value={technician.id}
+                                                                >
+                                                                    {technician.name}
+                                                                </option>
+                                                            ))}
+                                                        </>
+                                                    );
+                                                })()}
+                                            </select>
+                                        </label>
+                                        )}
+
+                                        <label className="flex min-w-0 flex-col gap-1">
                                             <span className="text-xs text-neutral-500">
                                                 $
                                             </span>
@@ -555,7 +755,7 @@ export default function CheckoutEditor({
                                                         Number(event.target.value)
                                                     )
                                                 }
-                                                className="w-28 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-right text-sm font-semibold text-black"
+                                                className="w-full min-w-0 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-right text-sm font-semibold text-black"
                                                 aria-label={`Precio de ${item.service.nameEs}`}
                                             />
                                         </label>
@@ -585,14 +785,54 @@ export default function CheckoutEditor({
                                 {selectedAddons.map((item) => (
                                     <div
                                         key={item.addon.id}
-                                        className="flex items-center justify-between rounded-lg bg-white px-3 py-2"
+                                        className="flex flex-col gap-3 rounded-lg bg-white p-4"
                                     >
-                                        <span className="text-sm text-neutral-700">
+                                        <span className="min-w-0 break-words text-sm font-semibold text-neutral-800">
                                             {item.addon.nameEs}
                                         </span>
 
-                                        <div className="flex items-center gap-3">
-                                            <label className="flex items-center gap-2">
+                                        <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+                                            {attributedCheckoutEnabled && (
+                                            <label className="flex min-w-0 flex-col gap-1">
+                                                <span className="text-xs text-neutral-500">
+                                                    Servicio asociado
+                                                </span>
+
+                                                <select
+                                                    value={item.parentServiceId ?? ""}
+                                                    onChange={(event) =>
+                                                        updateAddonParent(
+                                                            item.addon.id,
+                                                            event.target.value === ""
+                                                                ? null
+                                                                : Number(event.target.value)
+                                                        )
+                                                    }
+                                                    className="w-full min-w-0 max-w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-black"
+                                                    aria-label={`Servicio asociado a ${item.addon.nameEs}`}
+                                                >
+                                                    <option value="">Seleccionar servicio</option>
+
+                                                    {selectedServices
+                                                        .filter((service) =>
+                                                            serviceAddonRelations.some(
+                                                                (relation) =>
+                                                                    relation.serviceId === service.service.id &&
+                                                                    relation.addonId === item.addon.id
+                                                            )
+                                                        )
+                                                        .map((service) => (
+                                                            <option
+                                                                key={`${service.appointmentId ?? "new"}-${service.service.id}`}
+                                                                value={service.service.id}
+                                                            >
+                                                                {service.service.nameEs}
+                                                            </option>
+                                                        ))}
+                                                </select>
+                                            </label>
+                                            )}
+                                            <label className="flex min-w-0 flex-col gap-1">
                                                 <span className="text-xs text-neutral-500">
                                                     $
                                                 </span>
@@ -609,7 +849,7 @@ export default function CheckoutEditor({
                                                             Number(event.target.value)
                                                         )
                                                     }
-                                                    className="w-28 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-right text-sm font-semibold text-black"
+                                                    className="w-full min-w-0 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-right text-sm font-semibold text-black"
                                                     aria-label={`Precio de ${item.addon.nameEs}`}
                                                 />
                                             </label>

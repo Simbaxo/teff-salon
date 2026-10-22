@@ -4,6 +4,18 @@ import { auth } from "@/auth";
 import { canCheckout } from "@/lib/auth-roles";
 import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 import { assertCheckoutVisitUnchanged } from "@/lib/checkout/validate-visit-snapshot";
+import { getAssignmentPayloadError } from "@/lib/checkout/assignment-payload-guard";
+import {
+    authorizeAttributedCheckoutTest,
+    authorizeAttributedFixtureAppointments,
+} from "@/lib/checkout/authorize-attributed-test";import { validateAttributedCheckout } from "@/lib/checkout/validate-attributed-checkout";
+import { writeCheckoutLineItems } from "@/lib/checkout/write-checkout-line-items";
+import { getEligibleTipTechnicians } from "@/lib/checkout/get-eligible-tip-technicians";
+import { selectCheckoutFinancials } from "@/lib/checkout/select-checkout-financials";
+import type {
+    CheckoutServiceAssignment,
+    CheckoutAddonAssignment,
+} from "@/lib/checkout/types";
 
 // Payment methods currently accepted by TEFF
 const allowedPaymentMethods = ["CASH", "BOLD", "TRANSFER"];
@@ -40,7 +52,34 @@ export async function POST(request: Request) {
             discountTotal,
             payments,
             tips,
+            serviceAssignments,
+            addonAssignments,
         } = body;
+
+        // Only the isolated test OWNER may pass the assignment guard.
+        // Production and all other users retain the disabled behavior.
+        const allowAttributedTest = authorizeAttributedCheckoutTest(
+            session.user
+        );
+
+        const assignmentError = getAssignmentPayloadError(
+            serviceAssignments,
+            addonAssignments,
+            allowAttributedTest
+        );
+
+        if (assignmentError) {
+            return Response.json(
+                assignmentError.body,
+                { status: assignmentError.status }
+            );
+        }
+
+        // Identify the requested checkout format.
+        // The API guard still blocks attributed requests until release.
+        const usesAttributedCheckout =
+            serviceAssignments !== undefined &&
+            addonAssignments !== undefined;
 
         // Make sure the checkout contains the basic required information
         if (
@@ -227,6 +266,25 @@ export async function POST(request: Request) {
             );
         }
 
+        // Test-only attributed checkout must use the exact isolated
+        // customer visit. Never permit unrelated Development appointments.
+        if (
+            usesAttributedCheckout &&
+            !authorizeAttributedFixtureAppointments(
+                appointmentIds,
+                visitAppointments
+            )
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "Esta cita no está autorizada para pruebas de asignación.",
+                    conflictType: "TEST_FIXTURE_NOT_AUTHORIZED",
+                },
+                { status: 403 }
+            );
+        }
+
         // Use the appointment that opened checkout as the visit anchor.
         const appointment = visitAppointments.find(
             (item) => item.id === Number(appointmentId)
@@ -405,7 +463,9 @@ export async function POST(request: Request) {
                 )
         );
 
-        if (hasUnsupportedService) {
+        // Legacy checkout uses the original appointment technicians.
+        // Attributed checkout validates selected technicians inside the transaction.
+        if (!usesAttributedCheckout && hasUnsupportedService) {
             return Response.json(
                 {
                     error:
@@ -421,7 +481,13 @@ export async function POST(request: Request) {
         const hasNewCheckoutItems =
             newServiceIds.length > 0 || newAddonIds.length > 0;
 
-        if (hasNewCheckoutItems && visitEmployeeIds.length > 1) {
+        // Explicit service assignments remove the need to guess ownership.
+        // Keep this restriction for legacy checkout.
+        if (
+            !usesAttributedCheckout &&
+            hasNewCheckoutItems &&
+            visitEmployeeIds.length > 1
+        ) {
             return Response.json(
                 {
                     error:
@@ -487,6 +553,16 @@ export async function POST(request: Request) {
                 { status: 400 }
             );
         }
+
+        // Legacy checkout attributes revenue using appointment ownership.
+        // Attributed checkout calculates technician revenue inside the transaction.
+        let appointmentCommissionBases: {
+            appointmentId: number;
+            employeeId: number;
+            commissionBase: number;
+        }[] = [];
+
+        if (!usesAttributedCheckout) {
 
         // Calculate the booked revenue belonging to each appointment block.
         // This preserves which technician actually performed each service.
@@ -598,38 +674,39 @@ export async function POST(request: Request) {
         // The final block receives any rounding remainder so totals stay exact.
         let remainingDiscount = discountTotal;
 
-        const appointmentCommissionBases = appointmentRevenue.map(
-            (item, index) => {
-                let allocatedDiscount = 0;
+            appointmentCommissionBases = appointmentRevenue.map(
+                (item, index) => {
+                    let allocatedDiscount = 0;
 
-                if (discountTotal > 0 && attributedRevenueTotal > 0) {
-                    const isLastItem =
-                        index === appointmentRevenue.length - 1;
+                    if (discountTotal > 0 && attributedRevenueTotal > 0) {
+                        const isLastItem =
+                            index === appointmentRevenue.length - 1;
 
-                    allocatedDiscount = isLastItem
-                        ? remainingDiscount
-                        : Math.round(
-                            discountTotal *
-                                (item.revenue / attributedRevenueTotal)
+                        allocatedDiscount = isLastItem
+                            ? remainingDiscount
+                            : Math.round(
+                                discountTotal *
+                                    (item.revenue / attributedRevenueTotal)
+                            );
+
+                        allocatedDiscount = Math.min(
+                            allocatedDiscount,
+                            remainingDiscount,
+                            item.revenue
                         );
 
-                    allocatedDiscount = Math.min(
-                        allocatedDiscount,
-                        remainingDiscount,
-                        item.revenue
-                    );
+                        remainingDiscount -= allocatedDiscount;
+                    }
 
-                    remainingDiscount -= allocatedDiscount;
+                    return {
+                        appointmentId: item.appointmentId,
+                        employeeId: item.employeeId,
+                        commissionBase:
+                            item.revenue - allocatedDiscount,
+                    };
                 }
-
-                return {
-                    appointmentId: item.appointmentId,
-                    employeeId: item.employeeId,
-                    commissionBase:
-                        item.revenue - allocatedDiscount,
-                };
-            }
-        );
+            );
+        } // End legacy appointment-based revenue attribution.
 
         // Add all submitted payment amounts together
         const paymentTotal = payments.reduce(
@@ -692,37 +769,48 @@ export async function POST(request: Request) {
                 payment.amount > 0
         );
 
-        // Temporary default until commission rates are stored per employee.
-        const commissionRate = 50;
+        // Legacy commissions are prepared from appointment ownership.
+        // Attributed checkout uses its validated transaction snapshot.
+        let commissionsToCreate: {
+            employeeId: number;
+            commissionBase: number;
+            commissionRate: number;
+            commissionAmount: number;
+        }[] = [];
 
-        // Combine appointment-level commission bases when the same technician
-        // performed more than one service block in the customer visit.
-        const commissionByEmployee = new Map<number, number>();
+        if (!usesAttributedCheckout) {
+            // Temporary default until commission rates are stored per employee.
+            const commissionRate = 50;
 
-        for (const item of appointmentCommissionBases) {
-            if (item.commissionBase <= 0) {
-                continue;
+            // Combine appointment-level commission bases when the same technician
+            // performed more than one service block in the customer visit.
+            const commissionByEmployee = new Map<number, number>();
+
+            for (const item of appointmentCommissionBases) {
+                if (item.commissionBase <= 0) {
+                    continue;
+                }
+
+                const currentBase =
+                    commissionByEmployee.get(item.employeeId) ?? 0;
+
+                commissionByEmployee.set(
+                    item.employeeId,
+                    currentBase + item.commissionBase
+                );
             }
 
-            const currentBase =
-                commissionByEmployee.get(item.employeeId) ?? 0;
-
-            commissionByEmployee.set(
-                item.employeeId,
-                currentBase + item.commissionBase
-            );
-        }
-
-        const commissionsToCreate = Array.from(
-            commissionByEmployee.entries()
-        ).map(([employeeId, commissionBase]) => ({
-            employeeId,
-            commissionBase,
-            commissionRate,
-            commissionAmount: Math.round(
-                commissionBase * (commissionRate / 100)
-            ),
-        }));
+            commissionsToCreate = Array.from(
+                commissionByEmployee.entries()
+            ).map(([employeeId, commissionBase]) => ({
+                employeeId,
+                commissionBase,
+                commissionRate,
+                commissionAmount: Math.round(
+                    commissionBase * (commissionRate / 100)
+                ),
+            }));
+        } // End legacy commission preparation.
 
         // Prevent any appointment block in this visit from being sold twice.
         const hasCompletedAppointment = visitAppointments.some(
@@ -805,6 +893,7 @@ export async function POST(request: Request) {
                     },
                     select: {
                         id: true,
+                        customerId: true,
                         employeeId: true,
                         bookingId: true,
                         date: true,
@@ -830,6 +919,18 @@ export async function POST(request: Request) {
                 visitAppointments,
                 currentVisitAppointments
             );
+
+            // Recheck test fixture ownership after locking the appointments.
+            // Never allow attributed testing on unrelated Development visits.
+            if (
+                usesAttributedCheckout &&
+                !authorizeAttributedFixtureAppointments(
+                    appointmentIds,
+                    currentVisitAppointments
+                )
+            ) {
+                throw new Error("TEST_FIXTURE_NOT_AUTHORIZED");
+            }
 
             // Prevent duplicate sales before creating financial records.
             const existingSaleLinks =
@@ -862,6 +963,66 @@ export async function POST(request: Request) {
                 throw new Error("PAYROLL_LOCKED");
             }
 
+            // Prepare service-level financial attribution inside the
+            // protected transaction, before creating any sale records.
+            // The assignment payload remains disabled at the API boundary.
+            const attributedCheckout =
+                serviceAssignments !== undefined &&
+                addonAssignments !== undefined
+                    ? await validateAttributedCheckout(tx, {
+                          appointmentIds: uniqueAppointmentIds,
+                          services:
+                              serviceAssignments as CheckoutServiceAssignment[],
+                          addons:
+                              addonAssignments as CheckoutAddonAssignment[],
+                          selectedServiceIds: uniqueServiceIds,
+                          selectedAddonIds: uniqueAddonIds,
+                          servicePrices,
+                          addonPrices,
+                          discountTotal,
+                          tips,
+                      })
+                    : null;
+
+            // Both checkout modes must reconcile with the payment totals.
+            if (
+                attributedCheckout !== null &&
+                (
+                    attributedCheckout.subtotal !== subtotal ||
+                    attributedCheckout.discountTotal !== discountTotal ||
+                    attributedCheckout.finalTotal !== finalTotal
+                )
+            ) {
+                throw new Error("CHECKOUT_TOTAL_MISMATCH");
+            }
+
+            // Select one consistent source for commissions and tips.
+            const transactionFinancials =
+                attributedCheckout !== null
+                    ? selectCheckoutFinancials({
+                          mode: "attributed",
+                          financials: attributedCheckout,
+                      })
+                    : selectCheckoutFinancials({
+                          mode: "legacy",
+                          commissions: commissionsToCreate,
+                          appointmentEmployeeIds: visitAppointments.map(
+                              (appointment) => appointment.employeeId
+                          ),
+                      });
+
+            const transactionCommissions =
+                transactionFinancials.commissions;
+
+            // Attributed checkout remains disabled except for the
+            // explicitly authorized isolated Development test fixture.
+            if (
+                attributedCheckout !== null &&
+                !allowAttributedTest
+            ) {
+                throw new Error("ASSIGNMENTS_NOT_ENABLED");
+            }
+
             // Create the financial record for this checkout.
             const newSale = await tx.sale.create({
                 data: {
@@ -871,29 +1032,49 @@ export async function POST(request: Request) {
                 },
             });
 
-            // Save a permanent snapshot of the services actually sold
-            await tx.saleLineItem.createMany({
-                data: [
-                    ...services.map((service) => ({
-                        saleId: newSale.id,
-                        itemType: "SERVICE",
-                        itemId: service.id,
-                        itemName: service.nameEs,
-                        unitPrice:
-                            submittedServicePrices.get(service.id) ?? 0,
-                    })),
+            // An attributed checkout must have both validated assignment arrays.
+            // Never silently write legacy line items for attributed commissions.
+            if (transactionFinancials.mode === "attributed") {
+                if (
+                    !Array.isArray(serviceAssignments) ||
+                    !Array.isArray(addonAssignments)
+                ) {
+                    throw new Error("CHECKOUT_ASSIGNMENT_MODE_MISMATCH");
+                }
+                await writeCheckoutLineItems(tx, {
+                    mode: "attributed",
+                    saleId: newSale.id,
+                    services:
+                        serviceAssignments as CheckoutServiceAssignment[],
+                    addons:
+                        addonAssignments as CheckoutAddonAssignment[],
+                    catalogServices: services,
+                    catalogAddons: addons,
+                });
+            } else {
+                // Preserve the existing checkout format for legacy sales.
+                await writeCheckoutLineItems(tx, {
+                    mode: "legacy",
+                    saleId: newSale.id,
+                    items: [
+                        ...services.map((service) => ({
+                            itemType: "SERVICE",
+                            itemId: service.id,
+                            itemName: service.nameEs,
+                            unitPrice:
+                                submittedServicePrices.get(service.id) ?? 0,
+                        })),
 
-                    // Save a permanent snapshot of the add-ons actually sold
-                    ...addons.map((addon) => ({
-                        saleId: newSale.id,
-                        itemType: "ADDON",
-                        itemId: addon.id,
-                        itemName: addon.nameEs,
-                        unitPrice: 
-                            submittedAddonPrices.get(addon.id) ?? 0,
-                    })),
-                ],
-            });
+                        ...addons.map((addon) => ({
+                            itemType: "ADDON",
+                            itemId: addon.id,
+                            itemName: addon.nameEs,
+                            unitPrice:
+                                submittedAddonPrices.get(addon.id) ?? 0,
+                        })),
+                    ],
+                });
+            }
 
             // Connect every appointment block in this customer visit to the sale.
             await tx.saleAppointment.createMany({
@@ -919,9 +1100,9 @@ export async function POST(request: Request) {
             });
 
             // Record what TEFF owes each technician who worked on this visit.
-            if (commissionsToCreate.length > 0) {
+            if (transactionCommissions.length > 0) {
                 await tx.commission.createMany({
-                    data: commissionsToCreate.map((commission) => ({
+                    data: transactionCommissions.map((commission) => ({
                         saleId: newSale.id,
                         employeeId: commission.employeeId,
                         commissionBase: commission.commissionBase,
@@ -932,12 +1113,8 @@ export async function POST(request: Request) {
                 });
             }
 
-            // Only technicians who actually worked on this visit may receive tips.
-            const visitEmployeeIds = new Set(
-                visitAppointments.map(
-                    (visitAppointment) => visitAppointment.employeeId
-                )
-            );
+            // Use the same validated financial mode for commissions and tips.
+            const visitEmployeeIds = transactionFinancials.eligibleTipEmployees;
 
             const hasInvalidTipEmployee = tips.some(
                 (tip: {
@@ -994,29 +1171,48 @@ export async function POST(request: Request) {
                 },
             });
 
-            return newSale;
+            // Return the sale and the commissions selected for this transaction.
+            // The confirmation must reflect the amounts actually written.
+            return {
+                sale: newSale,
+                commissionAmount: transactionCommissions.reduce(
+                    (total, commission) =>
+                        total + commission.commissionAmount,
+                    0
+                ),
+            };
         }, {
             isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
             maxWait: 5000,
             timeout: 10000,
         });
 
-        // Tell the checkout UI that the sale was saved successfully
         return Response.json(
             {
                 success: true,
-                saleId: sale.id,
-                finalTotal: sale.finalTotal,
-                commissionAmount: commissionsToCreate.reduce(
-                    (total, commission) =>
-                        total + commission.commissionAmount,
-                    0
-                ),
+                saleId: sale.sale.id,
+                finalTotal: sale.sale.finalTotal,
+                commissionAmount: sale.commissionAmount,
             },
             { status: 201 }
         );
 
     } catch (error) {
+        // Reject checkout if the locked appointments do not belong
+        // to the authorized Development test fixture.
+        if (
+            error instanceof Error &&
+            error.message === "TEST_FIXTURE_NOT_AUTHORIZED"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "Esta cita no está autorizada para pruebas de asignación.",
+                    conflictType: "TEST_FIXTURE_NOT_AUTHORIZED",
+                },
+                { status: 403 }
+            );
+        }
         if (
             error instanceof Error &&
             error.message === "CHECKOUT_VISIT_CHANGED"
