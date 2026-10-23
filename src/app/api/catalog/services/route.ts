@@ -121,6 +121,7 @@ export async function POST(request: Request) {
                         in: uniqueEmployeeIds,
                     },
                     active: true,
+                    isBookable: true,
                 },
                 select: {
                     id: true,

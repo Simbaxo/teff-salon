@@ -197,6 +197,7 @@ export async function POST(request: Request) {
 
                 // Recalculate the complete draft statement.
                 const totals = calculatePayroll({
+                    salaryTotal: entry.salaryTotal,
                     commissions,
                     tips,
                     adjustments,

@@ -335,6 +335,9 @@ export async function POST(request: Request) {
                     select: {
                         id: true,
                         name: true,
+                        compensationType: true,
+                        weeklySalary: true,
+                        salaryStartDate: true,
                     },
                 });
 
@@ -342,6 +345,13 @@ export async function POST(request: Request) {
                     employees.map((employee) => [
                         employee.id,
                         employee.name,
+                    ])
+                );
+
+                const employeeById = new Map(
+                    employees.map((employee) => [
+                        employee.id,
+                        employee,
                     ])
                 );
 
@@ -374,9 +384,20 @@ export async function POST(request: Request) {
                                 )
                         );
 
+                        const employee = employeeById.get(employeeId);
+
+                        // Salary applies only to eligible fixed-salary employees.
+                        const salaryTotal =
+                            employee?.compensationType === "FIXED_WEEKLY" &&
+                            employee.salaryStartDate !== null &&
+                            serviceStart >= employee.salaryStartDate
+                                ? employee.weeklySalary
+                                : 0;
+
                         const summary = calculateWeeklyPayrollSummary({
                             employeeId,
                             payrollEntryId: entry?.id ?? null,
+                            salaryTotal,
                             commissions: employeeCommissions,
                             tips: employeeTips,
                             adjustments: entry?.adjustments ?? [],
@@ -480,6 +501,7 @@ export async function POST(request: Request) {
                         }
 
                         const fields = [
+                            "salaryTotal",
                             "productionTotal",
                             "commissionTotal",
                             "tipsTotal",

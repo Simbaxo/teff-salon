@@ -92,6 +92,7 @@ export async function PUT(
                             in: uniqueEmployeeIds,
                         },
                         active: true,
+                        isBookable: true,
                     },
                     select: {
                         id: true,

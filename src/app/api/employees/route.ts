@@ -4,6 +4,7 @@ export async function GET() {
   const employees = await prisma.employee.findMany({
     where: {
       active: true,
+      isBookable: true,
     },
     orderBy: {
       id: "asc",

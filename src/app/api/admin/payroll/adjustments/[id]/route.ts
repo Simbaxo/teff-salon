@@ -171,6 +171,7 @@ export async function DELETE(
                 });
 
                 const totals = calculatePayroll({
+                    salaryTotal: entry.salaryTotal,
                     commissions,
                     tips,
                     adjustments: remainingAdjustments,

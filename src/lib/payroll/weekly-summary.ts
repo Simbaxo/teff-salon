@@ -22,6 +22,9 @@ type WeeklyTip = {
 type WeeklySummaryInput = {
     employeeId: number;
     payrollEntryId: number | null;
+    // Fixed salary applicable to this payroll week.
+    // Defaults to zero for commission-based technicians.
+    salaryTotal?: number;
     commissions: WeeklyCommission[];
     tips: WeeklyTip[];
     adjustments: PayrollAdjustmentInput[];
@@ -41,6 +44,7 @@ export function calculateWeeklyPayrollSummary(
     );
 
     const totals = calculatePayroll({
+        salaryTotal: input.salaryTotal ?? 0,
         commissions: employeeCommissions,
         tips: employeeTips,
         adjustments: input.adjustments,

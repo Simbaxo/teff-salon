@@ -158,6 +158,9 @@ export async function GET(request: Request) {
             select: {
                 id: true,
                 name: true,
+                compensationType: true,
+                weeklySalary: true,
+                salaryStartDate: true,
             },
             orderBy: {
                 name: "asc",
@@ -330,10 +333,20 @@ export async function GET(request: Request) {
                     })
                 ) ?? [];
 
+            // Fixed salary applies from the employee's configured start date.
+            // Commission-based technicians continue receiving salaryTotal = 0.
+            const salaryTotal =
+                employee.compensationType === "FIXED_WEEKLY" &&
+                employee.salaryStartDate !== null &&
+                serviceStart >= employee.salaryStartDate
+                    ? employee.weeklySalary
+                    : 0;
+
             // Use the shared calculation for Preview and future Review.
             const weeklySummary = calculateWeeklyPayrollSummary({
                 employeeId: employee.id,
                 payrollEntryId: existingEntry?.id ?? null,
+                salaryTotal,
                 commissions: employeeCommissions,
                 tips: employeeTips,
                 adjustments,
@@ -350,6 +363,7 @@ export async function GET(request: Request) {
             const displayedTotals =
             isLocked && existingEntry
                 ? {
+                        salaryTotal: existingEntry.salaryTotal,
                         productionTotal: existingEntry.productionTotal,
                         commissionTotal: existingEntry.commissionTotal,
                         tipsTotal: existingEntry.tipsTotal,

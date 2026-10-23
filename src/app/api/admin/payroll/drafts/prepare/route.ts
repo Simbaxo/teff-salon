@@ -189,6 +189,9 @@ export async function POST(request: Request) {
                     select: {
                         id: true,
                         name: true,
+                        compensationType: true,
+                        weeklySalary: true,
+                        salaryStartDate: true,
                     },
                     orderBy: { name: "asc" },
                 });
@@ -352,9 +355,19 @@ export async function POST(request: Request) {
                             )
                     );
 
+                    // Fixed salary applies only from the configured start week.
+                    // Commission-based technicians continue receiving salaryTotal = 0.
+                    const salaryTotal =
+                        employee.compensationType === "FIXED_WEEKLY" &&
+                        employee.salaryStartDate !== null &&
+                        serviceStart >= employee.salaryStartDate
+                            ? employee.weeklySalary
+                            : 0;
+
                     const summary = calculatePayrollDraftSummary({
                         employeeId: employee.id,
                         payrollEntryId: entry?.id ?? null,
+                        salaryTotal,
                         commissions: employeeCommissions,
                         tips: employeeTips,
                         adjustments: entry?.adjustments ?? [],
@@ -436,6 +449,7 @@ export async function POST(request: Request) {
                     // Create missing entries or refresh existing draft totals.
                     for (const statement of statements) {
                         const totals = {
+                            salaryTotal: statement.salaryTotal,
                             productionTotal: statement.productionTotal,
                             commissionTotal: statement.commissionTotal,
                             tipsTotal: statement.tipsTotal,

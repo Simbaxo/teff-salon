@@ -34,6 +34,8 @@ type DraftAdjustment = {
 type DraftSummaryInput = {
     employeeId: number;
     payrollEntryId: number | null;
+    // Fixed weekly salary, zero for commission-based employees.
+    salaryTotal?: number;
     commissions: DraftCommission[];
     tips: DraftTip[];
     adjustments: DraftAdjustment[];
@@ -49,6 +51,7 @@ export function calculatePayrollDraftSummary(
     const weekly = calculateWeeklyPayrollSummary({
         employeeId: input.employeeId,
         payrollEntryId: input.payrollEntryId,
+        salaryTotal: input.salaryTotal ?? 0,
         commissions: input.commissions,
         tips: input.tips,
         adjustments: input.adjustments,

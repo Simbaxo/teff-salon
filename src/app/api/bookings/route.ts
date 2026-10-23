@@ -255,6 +255,7 @@ export async function POST(request: Request) {
     const activeEmployees = await prisma.employee.findMany({
       where: {
         active: true,
+        isBookable: true,
       },
       select: {
         id: true,

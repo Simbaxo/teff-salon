@@ -32,6 +32,19 @@ model Employee {
   name   String
   active Boolean @default(true)
 
+  // Whether this employee can be selected for salon services.
+  isBookable Boolean @default(true)
+
+  // How this employee is compensated.
+  compensationType EmployeeCompensationType @default(COMMISSION)
+
+  // Weekly salary in COP, used for fixed-salary employees.
+  weeklySalary Int @default(0)
+
+  // First payroll week eligible for fixed salary.
+  // Null for commission-based employees.
+  salaryStartDate DateTime?
+
   employeeServices EmployeeService[]
   appointments     Appointment[]
   scheduleBlocks   EmployeeScheduleBlock[]
@@ -459,6 +472,9 @@ model PayrollEntry {
   employeeId      Int
 
   // Finalized financial snapshot in Colombian pesos.
+  // Fixed salary earned during this payroll week.
+  // Stored permanently in the weekly financial snapshot.
+  salaryTotal Int @default(0)
   productionTotal Int @default(0)
   commissionTotal Int @default(0)
   tipsTotal       Int @default(0)
@@ -603,4 +619,9 @@ enum PayrollAdjustmentType {
   LOAN
   UNIFORM
   OTHER_DEDUCTION
+}
+
+enum EmployeeCompensationType {
+  COMMISSION
+  FIXED_WEEKLY
 }

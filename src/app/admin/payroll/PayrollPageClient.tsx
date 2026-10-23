@@ -25,6 +25,7 @@ const adjustmentLabels: Record<AdjustmentType, string> = {
 };
 
 type PayrollSummary = {
+    salaryTotal: number;
     employeeId: number;
     employeeName: string;
     productionTotal: number;
@@ -71,6 +72,7 @@ type PayrollDraftPreparation = {
         employeeId: number;
         employeeName: string;
         action: "CREATE_DRAFT" | "UPDATE_DRAFT";
+        salaryTotal: number;
         productionTotal: number;
         commissionTotal: number;
         tipsTotal: number;
@@ -1073,7 +1075,7 @@ export default function PayrollPageClient() {
                                     Pago: {formatDate(preview.period.payday)}
                                 </p>
                             </div>
-                            
+
                             <div className="flex flex-wrap items-center gap-3">
                                 <span className="rounded-full bg-[#B76E79]/10 px-4 py-2 text-sm font-semibold text-[#B76E79]">
                                     {preview.period.status === "DRAFT"
@@ -1146,6 +1148,12 @@ export default function PayrollPageClient() {
                                 </div>
 
                                 <div className="mt-3">
+                                    {employee.salaryTotal > 0 && (
+                                        <AmountRow
+                                            label="Salario Base"
+                                            amount={employee.salaryTotal}
+                                        />
+                                    )}
                                     <AmountRow
                                         label="Comisiones"
                                         amount={employee.commissionTotal}
@@ -1660,7 +1668,7 @@ export default function PayrollPageClient() {
                                 className="rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-black"
                             >
                                 Cancelar
-                            </button>            
+                            </button>
                             <button
                                 type="button"
                                 onClick={() => void handleConfirmPayrollReview()}

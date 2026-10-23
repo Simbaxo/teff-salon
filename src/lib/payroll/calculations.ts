@@ -8,6 +8,9 @@ export type PayrollAdjustmentInput = {
 };
 
 export type PayrollCalculationInput = {
+    // Fixed weekly salary in Colombian pesos.
+    // Commission-based technicians default to zero.
+    salaryTotal?: number;
     commissions: {
         commissionBase: number;
         commissionAmount: number;
@@ -57,7 +60,10 @@ export function calculatePayroll(
     const otherDeductions =
         adjustmentTotal("OTHER_DEDUCTION");
 
+    const salaryTotal = input.salaryTotal ?? 0;
+
     const totalEarned =
+        salaryTotal +
         commissionTotal +
         tipsTotal +
         bonusesTotal;
@@ -70,6 +76,7 @@ export function calculatePayroll(
         tipsAlreadyPaid;
 
     return {
+        salaryTotal,
         productionTotal,
         commissionTotal,
         tipsTotal,
