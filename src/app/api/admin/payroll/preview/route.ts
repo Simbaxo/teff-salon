@@ -2,6 +2,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { calculateManualPaymentBalance } from "@/lib/payroll/manual-payments";
+import { getFixedWeeklySalary } from "@/lib/payroll/fixed-weekly-salary";
 import {
     calculateWeeklyPayrollSummary,
 } from "@/lib/payroll/weekly-summary";
@@ -335,12 +336,12 @@ export async function GET(request: Request) {
 
             // Fixed salary applies from the employee's configured start date.
             // Commission-based technicians continue receiving salaryTotal = 0.
-            const salaryTotal =
-                employee.compensationType === "FIXED_WEEKLY" &&
-                employee.salaryStartDate !== null &&
-                serviceStart >= employee.salaryStartDate
-                    ? employee.weeklySalary
-                    : 0;
+            const salaryTotal = getFixedWeeklySalary({
+                compensationType: employee.compensationType,
+                weeklySalary: employee.weeklySalary,
+                salaryStartDate: employee.salaryStartDate,
+                weekStart: serviceStart,
+            });
 
             // Use the shared calculation for Preview and future Review.
             const weeklySummary = calculateWeeklyPayrollSummary({

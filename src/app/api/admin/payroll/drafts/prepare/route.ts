@@ -6,6 +6,7 @@ import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 import { validatePayrollWeek } from "@/lib/payroll/review-validation";
 import { addTeffDays, getTeffToday } from "@/lib/datetime";
 import { calculatePayrollDraftSummary } from "@/lib/payroll/draft-summary";
+import { getFixedWeeklySalary } from "@/lib/payroll/fixed-weekly-salary";
 
 import {
     hasValidPayrollAttribution,
@@ -357,12 +358,12 @@ export async function POST(request: Request) {
 
                     // Fixed salary applies only from the configured start week.
                     // Commission-based technicians continue receiving salaryTotal = 0.
-                    const salaryTotal =
-                        employee.compensationType === "FIXED_WEEKLY" &&
-                        employee.salaryStartDate !== null &&
-                        serviceStart >= employee.salaryStartDate
-                            ? employee.weeklySalary
-                            : 0;
+                    const salaryTotal = getFixedWeeklySalary({
+                        compensationType: employee.compensationType,
+                        weeklySalary: employee.weeklySalary,
+                        salaryStartDate: employee.salaryStartDate,
+                        weekStart: serviceStart,
+                    });
 
                     const summary = calculatePayrollDraftSummary({
                         employeeId: employee.id,

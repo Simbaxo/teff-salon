@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { getTeffToday, addTeffDays } from "@/lib/datetime";
 import { lockPayrollWeek } from "@/lib/payroll/period-lock";
+import { getFixedWeeklySalary } from "@/lib/payroll/fixed-weekly-salary";
 import {
     validatePayrollWeek,
     hasValidPayrollAttribution,
@@ -387,12 +388,14 @@ export async function POST(request: Request) {
                         const employee = employeeById.get(employeeId);
 
                         // Salary applies only to eligible fixed-salary employees.
-                        const salaryTotal =
-                            employee?.compensationType === "FIXED_WEEKLY" &&
-                            employee.salaryStartDate !== null &&
-                            serviceStart >= employee.salaryStartDate
-                                ? employee.weeklySalary
-                                : 0;
+                        const salaryTotal = employee
+                        ? getFixedWeeklySalary({
+                            compensationType: employee.compensationType,
+                            weeklySalary: employee.weeklySalary,
+                            salaryStartDate: employee.salaryStartDate,
+                            weekStart: serviceStart,
+                        })
+                        : 0;
 
                         const summary = calculateWeeklyPayrollSummary({
                             employeeId,
