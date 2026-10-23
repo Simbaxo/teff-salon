@@ -72,12 +72,6 @@ export default function InternalNav({
                         label="Inventario"
                         pathname={pathname}
                     />
-
-                    <NavLink
-                        href="/catalog/services"
-                        label="Catálogo"
-                        pathname={pathname}
-                    />
                 </>
             )}
 
