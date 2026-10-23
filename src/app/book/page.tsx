@@ -133,6 +133,7 @@ export default function BookPage() {
         {
         id: "NAILS",
         emoji: "💅",
+        image: "/images/services/semipermanente.webp",
         nameEs: "Uñas",
         nameEn: "Nails",
         descriptionEs: "Manicure, Pedicure y Extensiones",
@@ -141,6 +142,7 @@ export default function BookPage() {
         {
             id: "LASHES",
             emoji: "👁️",
+            image: "/images/services/lashes.webp",
             nameEs: "Pestañas",
             nameEn: "Lashes",
             descriptionEs: "Sets, Retoques y Lifting",
@@ -149,6 +151,7 @@ export default function BookPage() {
         {
             id: "BROWS",
             emoji: "✨",
+            image: "/images/services/brows.webp",
             nameEs: "Cejas y Depilación",
             nameEn: "Brows & Waxing",
             descriptionEs: "Laminado, Henna y Depilación",
@@ -157,6 +160,7 @@ export default function BookPage() {
         {
             id: "ESTHETICS",
             emoji: "🧖‍♀️",
+            image: "/images/services/facial.webp",
             nameEs: "Estética",
             nameEn: "Esthetics",
             descriptionEs: "Faciales y Tratamientos",
@@ -1169,9 +1173,19 @@ export default function BookPage() {
             )}
 
             {!bookingSuccess && (
-                <div className="mx-auto max-w-2xl">
-                    {/* Heading */}
-                    <h1 className="text-3xl font-bold text-black">
+            <div className="mx-auto max-w-2xl">
+                {/* TEFF branding */}
+                <div className="mb-8 flex flex-col items-start">
+                    <div className="font-serif text-4xl font-normal tracking-[0.3em] text-black sm:text-5xl">
+                        TEFF
+                    </div>
+                    <div className="mt-1 text-[9px] font-semibold uppercase tracking-[0.35em] text-black">
+                        BEAUTY SALON
+                    </div>
+                </div>
+
+                {/* Heading */}
+                <h1 className="text-3xl font-bold text-black">
                         {language === "es"
                             ? "Reserva Tu Cita"
                             : "Book Your Appointment"}
@@ -1186,24 +1200,59 @@ export default function BookPage() {
                     {!servicesConfirmed && (
                         <>
                         {/* Service Category Selection */}
-                        <div className="mt-8 grid grid-cols-2 gap-3">
-                            {serviceCategories.map((category) => (
-                                <button
-                                    key={category.id}
-                                    onClick={() => setSelectedCategory(category.id)}
-                                    className={`rounded-xl border p-4 text-left transition ${
-                                        selectedCategory === category.id
-                                            ? "border-black bg-neutral-200"
-                                            : "border-neutral-200 bg-white hover:border-neutral-400"
-                                    }`}
-                                > 
-                                    <div className="text-2xl">{category.emoji}</div>
+                        <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4">
+                            {serviceCategories.map((category) => {
+                                const isSelected = selectedCategory === category.id;
 
-                                    <h2 className="mt-2 font-semibold text-black">
-                                        {language === "es" ? category.nameEs : category.nameEn}
-                                    </h2>
-                                </button>
-                            ))}
+                                return (
+                                    <button
+                                        key={category.id}
+                                        type="button"
+                                        onClick={() => setSelectedCategory(category.id)}
+                                        aria-pressed={isSelected}
+                                        className={`group relative aspect-[1.15/1] overflow-hidden rounded-2xl border-2 text-left transition-all duration-200 sm:aspect-[1.6/1] ${
+                                            isSelected
+                                                ? "border-[#B76E79] ring-2 ring-[#B76E79]/30"
+                                                : "border-transparent hover:border-[#B76E79]/50"
+                                        }`}
+                                    >
+                                        {/* Category photo */}
+                                        <Image
+                                            src={category.image}
+                                            alt=""
+                                            fill
+                                            sizes="(max-width: 640px) 50vw, 320px"
+                                            className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                        />
+
+                                        {/* Gradient keeps text readable */}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />
+
+                                        {/* Category name and description */}
+                                        <div className="absolute inset-x-0 bottom-0 pb-5 pl-3 pr-9 pt-3 text-white sm:pb-6 sm:pl-4 sm:pr-10">
+                                            <h2 className="text-base font-bold leading-tight sm:text-lg">
+                                                {language === "es"
+                                                    ? category.nameEs
+                                                    : category.nameEn}
+                                            </h2>
+
+                                            <p className="mt-1 line-clamp-2 pr-5 text-[11px] leading-snug text-white/90 sm:text-xs">
+                                                {language === "es"
+                                                    ? category.descriptionEs
+                                                    : category.descriptionEn}
+                                            </p>
+                                        </div>
+
+                                        {/* Directional indicator */}
+                                        <span
+                                            aria-hidden="true"
+                                            className="absolute bottom-3 right-3 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-sm font-semibold text-black shadow-sm sm:bottom-4 sm:right-4"
+                                        >
+                                            →
+                                        </span>
+                                    </button>
+                                );
+                            })}
                         </div>
 
                         {selectedCategory !== null && (
@@ -1218,54 +1267,87 @@ export default function BookPage() {
                                         )?.nameEn}
                                 </h2>
 
-                                <div className="space-y-4">
+                                <div className="space-y-3">
                                     {services
                                         .filter((service) => service.category === selectedCategory)
-                                        .map((service) => (
-                                            <button
-                                                key={service.id}
-                                                onClick={() => toggleService(service.id)}
-                                                className={`w-full rounded-xl border p-4 text-left ${
-                                                    selectedServices.includes(service.id)
-                                                        ? "border-black bg-neutral-200"
-                                                        : "border-neutral-200 bg-white"
-                                                }`}
-                                            >
-                                            <div className="flex items-center gap-4">
-                                                {/* Show a temporary photo when one is available for this service. */}
-                                                {SERVICE_IMAGES[service.id] && (
-                                                    <Image
-                                                        src={SERVICE_IMAGES[service.id]}
-                                                        alt={
-                                                            language === "es"
-                                                                ? `Imagen ilustrativa de ${service.nameEs}`
-                                                                : `Illustrative image for ${service.nameEn}`
-                                                        }
-                                                        width={88}
-                                                        height={88}
-                                                        sizes="88px"
-                                                        className="h-[88px] w-[88px] shrink-0 rounded-lg object-cover"
-                                                    />
-                                                )}
-                                                <div className="min-w-0 flex-1">
-                                                    <h3 className="font-semibold text-black">
-                                                        {language === "es"
-                                                            ? service.nameEs
-                                                            : service.nameEn}
-                                                    </h3>
+                                        .map((service) => {
+                                            const isSelected = selectedServices.includes(service.id);
 
-                                                    <p className="mt-1 text-sm text-neutral-600">
-                                                        ${service.price.toLocaleString("es-CO")} COP
-                                                    </p>
+                                            return (
+                                                <button
+                                                    key={service.id}
+                                                    type="button"
+                                                    onClick={() => toggleService(service.id)}
+                                                    aria-pressed={isSelected}
+                                                    className={`w-full overflow-hidden rounded-2xl border text-left transition-colors ${
+                                                        isSelected
+                                                            ? "border-[#B76E79] bg-[#F9F0F1]"
+                                                            : "border-neutral-200 bg-white hover:border-neutral-300"
+                                                    }`}
+                                                >
+                                                    <div className="flex min-h-[112px] items-center gap-3 p-3 sm:gap-4">
+                                                        {/* Service photography */}
+                                                        {SERVICE_IMAGES[service.id] && (
+                                                            <Image
+                                                                src={SERVICE_IMAGES[service.id]}
+                                                                alt={
+                                                                    language === "es"
+                                                                        ? `Foto de ${service.nameEs}`
+                                                                        : `Photo of ${service.nameEn}`
+                                                                }
+                                                                width={112}
+                                                                height={112}
+                                                                sizes="(max-width: 640px) 96px, 112px"
+                                                                className="h-24 w-24 shrink-0 rounded-xl object-cover sm:h-28 sm:w-28"
+                                                            />
+                                                        )}
 
-                                                    <p className="text-sm text-neutral-500">
-                                                        {service.estimatedDuration} min
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            </button>
-                                        ))}
-                                    </div>
+                                                        {/* Service details */}
+                                                        <div className="min-w-0 flex-1">
+                                                            <h3 className="text-base font-semibold leading-snug text-black sm:text-lg">
+                                                                {language === "es"
+                                                                    ? service.nameEs
+                                                                    : service.nameEn}
+                                                            </h3>
+
+                                                            <p className="mt-1 text-sm text-neutral-600">
+                                                                ${service.price.toLocaleString("es-CO")} COP
+                                                            </p>
+
+                                                            <div className="mt-1 flex items-center gap-1.5 text-sm text-neutral-500">
+                                                                <svg
+                                                                    aria-hidden="true"
+                                                                    className="h-4 w-4 shrink-0"
+                                                                    viewBox="0 0 24 24"
+                                                                    fill="none"
+                                                                    stroke="currentColor"
+                                                                    strokeWidth="1.8"
+                                                                    strokeLinecap="round"
+                                                                >
+                                                                    <circle cx="12" cy="12" r="9" />
+                                                                    <path d="M12 7v5l3 2" />
+                                                                </svg>
+
+                                                                <span>{service.estimatedDuration} min</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Selection indicator */}
+                                                        <span
+                                                            aria-hidden="true"
+                                                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg ${
+                                                                isSelected
+                                                                    ? "bg-[#B76E79] text-white"
+                                                                    : "bg-neutral-100 text-neutral-700"
+                                                            }`}
+                                                        >
+                                                            {isSelected ? "✓" : "›"}
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                </div>
                             </div>
                         )}
                         </>
