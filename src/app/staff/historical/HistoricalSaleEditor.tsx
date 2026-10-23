@@ -157,6 +157,20 @@ export default function HistoricalSaleEditor() {
         0
     );
 
+    // Match the Bold fee calculation used by Finalizar Servicio.
+    // payments.BOLD excludes the customer-paid processing fee.
+    const boldBase = payments.BOLD;
+
+    const boldProcessingFee =
+        boldBase <= 0
+            ? 0
+            : boldBase <= 100000
+                ? 5000
+                : Math.round(boldBase * 0.05);
+
+    const boldCustomerCharge =
+        boldBase + boldProcessingFee;
+
     const remainingPayment =
         amountToCollect - paymentTotal;
 
@@ -1261,6 +1275,30 @@ export default function HistoricalSaleEditor() {
                 </div>
 
                 <div className="mt-5 rounded-xl bg-neutral-100 p-4">
+                    {boldBase > 0 && (
+                        <div className="mb-4 rounded-lg border border-neutral-200 bg-white p-3">
+                            <div className="flex justify-between text-sm text-black">
+                                <span>Pago por Bold</span>
+                                <span>
+                                    ${boldBase.toLocaleString("es-CO")}
+                                </span>
+                            </div>
+
+                            <div className="mt-2 flex justify-between text-sm text-black">
+                                <span>Recargo Bold</span>
+                                <span>
+                                    ${boldProcessingFee.toLocaleString("es-CO")}
+                                </span>
+                            </div>
+
+                            <div className="mt-3 flex justify-between border-t border-neutral-200 pt-2 font-bold text-black">
+                                <span>Total a cobrar por Bold</span>
+                                <span>
+                                    ${boldCustomerCharge.toLocaleString("es-CO")}
+                                </span>
+                            </div>
+                        </div>
+                    )}
                     <div className="flex justify-between text-sm">
                         <span className="text-neutral-600">
                             Total a cobrar

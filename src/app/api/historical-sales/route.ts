@@ -499,6 +499,21 @@ export async function POST(request: Request) {
             0
         );
 
+        // Calculate Bold surcharge using the same rules as regular checkout.
+        // The payment amount excludes the processing fee.
+        const boldPayment = paymentInputs.find(
+            (payment) => payment.paymentMethod === "BOLD"
+        );
+
+        const boldBase = boldPayment?.amount ?? 0;
+
+        const boldProcessingFee =
+            boldBase <= 0
+                ? 0
+                : boldBase <= 100000
+                    ? 5000
+                    : Math.round(boldBase * 0.05);
+
         const expectedPaymentTotal =
             finalTotal + electronicTipTotal;
 
@@ -894,7 +909,10 @@ export async function POST(request: Request) {
                     saleId: sale.id,
                     paymentMethod: payment.paymentMethod,
                     amount: payment.amount,
-                    processingFee: 0,
+                    processingFee:
+                        payment.paymentMethod === "BOLD"
+                            ? boldProcessingFee
+                            : 0,
                     createdAt: historicalTimestamp,
                 })),
             });
