@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 import { validatePayrollWeek } from "@/lib/payroll/review-validation";
-import { addTeffDays } from "@/lib/datetime";
+import { addTeffDays, getTeffToday } from "@/lib/datetime";
 import { calculatePayrollDraftSummary } from "@/lib/payroll/draft-summary";
 
 import {
@@ -53,14 +53,13 @@ export async function POST(request: Request) {
         );
     }
 
-    // Writing drafts requires explicit confirmation in development.
-    const writeRequested =
-        "write" in body && body.write === true;
-
-    // Never allow this development workflow to write in production.
+    // Draft preparation requires explicit OWNER confirmation.
+    // OWNER authorization is enforced at the start of this route.
     const writeEnabled =
-        process.env.NODE_ENV !== "production" &&
-        writeRequested;
+        "write" in body &&
+        body.write === true &&
+        "confirmPrepare" in body &&
+        body.confirmPrepare === true;
 
     const serviceStart = validatePayrollWeek(body.week);
 
@@ -75,6 +74,21 @@ export async function POST(request: Request) {
     const serviceEnd = new Date(
         `${addTeffDays(week, 7)}T00:00:00.000Z`
     );
+
+    // Drafts may be previewed during the week,
+    // but saving is allowed only after Sunday ends.
+    const nextMonday = addTeffDays(week, 7);
+
+    if (writeEnabled && getTeffToday() < nextMonday) {
+        return Response.json(
+            {
+                error:
+                    "No se puede guardar la nómina antes de que termine la semana.",
+                conflictType: "PAYROLL_WEEK_NOT_FINISHED",
+            },
+            { status: 409 }
+        );
+    }
 
     try {
         const result = await prisma.$transaction(

@@ -130,34 +130,6 @@ const result = await database.$transaction(
                     if (updatedEntry.count !== 1) {
                         throw new Error("PAYROLL_SETTLEMENT_CONFLICT");
                     }
-
-                    // Check whether every statement is now settled.
-                    const remainingEntries =
-                        await tx.payrollEntry.count({
-                            where: {
-                                payrollPeriodId: entry.payrollPeriodId,
-                                status: { not: "PAID" },
-                            },
-                        });
-
-                    if (remainingEntries === 0) {
-                        const updatedPeriod =
-                            await tx.payrollPeriod.updateMany({
-                                where: {
-                                    id: entry.payrollPeriodId,
-                                    status: "REVIEWED",
-                                },
-                                data: {
-                                    status: "PAID",
-                                    paidAt: settledAt,
-                                },
-                            });
-
-                        if (updatedPeriod.count !== 1) {
-                            throw new Error("PAYROLL_SETTLEMENT_CONFLICT");
-                        }
-                    }
-
                     settlementCompleted = true;
                 }
 

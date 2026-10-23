@@ -122,7 +122,9 @@ test("records full payroll payment and prevents duplicates", async () => {
             where: { id: period.id },
         });
 
-        assert.equal(savedPeriod.status, "PAID");
+        // Paying a technician must not automatically close the week.
+        assert.equal(savedPeriod.status, "REVIEWED");
+        assert.equal(savedPeriod.paidAt, null);
 
         const payments = await prisma.payrollManualPayment.findMany({
             where: { payrollEntryId: entry.id },

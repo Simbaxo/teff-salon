@@ -115,7 +115,9 @@ test("settles zero-balance payroll without creating a payment", async () => {
         });
 
         assert.equal(savedEntry.status, "PAID");
-        assert.equal(savedPeriod.status, "PAID");
+       // Settling a zero-balance technician leaves the week open.
+        assert.equal(savedPeriod.status, "REVIEWED");
+        assert.equal(savedPeriod.paidAt, null);
 
         // No fictitious payment should be created.
         const paymentCount = await prisma.payrollManualPayment.count({

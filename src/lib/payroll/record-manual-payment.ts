@@ -260,49 +260,6 @@ async function executeManualPayment({
                             throw new Error("PAYROLL_SETTLEMENT_CONFLICT");
                         }
                     }
-
-
-                    // Check every statement after recording this payment.
-                    // The period is paid only when all entries are settled.
-                    const periodEntries =
-                        await tx.payrollEntry.findMany({
-                            where: {
-                                payrollPeriodId: entry.payrollPeriodId,
-                            },
-                            select: {
-                                id: true,
-                                status: true,
-                                netPay: true,
-                            },
-                        });
-
-                    // Zero-value statements must be settled explicitly.
-                    // Do not create fictitious payments for them.
-                    const allEntriesPaid =
-                        periodEntries.length > 0 &&
-                        periodEntries.every(
-                            (item) => item.status === "PAID"
-                        );
-
-                    if (allEntriesPaid) {
-                        const updatedPeriod =
-                            await tx.payrollPeriod.updateMany({
-                                where: {
-                                    id: entry.payrollPeriodId,
-                                    status: "REVIEWED",
-                                },
-                                data: {
-                                    status: "PAID",
-                                    paidAt: new Date(),
-                                },
-                            });
-
-                        if (updatedPeriod.count !== 1) {
-                            throw new Error(
-                                "PAYROLL_SETTLEMENT_CONFLICT"
-                            );
-                        }
-                    }
                 }
 
                 return {

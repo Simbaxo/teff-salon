@@ -60,6 +60,30 @@ type PayrollPreview = {
     readOnly: boolean;
 };
 
+type PayrollDraftPreparation = {
+    week: string;
+    readyToWrite: boolean;
+    readOnly: boolean;
+    createCount: number;
+    updateCount: number;
+    warnings: unknown[];
+    statements: {
+        employeeId: number;
+        employeeName: string;
+        action: "CREATE_DRAFT" | "UPDATE_DRAFT";
+        productionTotal: number;
+        commissionTotal: number;
+        tipsTotal: number;
+        bonusesTotal: number;
+        totalEarned: number;
+        loansTotal: number;
+        uniformsTotal: number;
+        otherDeductions: number;
+        tipsAlreadyPaid: number;
+        netPay: number;
+    }[];
+};
+
 function formatCOP(amount: number) {
     return new Intl.NumberFormat("es-CO", {
         style: "currency",
@@ -125,6 +149,19 @@ function AmountRow({
 }
 
 export default function PayrollPageClient() {
+    // Weekly payroll draft preparation.
+    const [draftPreparation, setDraftPreparation] =
+        useState<PayrollDraftPreparation | null>(null);
+
+    const [preparingDrafts, setPreparingDrafts] =
+        useState(false);
+
+    const [draftPreparationError, setDraftPreparationError] =
+        useState("");
+
+    const [showDraftConfirmation, setShowDraftConfirmation] =
+        useState(false);
+
     // Technician selected for payment confirmation.
     const [paymentEmployee, setPaymentEmployee] =
         useState<PayrollSummary | null>(null);
@@ -182,6 +219,15 @@ export default function PayrollPageClient() {
     const [showReviewConfirmation, setShowReviewConfirmation] =
         useState(false);
 
+    // Separate OWNER confirmation for closing a completed payroll week.
+    const [showCloseWeekConfirmation, setShowCloseWeekConfirmation] =
+        useState(false);
+
+    // Prevent duplicate closing requests.
+    const [closingWeek, setClosingWeek] = useState(false);
+
+    // Display errors from the close-week operation.
+    const [closeWeekError, setCloseWeekError] = useState("");
 
     // Only one technician's adjustment form is open at a time.
     const [editingEmployeeId, setEditingEmployeeId] =
@@ -603,6 +649,249 @@ export default function PayrollPageClient() {
         }
     }
 
+    async function handleCheckCloseWeek() {
+        if (
+            !preview ||
+            preview.period.status !== "REVIEWED" ||
+            closingWeek
+        ) {
+            return;
+        }
+
+        setClosingWeek(true);
+        setCloseWeekError("");
+        setShowCloseWeekConfirmation(false);
+
+        try {
+            const response = await fetch(
+                "/api/admin/payroll/close-week",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ week }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok || data.readOnly !== true) {
+                throw new Error(
+                    data.error ??
+                    "No se pudo validar el cierre de nómina."
+                );
+            }
+
+            if (data.readyToClose !== true) {
+                const unpaidCount =
+                    data.unpaidEmployeeIds?.length ?? 0;
+
+                throw new Error(
+                    unpaidCount > 0
+                        ? `Hay ${unpaidCount} técnica(s) pendientes de pago o liquidación.`
+                        : "La semana todavía no cumple los requisitos para cerrarse."
+                );
+            }
+
+            setShowCloseWeekConfirmation(true);
+        } catch (error) {
+            setCloseWeekError(
+                error instanceof Error
+                    ? error.message
+                    : "Ocurrió un error al validar el cierre."
+            );
+        } finally {
+            setClosingWeek(false);
+        }
+    }
+
+    async function handleConfirmCloseWeek() {
+        if (
+            !preview ||
+            preview.period.status !== "REVIEWED" ||
+            !showCloseWeekConfirmation ||
+            closingWeek
+        ) {
+            return;
+        }
+
+        setClosingWeek(true);
+        setCloseWeekError("");
+
+        try {
+            const response = await fetch(
+                "/api/admin/payroll/close-week",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        week,
+                        closeWeek: true,
+                        confirmClose: true,
+                    }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok || data.closeCompleted !== true) {
+                throw new Error(
+                    data.error ??
+                    "No se pudo cerrar la semana. Verifica los pagos pendientes."
+                );
+            }
+
+            // Refresh payroll only after the database confirms closure.
+            setShowCloseWeekConfirmation(false);
+            setRefreshKey((current) => current + 1);
+        } catch (error) {
+            setCloseWeekError(
+                error instanceof Error
+                    ? error.message
+                    : "Ocurrió un error al cerrar la semana."
+            );
+        } finally {
+            setClosingWeek(false);
+        }
+    }
+
+    async function handlePreparePayroll() {
+        if (
+            !preview ||
+            preview.period.status !== "DRAFT" ||
+            preparingDrafts
+        ) {
+            return;
+        }
+
+        setPreparingDrafts(true);
+        setDraftPreparationError("");
+        setDraftPreparation(null);
+        setShowDraftConfirmation(false);
+
+        try {
+            const response = await fetch(
+                "/api/admin/payroll/drafts/prepare",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ week }),
+                }
+            );
+
+            const data: PayrollDraftPreparation & {
+                error?: string;
+            } = await response.json();
+
+            if (
+                !response.ok ||
+                data.readOnly !== true ||
+                data.readyToWrite !== true
+            ) {
+                throw new Error(
+                    data.error ??
+                    "La nómina tiene conflictos pendientes. No se puede preparar."
+                );
+            }
+
+            setDraftPreparation(data);
+            setShowDraftConfirmation(true);
+        } catch (error) {
+            setDraftPreparationError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo calcular la nómina."
+            );
+        } finally {
+            setPreparingDrafts(false);
+        }
+    }
+
+    async function handleConfirmPreparePayroll() {
+        if (
+            !preview ||
+            preview.period.status !== "DRAFT" ||
+            !showDraftConfirmation ||
+            !draftPreparation ||
+            draftPreparation.week !== week ||
+            preparingDrafts
+        ) {
+            return;
+        }
+
+        setPreparingDrafts(true);
+        setDraftPreparationError("");
+
+        try {
+            const response = await fetch(
+                "/api/admin/payroll/drafts/prepare",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        week,
+                        write: true,
+                        confirmPrepare: true,
+                    }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (
+                !response.ok ||
+                data.readOnly !== false ||
+                !Array.isArray(data.savedEntries) ||
+                data.savedEntries.length !==
+                    draftPreparation.statements.length
+            ) {
+                throw new Error(
+                    data.error ??
+                    "No se pudo guardar la nómina. Verifica los valores."
+                );
+            }
+
+            // Verify the server saved the same employee set
+            // that the Owner reviewed.
+            const expectedIds = draftPreparation.statements
+                .map((item) => item.employeeId)
+                .sort((a, b) => a - b);
+
+            const savedIds = data.savedEntries
+                .map((item: { employeeId: number }) => item.employeeId)
+                .sort((a: number, b: number) => a - b);
+
+            if (
+                expectedIds.some(
+                    (id, index) => id !== savedIds[index]
+                )
+            ) {
+                throw new Error(
+                    "La nómina fue guardada, pero los empleados cambiaron. Actualiza la pantalla y verifica los valores."
+                );
+            }
+
+            setShowDraftConfirmation(false);
+            setDraftPreparation(null);
+            setRefreshKey((current) => current + 1);
+        } catch (error) {
+            setDraftPreparationError(
+                error instanceof Error
+                    ? error.message
+                    : "Ocurrió un error al guardar la nómina."
+            );
+        } finally {
+            setPreparingDrafts(false);
+        }
+    }
+
     // Validate payroll before asking the Owner to approve it.
     async function handleReviewPayroll() {
         if (!preview || preview.period.status !== "DRAFT") {
@@ -740,12 +1029,30 @@ export default function PayrollPageClient() {
                 </p>
             )}
 
+            {draftPreparationError && (
+                <p
+                    role="alert"
+                    className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700"
+                >
+                    {draftPreparationError}
+                </p>
+            )}
+
             {reviewError && (
                 <p
                     role="alert"
                     className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700"
                 >
                     {reviewError}
+                </p>
+            )}
+
+            {closeWeekError && (
+                <p
+                    role="alert"
+                    className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700"
+                >
+                    {closeWeekError}
                 </p>
             )}
 
@@ -776,6 +1083,20 @@ export default function PayrollPageClient() {
                                         : "Pagado"}
                                 </span>
 
+                                {/* Calculate and preview payroll drafts before saving. */}
+                                {preview.period.status === "DRAFT" && (
+                                    <button
+                                        type="button"
+                                        onClick={() => void handlePreparePayroll()}
+                                        disabled={preparingDrafts || reviewingPayroll || loading}
+                                        className="rounded-xl border border-[#B76E79] bg-white px-5 py-3 text-sm font-semibold text-[#B76E79] transition-colors hover:bg-[#B76E79]/5 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {preparingDrafts
+                                            ? "Calculando..."
+                                            : "Calcular Nómina"}
+                                    </button>
+                                )}
+
                                 {/* Only draft payroll can enter the review workflow. */}
                                 {preview.period.status === "DRAFT" && (
                                     <button
@@ -787,6 +1108,19 @@ export default function PayrollPageClient() {
                                         {reviewingPayroll
                                             ? "Validando nómina..."
                                             : "Revisar Nómina"}
+                                    </button>
+                                )}
+                                {/* The Owner explicitly closes a reviewed payroll week. */}
+                                {preview.period.status === "REVIEWED" && (
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleCheckCloseWeek()}
+                                        disabled={closingWeek || loading}
+                                        className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#A65D69] disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {closingWeek
+                                            ? "Validando cierre..."
+                                            : "Cerrar Semana"}
                                     </button>
                                 )}
                             </div>
@@ -1116,6 +1450,164 @@ export default function PayrollPageClient() {
                         </p>
                     )}
                 </>
+            )}
+
+            {/* Review calculated payroll before saving drafts. */}
+            {showDraftConfirmation && draftPreparation && (
+                <div
+                    role="presentation"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="payroll-prepare-title"
+                        className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl"
+                    >
+                        <h3
+                            id="payroll-prepare-title"
+                            className="text-xl font-bold text-black"
+                        >
+                            Confirmar Preparación de Nómina
+                        </h3>
+
+                        <p className="mt-3 text-sm text-neutral-600">
+                            Semana del {formatDate(week)} al{" "}
+                            {formatDate(addDays(week, 6))}
+                        </p>
+
+                        <p className="mt-3 text-sm text-neutral-700">
+                            Se crearán {draftPreparation.createCount} borradores
+                            y se actualizarán {draftPreparation.updateCount} existentes.
+                            Revisa los valores antes de guardar.
+                        </p>
+
+                        <div className="mt-4 max-h-72 space-y-3 overflow-y-auto">
+                            {draftPreparation.statements.map((statement) => (
+                                <div
+                                    key={statement.employeeId}
+                                    className="rounded-xl border border-neutral-200 p-3"
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="font-semibold text-black">
+                                            {statement.employeeName}
+                                        </span>
+                                        <span className="text-xs text-neutral-500">
+                                            {statement.action === "CREATE_DRAFT"
+                                                ? "Nuevo"
+                                                : "Actualizar"}
+                                        </span>
+                                    </div>
+
+                                    <p className="mt-2 text-sm text-neutral-600">
+                                        Producción: {formatCOP(statement.productionTotal)}
+                                    </p>
+
+                                    <p className="text-sm text-neutral-600">
+                                        Comisiones: {formatCOP(statement.commissionTotal)}
+                                    </p>
+
+                                    <p className="mt-1 text-sm font-bold text-black">
+                                        Pago Neto: {formatCOP(statement.netPay)}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowDraftConfirmation(false);
+                                    setDraftPreparation(null);
+                                }}
+                                disabled={preparingDrafts}
+                                className="rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-black"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => void handleConfirmPreparePayroll()}
+                                disabled={preparingDrafts}
+                                className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {preparingDrafts
+                                    ? "Guardando..."
+                                    : "Confirmar y Guardar"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirm before permanently closing the payroll week. */}
+            {showCloseWeekConfirmation && (
+                <div
+                    role="presentation"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="payroll-close-week-title"
+                        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+                    >
+                        <h3
+                            id="payroll-close-week-title"
+                            className="text-xl font-bold text-black"
+                        >
+                            Cerrar Semana
+                        </h3>
+
+                        <p className="mt-4 text-sm text-neutral-600">
+                            Semana del {formatDate(week)} al{" "}
+                            {formatDate(addDays(week, 6))}
+                        </p>
+
+                        <p className="mt-3 text-sm text-neutral-700">
+                            Confirmo que todos los pagos de esta semana
+                            fueron registrados y que no quedan saldos
+                            pendientes. Al cerrar la semana, la nómina
+                            quedará bloqueada para modificaciones.
+                        </p>
+
+                        {closeWeekError && (
+                            <p
+                                role="alert"
+                                className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700"
+                            >
+                                {closeWeekError}
+                            </p>
+                        )}
+
+                        <div className="mt-6 flex flex-wrap justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowCloseWeekConfirmation(false);
+                                    setCloseWeekError("");
+                                }}
+                                disabled={closingWeek}
+                                className="rounded-xl border border-neutral-300 px-4 py-3 text-sm font-semibold text-black"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => void handleConfirmCloseWeek()}
+                                disabled={closingWeek}
+                                className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {closingWeek
+                                    ? "Cerrando..."
+                                    : "Confirmar Cierre"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Owner confirmation before approving weekly payroll. */}
