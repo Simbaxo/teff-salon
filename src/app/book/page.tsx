@@ -12,14 +12,16 @@ import {
 // Temporary service photos, mapped by database service ID.
 // Replace these files with real TEFF photography as it becomes available.
 const SERVICE_IMAGES: Record<number, string> = {
-    1: "/images/services/manicure.webp",
+    1: "/images/services/semipermanente.webp",
     2: "/images/services/pedicure.webp",
+    3: "/images/services/base-rubber.webp",
+    10: "/images/services/acrilico.webp",
     12: "/images/services/extensions.webp",
+    13: "/images/services/polygel.webp",
     21: "/images/services/lashes.webp",
     40: "/images/services/brows.webp",
     46: "/images/services/facial.webp",
 };
-
 // Generate available start times based on TEFF's business hours
 function getTimeSlots(date: string) {
     if (!date) return [];
