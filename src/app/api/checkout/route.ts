@@ -130,6 +130,14 @@ export async function POST(request: Request) {
         const uniqueServiceIds = [...new Set(serviceIds)];
         const uniqueAddonIds = [...new Set(addonIds)];
 
+        // Repeated add-ons require instance-aware financial processing.
+        // Do not allow legacy checkout to silently merge duplicate charges.
+        const hasRepeatedAddonIds =
+            uniqueAddonIds.length !== addonIds.length;
+
+        // Repeated add-ons are validated individually below.
+        // Legacy checkout must still reject ambiguous technician attribution.
+
         // Checkout prices may be adjusted for this sale only.
         // They must still be valid whole Colombian-peso amounts.
         const servicePricesAreValid = servicePrices.every(
@@ -141,11 +149,22 @@ export async function POST(request: Request) {
         );
 
         const addonPricesAreValid = addonPrices.every(
-            (item: { addonId: number; price: number }) =>
-                Number.isInteger(item.addonId) &&
+            (item: {
+                instanceId?: string;
+                addonId: number;
+                price: number;
+            }) =>
+                Number.isSafeInteger(item.addonId) &&
                 item.addonId > 0 &&
-                Number.isInteger(item.price) &&
-                item.price >= 0
+                Number.isSafeInteger(item.price) &&
+                item.price >= 0 &&
+                (
+                    item.instanceId === undefined ||
+                    (
+                        typeof item.instanceId === "string" &&
+                        item.instanceId.trim().length > 0
+                    )
+                )
         );
 
         if (!servicePricesAreValid || !addonPricesAreValid) {
@@ -173,19 +192,86 @@ export async function POST(request: Request) {
             )
         );
 
+        // Each add-on occurrence has its own price.
+        // Legacy requests continue using the catalog ID.
+        const addonPriceEntries = addonPrices as {
+            instanceId?: string;
+            addonId: number;
+            price: number;
+        }[];
+
+        // Accept either legacy add-ons or instance-aware add-ons.
+        // Never mix both formats within one checkout request.
+        const hasLegacyAddonEntries = addonPriceEntries.some(
+            (item) => item.instanceId === undefined
+        );
+
+        const hasInstanceAwareAddonEntries = addonPriceEntries.some(
+            (item) => item.instanceId !== undefined
+        );
+
+        if (hasLegacyAddonEntries && hasInstanceAwareAddonEntries) {
+            return Response.json(
+                {
+                    error:
+                        "Los adicionales deben usar un formato de identificación consistente.",
+                    conflictType: "MIXED_ADDON_IDENTIFIERS",
+                },
+                { status: 400 }
+            );
+        }
+
+        const addonInstanceKey = (item: {
+            instanceId?: string;
+            addonId: number;
+        }) =>
+            item.instanceId === undefined
+                ? `legacy-${item.addonId}`
+                : `instance-${item.instanceId}`;
+
+        const submittedAddonInstances = new Map(
+            addonPriceEntries.map((item) => [
+                addonInstanceKey(item),
+                item,
+            ])
+        );
+
+        const addonInstancePricesMatch =
+            submittedAddonInstances.size === addonPriceEntries.length &&
+            addonPriceEntries.length === addonIds.length &&
+            addonPriceEntries.every(
+                (item, index) =>
+                    item.addonId === addonIds[index]
+            );
+
         const servicePriceIdsMatch =
             submittedServicePrices.size === uniqueServiceIds.length &&
             uniqueServiceIds.every((id) =>
                 submittedServicePrices.has(id)
             );
 
+        // Every submitted add-on occurrence must have a matching price.
+        // Repeated catalog IDs require unique instance identifiers.
         const addonPriceIdsMatch =
-            submittedAddonPrices.size === uniqueAddonIds.length &&
-            uniqueAddonIds.every((id) =>
-                submittedAddonPrices.has(id)
+            addonInstancePricesMatch &&
+            (
+                hasRepeatedAddonIds
+                    ? addonPriceEntries.every(
+                        (item) =>
+                            typeof item.instanceId === "string" &&
+                            item.instanceId.trim().length > 0
+                    )
+                    : submittedAddonPrices.size === uniqueAddonIds.length &&
+                    uniqueAddonIds.every((id) =>
+                        submittedAddonPrices.has(id)
+                    )
             );
 
-        if (!servicePriceIdsMatch || !addonPriceIdsMatch) {
+        if (
+            !servicePriceIdsMatch ||
+            !addonPriceIdsMatch ||
+            !addonInstancePricesMatch
+        ) {
             return Response.json(
                 { error: "Checkout prices do not match selected items" },
                 { status: 400 }
@@ -259,6 +345,8 @@ export async function POST(request: Request) {
 
                 appointmentAddons: {
                     select: {
+                        id: true,
+                        appointmentId: true,
                         addonId: true,
                         bookedPrice: true,
                     },
@@ -338,6 +426,93 @@ export async function POST(request: Request) {
                 {
                     error:
                         "All appointments in one sale must have the same service date",
+                },
+                { status: 400 }
+            );
+        }
+
+        // Identify each booked add-on by its database record ID.
+        // Keep its original appointment and catalog association.
+        const bookedAddonInstances = new Map<
+            string,
+            {
+                appointmentId: number;
+                addonId: number;
+                bookedPrice: number;
+            }
+        >();
+        // Load each booked add-on exactly once from verified appointments.
+        for (const visitAppointment of visitAppointments) {
+            for (const item of visitAppointment.appointmentAddons) {
+                bookedAddonInstances.set(`booked-${item.id}`, {
+                    appointmentId: visitAppointment.id,
+                    addonId: item.addonId,
+                    bookedPrice: item.bookedPrice,
+                });
+            }
+        }
+        // Legacy requests without instance IDs cannot distinguish
+        // multiple booked occurrences of the same catalog add-on.
+        const legacyAddonIds = new Set(
+            addonPriceEntries
+                .filter((item) => item.instanceId === undefined)
+                .map((item) => item.addonId)
+        );
+
+        const bookedAddonCounts = new Map<number, number>();
+
+        for (const booked of bookedAddonInstances.values()) {
+            bookedAddonCounts.set(
+                booked.addonId,
+                (bookedAddonCounts.get(booked.addonId) ?? 0) + 1
+            );
+        }
+
+        const hasAmbiguousLegacyAddon = [...legacyAddonIds].some(
+            (addonId) =>
+                (bookedAddonCounts.get(addonId) ?? 0) > 1
+        );
+
+        if (hasAmbiguousLegacyAddon) {
+            return Response.json(
+                {
+                    error:
+                        "Los adicionales repetidos requieren identificación individual.",
+                    conflictType: "AMBIGUOUS_LEGACY_ADDONS",
+                },
+                { status: 409 }
+            );
+        }
+
+        // Validate every explicitly identified add-on occurrence.
+        const invalidAddonInstance = addonPriceEntries.some((item) => {
+            const instanceId = item.instanceId;
+
+            // Older requests may omit instance IDs.
+            if (instanceId === undefined) {
+                return false;
+            }
+
+            // Booked instances must match an actual record from this visit.
+            if (instanceId.startsWith("booked-")) {
+                const booked = bookedAddonInstances.get(instanceId);
+
+                return !booked || booked.addonId !== item.addonId;
+            }
+
+            // New instances cannot impersonate booked records.
+            return (
+                instanceId.startsWith("instance-") ||
+                instanceId.startsWith("legacy-") ||
+                bookedAddonInstances.has(instanceId)
+            );
+        });
+
+        if (invalidAddonInstance) {
+            return Response.json(
+                {
+                    error: "Invalid checkout add-on instance",
+                    conflictType: "INVALID_ADDON_INSTANCE",
                 },
                 { status: 400 }
             );
@@ -423,10 +598,19 @@ export async function POST(request: Request) {
             serviceAddonRelations.map((relation) => relation.addonId)
         );
 
-        // Only newly added add-ons must must the current service/add-on rules
-        const newAddonIds = uniqueAddonIds.filter(
-            (addonId) => !bookedAddonPrices.has(addonId)
-        );
+        // Identify newly added occurrences, even when their catalog ID
+        // matches an add-on that was originally booked.
+        const newAddonIds = [
+            ...new Set(
+                addonPriceEntries
+                    .filter((item) =>
+                        item.instanceId !== undefined
+                            ? !bookedAddonInstances.has(item.instanceId)
+                            : !bookedAddonPrices.has(item.addonId)
+                    )
+                    .map((item) => item.addonId)
+            ),
+        ];
 
         // Reject add-ons that do not belong to any selected services
         const hasInvalidAddon = newAddonIds.some(
@@ -484,11 +668,19 @@ export async function POST(request: Request) {
             );
         }
 
-        // Newly added checkout items need explicit technician attribution.
-        // A single-technician visit is unambiguous. For multi-technician visits,
-        // do not guess which technician performed an item added during checkout.
+       // A new instance is one that does not reference
+        // an originally booked add-on record.
+        const hasNewAddonInstances = addonPriceEntries.some((item) => {
+            if (item.instanceId !== undefined) {
+                return !bookedAddonInstances.has(item.instanceId);
+            }
+
+            // Preserve existing single-add-on legacy requests.
+            return !bookedAddonPrices.has(item.addonId);
+        });
+
         const hasNewCheckoutItems =
-            newServiceIds.length > 0 || newAddonIds.length > 0;
+            newServiceIds.length > 0 || hasNewAddonInstances;
 
         // Explicit service assignments remove the need to guess ownership.
         // Keep this restriction for legacy checkout.
@@ -514,12 +706,28 @@ export async function POST(request: Request) {
             );
         }
 
-        // An inactive add-on is allowed only if it was part of the original booking
-        const hasInvalidInactiveAddon = addons.some(
-            (addon) =>
-                !addon.active &&
-                !bookedAddonPrices.has(addon.id)
-        );
+        // Originally booked inactive add-ons may still be honored.
+        // Newly added occurrences must use an active catalog add-on.
+        const hasInvalidInactiveAddon = addonPriceEntries.some((item) => {
+            const addon = addons.find(
+                (catalogItem) => catalogItem.id === item.addonId
+            );
+
+            if (!addon) {
+                return true;
+            }
+
+            if (addon.active) {
+                return false;
+            }
+
+            if (item.instanceId !== undefined) {
+                return !bookedAddonInstances.has(item.instanceId);
+            }
+
+            // Backward compatibility for legacy requests without instance IDs.
+            return !bookedAddonPrices.has(item.addonId);
+        });
 
         if (hasInvalidInactiveAddon) {
             return Response.json(
@@ -536,9 +744,10 @@ export async function POST(request: Request) {
             0
         );
 
-        const addonsTotal = addons.reduce(
-            (total, addon) =>
-                total + (submittedAddonPrices.get(addon.id) ?? 0),
+        // Count each validated add-on occurrence separately.
+        // Catalog IDs may repeat, but each selected instance has its own price.
+        const addonsTotal = addonPriceEntries.reduce(
+            (total, item) => total + item.price,
             0
         );
 
@@ -596,15 +805,26 @@ export async function POST(request: Request) {
                 const addonRevenue =
                     visitAppointment.appointmentAddons.reduce(
                         (total, item) => {
-                            // Only include add-ons that remain in the final checkout.
-                            if (!uniqueAddonIds.includes(item.addonId)) {
-                                return total;
+                            const instanceId = `booked-${item.id}`;
+
+                            const submitted =
+                                submittedAddonInstances.get(`instance-${instanceId}`);
+
+                            if (submitted) {
+                                return total + submitted.price;
                             }
 
-                            return (
-                                total +
-                                (submittedAddonPrices.get(item.addonId) ?? 0)
-                            );
+                            // Backward compatibility for requests without instance IDs.
+                            const legacyPrice =
+                                submittedAddonInstances.get(
+                                    `legacy-${item.addonId}`
+                                );
+
+                            if (legacyPrice) {
+                                return total + legacyPrice.price;
+                            }
+
+                            return total;
                         },
                         0
                     );
@@ -629,12 +849,19 @@ export async function POST(request: Request) {
                     0
                 );
 
-            const addedAddonRevenue = addons
-                .filter((addon) => newAddonIds.includes(addon.id))
+            // Count every newly added add-on occurrence exactly once.
+            // Originally booked add-ons are already counted in appointmentRevenue.
+            const addedAddonRevenue = addonPriceEntries
+                .filter((item) => {
+                    if (item.instanceId !== undefined) {
+                        return !bookedAddonInstances.has(item.instanceId);
+                    }
+
+                    // Preserve older single-add-on requests.
+                    return !bookedAddonPrices.has(item.addonId);
+                })
                 .reduce(
-                    (total, addon) =>
-                        total +
-                        (submittedAddonPrices.get(addon.id) ?? 0),
+                    (total, item) => total + item.price,
                     0
                 );
 
@@ -986,7 +1213,8 @@ export async function POST(request: Request) {
                           addons:
                               addonAssignments as CheckoutAddonAssignment[],
                           selectedServiceIds: uniqueServiceIds,
-                          selectedAddonIds: uniqueAddonIds,
+                          // Preserve every selected occurrence for validation.
+                          selectedAddonIds: addonIds,
                           servicePrices,
                           addonPrices,
                           discountTotal,
@@ -1073,13 +1301,23 @@ export async function POST(request: Request) {
                                 submittedServicePrices.get(service.id) ?? 0,
                         })),
 
-                        ...addons.map((addon) => ({
-                            itemType: "ADDON",
-                            itemId: addon.id,
-                            itemName: addon.nameEs,
-                            unitPrice:
-                                submittedAddonPrices.get(addon.id) ?? 0,
-                        })),
+                        // Save every selected add-on occurrence independently.
+                        ...addonPriceEntries.map((item) => {
+                            const addon = addons.find(
+                                (catalogItem) => catalogItem.id === item.addonId
+                            );
+
+                            if (!addon) {
+                                throw new Error("CHECKOUT_ADDON_NOT_FOUND");
+                            }
+
+                            return {
+                                itemType: "ADDON",
+                                itemId: addon.id,
+                                itemName: addon.nameEs,
+                                unitPrice: item.price,
+                            };
+                        }),
                     ],
                 });
             }

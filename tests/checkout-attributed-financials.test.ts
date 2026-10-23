@@ -163,3 +163,50 @@ test("rejects invalid negative prices", () => {
         /Invalid checkout commission input/
     );
 });
+
+
+test("attributes repeated add-ons to different technicians", () => {
+    const repeatedAddons = [
+        {
+            addonId: 5,
+            serviceIndex: 0,
+            price: 10000,
+        },
+        {
+            addonId: 5,
+            serviceIndex: 1,
+            price: 15000,
+        },
+    ];
+
+    const result = prepareAttributedFinancials(
+        services,
+        repeatedAddons,
+        0,
+        []
+    );
+
+    // Two services: 60,000 + 60,000
+    // Two add-ons: 10,000 + 15,000
+    assert.equal(result.subtotal, 145000);
+
+    assert.deepEqual(
+        result.commissions.map((item) => ({
+            employeeId: item.employeeId,
+            commissionBase: item.commissionBase,
+            commissionAmount: item.commissionAmount,
+        })),
+        [
+            {
+                employeeId: 1,
+                commissionBase: 70000,
+                commissionAmount: 35000,
+            },
+            {
+                employeeId: 2,
+                commissionBase: 75000,
+                commissionAmount: 37500,
+            },
+        ]
+    );
+});

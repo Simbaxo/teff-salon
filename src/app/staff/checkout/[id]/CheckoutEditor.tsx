@@ -42,6 +42,7 @@ type ServiceAddonRelation = {
 
 // Add-on data received from the original appointment.
 type BookedCheckoutAddon = {
+    id?: number;
     bookedPrice: number;
     addon: {
         id: number;
@@ -49,9 +50,11 @@ type BookedCheckoutAddon = {
     };
 };
 
-// Add-on selected during checkout.
-// Its parent service determines technician attribution.
 type CheckoutAddon = BookedCheckoutAddon & {
+    // Unique identifier for this selected add-on occurrence.
+    instanceId: string;
+
+    // Service responsible for this add-on's revenue.
     parentServiceId: number | null;
 };
 
@@ -112,13 +115,14 @@ export default function CheckoutEditor({
             )
         );
 
-    // Existing add-ons need an explicit parent service
-    // before service-level attribution can be submitted.
+    // Identify booked add-ons using their actual database record IDs.
+    // Each add-on occurrence has its own independent identifier.
     const [selectedAddons, setSelectedAddons] =
-        useState<CheckoutAddon[]>(
+        useState<CheckoutAddon[]>(() =>
             visitAppointments.flatMap((visitAppointment) =>
                 visitAppointment.appointmentAddons.map((item) => ({
                     ...item,
+                    instanceId: `booked-${item.id}`,
                     parentServiceId: null,
                 }))
             )
@@ -347,33 +351,41 @@ export default function CheckoutEditor({
             (item) => item.service.id !== serviceId
         );
 
-        // Find which add-ons are still allowed by the remaining services
-        const remainingAllowedAddonIds = serviceAddonRelations
-            .filter((relation) =>
-                remainingServices.some(
-                    (item) => item.service.id === relation.serviceId
-                )
-            )
-            .map((relation) => relation.addonId);
+        const remainingServiceIds = new Set(
+            remainingServices.map((item) => item.service.id)
+        );
 
         setSelectedServices(remainingServices);
 
-        // Remove selected add-ons that no longer belong to any service
         setSelectedAddons((current) =>
-            current.filter((item) =>
-                remainingAllowedAddonIds.includes(item.addon.id)
-            )
-        )
+            current.filter((item) => {
+                // Remove an add-on explicitly assigned to
+                // a service that has just been removed.
+                if (item.parentServiceId !== null) {
+                    return remainingServiceIds.has(
+                        item.parentServiceId
+                    );
+                }
+
+                // Unassigned add-ons may remain only if
+                // a compatible service is still selected.
+                return serviceAddonRelations.some(
+                    (relation) =>
+                        relation.addonId === item.addon.id &&
+                        remainingServiceIds.has(relation.serviceId)
+                );
+            })
+        );
     }
 
     // Assign an add-on to the service that performed it.
     function updateAddonParent(
-        addonId: number,
+        instanceId: string,
         parentServiceId: number | null
     ) {
         setSelectedAddons((current) =>
             current.map((item) =>
-                item.addon.id === addonId
+                item.instanceId === instanceId
                     ? { ...item, parentServiceId }
                     : item
             )
@@ -382,19 +394,31 @@ export default function CheckoutEditor({
 
     // Add an add-on to the final checkout selection
     function addAddon(addon: AvailableAddon) {
+        const hasMultipleTechnicians =
+            new Set(
+                visitAppointments.map((item) => item.employeeId)
+            ).size > 1;
+
         const alreadySelected = selectedAddons.some(
             (item) => item.addon.id === addon.id
         );
 
-        // Prevent the same add-on from being added twice
-        if (alreadySelected) {
+        if (
+            !attributedCheckoutEnabled &&
+            hasMultipleTechnicians
+        ) {
+            setCheckoutError(
+                "No se pueden agregar adicionales nuevos cuando varias técnicas atendieron la cita sin asignación individual."
+            );
             return;
         }
+
+        setCheckoutError("");
 
         setSelectedAddons((current) => [
             ...current,
             {
-                // Require an explicit parent before attributed checkout.
+                instanceId: crypto.randomUUID(),
                 parentServiceId: null,
                 bookedPrice: addon.price,
                 addon: {
@@ -429,7 +453,7 @@ export default function CheckoutEditor({
 
     // Adjust an add-on price for this checkout only.
     function updateAddonPrice(
-        addonId: number,
+        instanceId: string,
         price: number
     ) {
         if (!Number.isInteger(price) || price < 0) {
@@ -438,11 +462,8 @@ export default function CheckoutEditor({
 
         setSelectedAddons((current) =>
             current.map((item) =>
-                item.addon.id === addonId
-                    ? {
-                        ...item,
-                        bookedPrice: price,
-                    }
+                item.instanceId === instanceId
+                    ? { ...item, bookedPrice: price }
                     : item
             )
         );
@@ -523,6 +544,7 @@ export default function CheckoutEditor({
 
                 // Add-ons inherit the technician of their parent service.
                 const addonAssignments = selectedAddons.map((item) => ({
+                    instanceId: item.instanceId,
                     addonId: item.addon.id,
                     serviceIndex: selectedServices.findIndex(
                         (service) =>
@@ -565,6 +587,7 @@ export default function CheckoutEditor({
                         })),
 
                         addonPrices: selectedAddons.map((item) => ({
+                            instanceId: item.instanceId,
                             addonId: item.addon.id,
                             price: item.bookedPrice,
                         })),
@@ -802,7 +825,7 @@ export default function CheckoutEditor({
                                                     value={item.parentServiceId ?? ""}
                                                     onChange={(event) =>
                                                         updateAddonParent(
-                                                            item.addon.id,
+                                                            item.instanceId,
                                                             event.target.value === ""
                                                                 ? null
                                                                 : Number(event.target.value)
@@ -845,7 +868,7 @@ export default function CheckoutEditor({
                                                     value={item.bookedPrice}
                                                     onChange={(event) =>
                                                         updateAddonPrice(
-                                                            item.addon.id,
+                                                            item.instanceId,
                                                             Number(event.target.value)
                                                         )
                                                     }
@@ -921,16 +944,12 @@ export default function CheckoutEditor({
 
                         <div className="mt-3 space-y-2">
                             {filteredAvailableAddons.map((addon) => {
-                                const alreadySelected = selectedAddons.some(
-                                    (item) => item.addon.id === addon.id
-                                );
 
                                 return (
                                     <button
                                         key={addon.id}
                                         type="button"
                                         onClick={() => addAddon(addon)}
-                                        disabled={alreadySelected}
                                         className="flex w-full items-center justify-between rounded-lg border border-neutral-200 bg-white px-3 py-2 text-left disabled:opacity-40"
                                     >
                                         <span className="text-sm text-neutral-700">

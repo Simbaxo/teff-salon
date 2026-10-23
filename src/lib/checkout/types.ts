@@ -13,9 +13,15 @@ export type CheckoutServiceAssignment = {
 
 /**
  * An add-on belongs to a specific selected service.
- * serviceIndex identifies its position in the submitted services array.
+ *
+ * addonId identifies the catalog item.
+ * instanceId identifies an individual selected occurrence.
+ * serviceIndex identifies its parent service.
+ *
+ * instanceId remains optional for existing checkout requests.
  */
 export type CheckoutAddonAssignment = {
+    instanceId?: string;
     addonId: number;
     serviceIndex: number;
     price: number;

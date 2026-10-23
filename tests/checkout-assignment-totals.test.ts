@@ -142,3 +142,42 @@ test("rejects missing add-on assignments", () => {
         /Checkout assignments do not match selected items/
     );
 });
+
+test("accepts repeated add-ons with unique instances and prices", () => {
+    const repeatedAddons: CheckoutAddonAssignment[] = [
+        {
+            instanceId: "retiro-manos",
+            addonId: 5,
+            serviceIndex: 0,
+            price: 10000,
+        },
+        {
+            instanceId: "retiro-pies",
+            addonId: 5,
+            serviceIndex: 1,
+            price: 15000,
+        },
+    ];
+
+    assert.doesNotThrow(() =>
+        validateCheckoutAssignmentTotals(
+            services,
+            repeatedAddons,
+            [10, 20],
+            [5, 5],
+            servicePrices,
+            [
+                {
+                    instanceId: "retiro-manos",
+                    addonId: 5,
+                    price: 10000,
+                },
+                {
+                    instanceId: "retiro-pies",
+                    addonId: 5,
+                    price: 15000,
+                },
+            ]
+        )
+    );
+});

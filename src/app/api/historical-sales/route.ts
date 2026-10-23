@@ -222,14 +222,12 @@ export async function POST(request: Request) {
         const uniqueServiceIds = [...new Set(serviceIds)];
         const uniqueAddonIds = [...new Set(addonIds)];
 
-        if (
-            uniqueServiceIds.length !== serviceIds.length ||
-            uniqueAddonIds.length !== addonIds.length
-        ) {
+        // Services must remain unique.
+        // Add-ons may repeat when applied to different services.
+        if (uniqueServiceIds.length !== serviceIds.length) {
             return Response.json(
                 {
-                    error:
-                        "Historical sale contains duplicate services or add-ons",
+                    error: "Historical sale contains duplicate services",
                 },
                 { status: 400 }
             );

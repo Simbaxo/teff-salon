@@ -83,9 +83,9 @@ test("preserves service and add-on attribution with transaction rollback", async
 
                     const sale = await tx.sale.create({
                         data: {
-                            subtotal: 135000,
+                            subtotal: 145000,
                             discountTotal: 0,
-                            finalTotal: 135000,
+                            finalTotal: 145000,
                         },
                     });
 
@@ -105,10 +105,15 @@ test("preserves service and add-on attribution with transaction rollback", async
                                 price: 60000,
                             },
                         ],
-                        addons: [
+                       addons: [
                             {
                                 addonId: addon.id,
                                 serviceIndex: 0,
+                                price: 10000,
+                            },
+                            {
+                                addonId: addon.id,
+                                serviceIndex: 1,
                                 price: 15000,
                             },
                         ],
@@ -124,20 +129,32 @@ test("preserves service and add-on attribution with transaction rollback", async
                         orderBy: { id: "asc" },
                     });
 
-                    assert.equal(lines.length, 3);
+                    assert.equal(lines.length, 4);
 
-                    const [manicure, pedicure, retiro] = lines;
+                    const [manicure, pedicure, retiroManos, retiroPies] = lines;
 
-                    // Each service must retain its selected technician.
+                    // Services retain their assigned technicians.
                     assert.equal(manicure.employeeId, employeeA.id);
                     assert.equal(pedicure.employeeId, employeeB.id);
 
-                    // The add-on inherits its parent service technician.
-                    assert.equal(retiro.employeeId, employeeA.id);
-                    assert.equal(retiro.parentLineItemId, manicure.id);
+                    // Both Retiro charges use the same catalog add-on.
+                    assert.equal(retiroManos.itemId, addon.id);
+                    assert.equal(retiroPies.itemId, addon.id);
+
+                    // Each Retiro retains its own price.
+                    assert.equal(retiroManos.unitPrice, 10000);
+                    assert.equal(retiroPies.unitPrice, 15000);
+
+                    // Each Retiro belongs to the correct technician and service.
+                    assert.equal(retiroManos.employeeId, employeeA.id);
+                    assert.equal(retiroManos.parentLineItemId, manicure.id);
+
+                    assert.equal(retiroPies.employeeId, employeeB.id);
+                    assert.equal(retiroPies.parentLineItemId, pedicure.id);
 
                     assert.equal(manicure.appointmentId, appointment.id);
-                    assert.equal(retiro.appointmentId, appointment.id);
+                    assert.equal(retiroManos.appointmentId, appointment.id);
+                    assert.equal(retiroPies.appointmentId, appointment.id);
 
                     const total = lines.reduce(
                         (sum, line) => sum + line.unitPrice,

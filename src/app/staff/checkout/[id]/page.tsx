@@ -121,6 +121,7 @@ export default async function CheckoutPage({
         ? await prisma.employee.findMany({
             where: {
                 active: true,
+                isBookable: true,
             },
             select: {
                 id: true,

@@ -12,16 +12,44 @@ export function validateCheckoutAssignmentTotals(
     selectedServiceIds: number[],
     selectedAddonIds: number[],
     servicePrices: { serviceId: number; price: number }[],
-    addonPrices: { addonId: number; price: number }[]
+    addonPrices: {
+        instanceId?: string;
+        addonId: number;
+        price: number;
+    }[]
 ): void {
-    // The existing checkout request identifies each service by ID.
-    // Until that request supports repeated IDs, reject ambiguous repeats.
     const assignedServiceIds = services.map((item) => item.serviceId);
     const assignedAddonIds = addons.map((item) => item.addonId);
 
+    // Preserve the existing service-ID restriction.
+    if (new Set(assignedServiceIds).size !== assignedServiceIds.length) {
+        throw new Error("Duplicate checkout item ID");
+    }
+
+    const hasRepeatedAddonIds =
+        new Set(assignedAddonIds).size !== assignedAddonIds.length;
+
+    const instanceIds = addons.map((item) => item.instanceId);
+
+    const allLegacy = instanceIds.every(
+        (id) => id === undefined
+    );
+
+    const allInstanceAware = instanceIds.every(
+        (id) =>
+            typeof id === "string" &&
+            id.trim().length > 0
+    );
+
+    const hasDuplicateInstanceIds =
+        new Set(instanceIds).size !== instanceIds.length;
+
+    // Accept either the original legacy format or the new
+    // instance-aware format. Never mix both formats.
     if (
-        new Set(assignedServiceIds).size !== assignedServiceIds.length ||
-        new Set(assignedAddonIds).size !== assignedAddonIds.length
+        (!allLegacy && !allInstanceAware) ||
+        (allLegacy && hasRepeatedAddonIds) ||
+        (allInstanceAware && hasDuplicateInstanceIds)
     ) {
         throw new Error("Duplicate checkout item ID");
     }
@@ -43,8 +71,31 @@ export function validateCheckoutAssignmentTotals(
         servicePrices.map((item) => [item.serviceId, item.price])
     );
 
+    // Compare each add-on occurrence, not just its catalog ID.
+    const addonKey = (item: {
+        instanceId?: string;
+        addonId: number;
+    }) =>
+        item.instanceId === undefined
+            ? `legacy-${item.addonId}`
+            : `instance-${item.instanceId}`;
+
     const addonPriceMap = new Map(
-        addonPrices.map((item) => [item.addonId, item.price])
+        addonPrices.map((item) => [
+            addonKey(item),
+            item,
+        ])
+    );
+
+    const hasInvalidAddonPrices = addonPrices.some(
+        (item) =>
+            !Number.isSafeInteger(item.addonId) ||
+            item.addonId <= 0 ||
+            !Number.isSafeInteger(item.price) ||
+            item.price < 0 ||
+            (item.instanceId !== undefined &&
+                (typeof item.instanceId !== "string" ||
+                    item.instanceId.trim().length === 0))
     );
 
     if (
@@ -52,14 +103,20 @@ export function validateCheckoutAssignmentTotals(
         addonPriceMap.size !== addonPrices.length ||
         servicePrices.length !== services.length ||
         addonPrices.length !== addons.length ||
+        hasInvalidAddonPrices ||
         services.some(
             (item) =>
                 servicePriceMap.get(item.serviceId) !== item.price
         ) ||
-        addons.some(
-            (item) =>
-                addonPriceMap.get(item.addonId) !== item.price
-        )
+        addons.some((item) => {
+            const submitted = addonPriceMap.get(addonKey(item));
+
+            return (
+                !submitted ||
+                submitted.addonId !== item.addonId ||
+                submitted.price !== item.price
+            );
+        })
     ) {
         throw new Error("Checkout assignment prices do not match");
     }
