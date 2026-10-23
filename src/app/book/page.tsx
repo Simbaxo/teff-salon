@@ -1195,11 +1195,13 @@ export default function BookPage() {
                             ? "Reserva Tu Cita"
                             : "Book Your Appointment"}
                     </h1>
-                    <p className="mt-2 text-neutral-600">
-                        {language === "es"
-                            ? "Selecciona los servicios que deseas reservar."
-                            : "Select the services you would like to book."}
-                    </p>
+                    {!servicesConfirmed && (
+                        <p className="mt-2 text-neutral-600">
+                            {language === "es"
+                                ? "Selecciona los servicios que deseas reservar."
+                                : "Select the services you would like to book."}
+                        </p>
+                    )}
                     
                     {/* Service Browser */}
                     {!servicesConfirmed && (
@@ -1360,61 +1362,97 @@ export default function BookPage() {
 
                     {/* Appointment Configuration */}
                     {servicesConfirmed && !scheduleStarted && (
-                        <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
-                            <div className="flex items-start justify-between gap-4">
-                                <div>
-                                    <h2 className="font-semibold text-black">
-                                        {language === "es"
-                                            ? "Tus servicios"
-                                            : "Your Services"}
-                                    </h2>
-
-                                    <p className="mt-1 text-sm text-neutral-500">
-                                        {selectedServices.length}{" "}
-                                        {language === "es"
-                                            ? selectedServices.length === 1
-                                                ? "servicio seleccionado"
-                                                : "servicios seleccionados"
-                                            : selectedServices.length === 1
-                                            ? "service selected"
-                                            : "services selected"}
+                        <div className="mt-8 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+                            {/* Header */}
+                            <div className="flex items-start justify-between gap-3 border-b border-neutral-100 px-5 py-5 sm:px-6">
+                                <div className="min-w-0">
+                                    <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#B76E79]">
+                                        TEFF BEAUTY SALON
                                     </p>
+
+                                    <h2 className="mt-1 text-xl font-semibold tracking-tight text-black">
+                                        {language === "es" ? "Tus servicios" : "Your Services"}
+                                    </h2>
                                 </div>
-                                
+
+                                <span className="shrink-0 rounded-full bg-[#F9F0F1] px-3 py-1.5 text-xs font-semibold text-[#9F5663]">
+                                    {selectedServices.length}{" "}
+                                    {language === "es"
+                                        ? selectedServices.length === 1
+                                            ? "servicio"
+                                            : "servicios"
+                                        : selectedServices.length === 1
+                                            ? "service"
+                                            : "services"}
+                                </span>
+                            </div>
+
+                            {/* Selected services */}
+                            <div className="px-5 py-5 sm:px-6">
+                                <div className="space-y-4">
+                                    {selectedServiceDetails.map((service) => (
+                                        <div
+                                            key={service.id}
+                                            className="flex items-start justify-between gap-4"
+                                        >
+                                            <div className="flex min-w-0 items-start gap-3">
+                                                <span
+                                                    aria-hidden="true"
+                                                    className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#F9F0F1] text-xs font-bold text-[#B76E79]"
+                                                >
+                                                    ✓
+                                                </span>
+
+                                                <span className="text-sm font-medium leading-6 text-neutral-800">
+                                                    {language === "es"
+                                                        ? service.nameEs
+                                                        : service.nameEn}
+                                                </span>
+                                            </div>
+
+                                            <span className="shrink-0 text-sm font-semibold leading-6 text-black">
+                                                ${service.price.toLocaleString("es-CO")}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Services subtotal */}
+                                <div className="mt-5 flex items-center justify-between gap-3 border-t border-neutral-200 pt-4">
+                                    <span className="text-sm text-neutral-600">
+                                        {language === "es"
+                                            ? "Subtotal servicios"
+                                            : "Services subtotal"}
+                                    </span>
+
+                                    <span className="text-lg font-bold text-black">
+                                        ${selectedServiceDetails
+                                            .reduce((sum, service) => sum + service.price, 0)
+                                            .toLocaleString("es-CO")}{" "}
+                                        <span className="text-xs font-medium text-neutral-500">
+                                            COP
+                                        </span>
+                                    </span>
+                                </div>
+
+                                {/* Edit services */}
                                 <button
+                                    type="button"
                                     onClick={() => {
                                         setServicesConfirmed(false);
                                         setAddonsConfirmed(false);
                                         setScheduleStarted(false);
                                     }}
-                                    className="text-sm font-semibold text-black underline underline-offset-4"
+                                    className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-800 transition-colors hover:border-[#B76E79] hover:bg-[#F9F0F1]"
                                 >
+                                    <span aria-hidden="true">✎</span>
                                     {language === "es"
                                         ? "Editar servicios"
                                         : "Edit services"}
                                 </button>
+                            </div>
                         </div>
-
-                        <div className="mt-4 space-y-2">
-                            {selectedServiceDetails.map((service) => (
-                                <div
-                                    key={service.id}
-                                    className="flex justify-between gap-4 text-sm"
-                                >
-                                    <span className="text-neutral-700">
-                                        {language === "es"
-                                            ? service.nameEs
-                                            : service.nameEn}
-                                    </span>
-
-                                    <span className="shrink-0 font-medium text-black">
-                                        ${service.price.toLocaleString("es-CO")}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
+                    )}
 
                     {servicesConfirmed && 
                         !scheduleStarted &&
@@ -1448,9 +1486,9 @@ export default function BookPage() {
                                     return (
                                         <div
                                             key={addon.id}
-                                            className={`rounded-xl border p-4 ${
+                                            className={`overflow-hidden rounded-2xl border p-4 transition-colors sm:p-5 ${
                                                 isSelected
-                                                    ? "border-black bg-neutral-200"
+                                                    ? "border-[#B76E79] bg-[#F9F0F1]"
                                                     : "border-neutral-200 bg-white"
                                             }`}
                                         >
@@ -1463,19 +1501,45 @@ export default function BookPage() {
                                                 }}
                                                 className="w-full text-left"
                                             >
-                                                <h3 className="font-semibold text-black">
-                                                    {language === "es"
-                                                        ? addon.nameEs
-                                                        : addon.nameEn}
-                                                </h3>
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <h3 className="text-base font-semibold text-black sm:text-lg">
+                                                        {language === "es"
+                                                            ? addon.nameEs
+                                                            : addon.nameEn}
+                                                    </h3>
 
-                                                <p className="mt-1 text-sm text-neutral-600">
+                                                    <span
+                                                        aria-hidden="true"
+                                                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base ${
+                                                            isSelected
+                                                                ? "bg-[#B76E79] text-white"
+                                                                : "bg-neutral-100 text-neutral-500"
+                                                        }`}
+                                                    >
+                                                        {isSelected ? "✓" : "+"}
+                                                    </span>
+                                                </div>
+
+                                                <p className="mt-1 text-sm font-medium text-neutral-700">
                                                     +${addon.price.toLocaleString("es-CO")} COP
                                                 </p>
 
-                                                <p className="text-sm text-neutral-500">
-                                                    +{addon.estimatedDuration} min
-                                                </p>
+                                                <div className="mt-1 flex items-center gap-1.5 text-sm text-neutral-500">
+                                                    <svg
+                                                        aria-hidden="true"
+                                                        className="h-4 w-4 shrink-0 text-[#B76E79]"
+                                                        viewBox="0 0 24 24"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="1.8"
+                                                        strokeLinecap="round"
+                                                    >
+                                                        <circle cx="12" cy="12" r="9" />
+                                                        <path d="M12 7v5l3 2" />
+                                                    </svg>
+
+                                                    <span>+{addon.estimatedDuration} min</span>
+                                                </div>
                                             </button>
 
                                             {compatibleServices.length > 1 && (
@@ -1492,14 +1556,14 @@ export default function BookPage() {
                                                                 key={service.id}
                                                                 type="button"
                                                                 onClick={() => toggleAddon(addon.id, service.id)}
-                                                                className={`rounded-lg border px-3 py-2 text-sm ${
+                                                                className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
                                                                     selectedAddons.some(
                                                                         (selection) =>
                                                                             selection.addonId === addon.id &&
                                                                             selection.serviceId === service.id
                                                                     )
-                                                                        ? "border-black bg-black text-white"
-                                                                        : "border-neutral-300 bg-white text-black"
+                                                                        ? "border-[#B76E79] bg-[#B76E79] text-white"
+                                                                        : "border-neutral-200 bg-white text-neutral-700 hover:border-[#B76E79]"
                                                                 }`}
                                                             >
                                                                 {language === "es"
@@ -1516,11 +1580,12 @@ export default function BookPage() {
                             </div>
 
                             <button
+                                type="button"
                                 onClick={() => {
                                     setAddonsConfirmed(true);
                                     setScheduleStarted(true);
                                 }}
-                                className="mt-5 w-full rounded-xl bg-black px-6 py-3 font-semibold text-white"
+                                className="mt-6 flex w-full items-center justify-center gap-3 rounded-xl bg-black px-6 py-4 font-semibold text-white transition-colors hover:bg-neutral-800"
                             >
                                 {language === "es"
                                     ? selectedAddons.length > 0
@@ -1529,7 +1594,7 @@ export default function BookPage() {
                                     : selectedAddons.length > 0
                                         ? "Continue"
                                         : "Continue without Add-Ons"}
-
+                                <span aria-hidden="true">→</span>
                             </button>
                         </div>
                     )}
@@ -1539,46 +1604,32 @@ export default function BookPage() {
                         (scheduleStarted || availableAddons.length === 0) && (
                             <div className="mt-8">
                                 <button
+                                    type="button"
                                     onClick={() => {
                                         setScheduleStarted(false);
-                                        setAddonsConfirmed(false)
+                                        setAddonsConfirmed(false);
                                     }}
-                                    className="text-sm font-medium text-neutral-600 hover:text-black"
+                                    className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:border-[#B76E79] hover:bg-[#F9F0F1]"
                                 >
-                                    ← {language === "es" ? "Volver" : "Back"}
+                                    <span aria-hidden="true">←</span>
+                                    {language === "es" ? "Volver" : "Back"}
                                 </button>
-
-                                <p className="mt-6 text-sm font-medium uppercase tracking-wide text-neutral-500">
-                                    {language === "es" ? "Agenda" : "Schedule"}
-                                </p>
-
-                                <h2 className="mt-1 text-2xl font-semibold text-black">
-                                    {language === "es"
-                                        ? "Programa Tu Cita"
-                                        : "Schedule Your Appointment"}
-                                </h2>
                             </div>
                         )}
 
                     {/* Render Technician Options */}
                     {isScheduleStage && (
-                        <div className="mt-8">
-                            <h2 className="text-xl font-semibold text-black">
+                        <div className="mt-6">
+                            <h2 className="text-xl font-semibold tracking-tight text-black sm:text-2xl">
                                 {language === "es"
-                                ? "Técnicas para tus servicios"
-                                : "Technicians for your services"}
+                                    ? "Elige quién te atenderá"
+                                    : "Choose your technician"}
                             </h2>
-
-                            <p className="mt-1 text-sm text-neutral-500">
-                                {language === "es"
-                                    ? "Puedes elegir una técnica para cada servicio."
-                                    : "You can choose a technician for each service."}
-                            </p>
 
                             <div className="mt-5 space-y-6">
                                 {/* All selected nail services share one customer-facing technician choice. */}
                                 {selectedNailAssignments.length > 0 && (
-                                    <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                                    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
                                         <h3 className="font-semibold text-black">
                                             {language === "es"
                                                 ? "Servicios de uñas"
@@ -1612,21 +1663,34 @@ export default function BookPage() {
                                                 <button
                                                     type="button"
                                                     onClick={() => selectNailTechnician("any")}
-                                                    className={`w-full rounded-xl border p-4 text-left ${
+                                                    className={`w-full rounded-xl border p-4 text-left transition-colors ${
                                                         selectedNailAssignments.every(
                                                             ({ service }) =>
-                                                                selectedEmployeesByService[service.id] ===
-                                                                "any"
+                                                                selectedEmployeesByService[service.id] === "any"
                                                         )
-                                                            ? "border-black bg-neutral-200"
-                                                            : "border-neutral-200 bg-white"
+                                                            ? "border-[#B76E79] bg-[#F9F0F1]"
+                                                            : "border-neutral-200 bg-white hover:border-[#B76E79]"
                                                     }`}
                                                 >
-                                                    <span className="font-semibold text-black">
-                                                        {language === "es"
-                                                            ? "Cualquier Técnica — Recomendado"
-                                                            : "Any Technician — Recommended"}
-                                                    </span>
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <span className="font-semibold text-black">
+                                                            {language === "es"
+                                                                ? "Cualquier Técnica — Recomendado"
+                                                                : "Any Technician — Recommended"}
+                                                        </span>
+
+                                                        {selectedNailAssignments.every(
+                                                            ({ service }) =>
+                                                                selectedEmployeesByService[service.id] === "any"
+                                                        ) && (
+                                                            <span
+                                                                aria-hidden="true"
+                                                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#B76E79] text-sm font-bold text-white"
+                                                            >
+                                                                ✓
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </button>
 
                                                 {qualifiedNailEmployees.map((employee) => (
@@ -1636,20 +1700,32 @@ export default function BookPage() {
                                                         onClick={() =>
                                                             selectNailTechnician(employee.id)
                                                         }
-                                                        className={`w-full rounded-xl border p-4 text-left ${
+                                                        className={`w-full rounded-xl border p-4 text-left transition-colors ${
                                                             selectedNailAssignments.every(
                                                                 ({ service }) =>
-                                                                    selectedEmployeesByService[
-                                                                        service.id
-                                                                    ] === employee.id
+                                                                    selectedEmployeesByService[service.id] === employee.id
                                                             )
-                                                                ? "border-black bg-neutral-200"
-                                                                : "border-neutral-200 bg-white"
+                                                                ? "border-[#B76E79] bg-[#F9F0F1]"
+                                                                : "border-neutral-200 bg-white hover:border-[#B76E79]"
                                                         }`}
                                                     >
-                                                        <span className="font-semibold text-black">
-                                                            {employee.name}
-                                                        </span>
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <span className="font-semibold text-black">
+                                                                {employee.name}
+                                                            </span>
+
+                                                            {selectedNailAssignments.every(
+                                                                ({ service }) =>
+                                                                    selectedEmployeesByService[service.id] === employee.id
+                                                            ) && (
+                                                                <span
+                                                                    aria-hidden="true"
+                                                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#B76E79] text-sm font-bold text-white"
+                                                                >
+                                                                    ✓
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </button>
                                                 ))}
                                             </div>
@@ -1667,7 +1743,7 @@ export default function BookPage() {
                                         return (
                                             <div
                                                 key={service.id}
-                                                className="rounded-xl border border-neutral-200 bg-white p-4"
+                                                className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm"
                                             >
                                                 <h3 className="font-semibold text-black">
                                                     {language === "es"
@@ -1700,17 +1776,28 @@ export default function BookPage() {
                                                                 );
                                                                 setSelectedTime("");
                                                             }}
-                                                            className={`w-full rounded-xl border p-4 text-left ${
+                                                            className={`w-full rounded-xl border p-4 text-left transition-colors ${
                                                                 selectedForService === "any"
-                                                                    ? "border-black bg-neutral-200"
-                                                                    : "border-neutral-200 bg-white"
+                                                                    ? "border-[#B76E79] bg-[#F9F0F1]"
+                                                                    : "border-neutral-200 bg-white hover:border-[#B76E79]"
                                                             }`}
                                                         >
-                                                            <span className="font-semibold text-black">
-                                                                {language === "es"
-                                                                    ? "Cualquier Técnica — Recomendado"
-                                                                    : "Any Technician — Recommended"}
-                                                            </span>
+                                                            <div className="flex items-center justify-between gap-3">
+                                                                <span className="font-semibold text-black">
+                                                                    {language === "es"
+                                                                        ? "Cualquier Técnica — Recomendado"
+                                                                        : "Any Technician — Recommended"}
+                                                                </span>
+
+                                                                {selectedForService === "any" && (
+                                                                    <span
+                                                                        aria-hidden="true"
+                                                                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#B76E79] text-sm font-bold text-white"
+                                                                    >
+                                                                        ✓
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </button>
 
                                                         {qualifiedEmployees.map((employee) => (
@@ -1726,15 +1813,26 @@ export default function BookPage() {
                                                                     );
                                                                     setSelectedTime("");
                                                                 }}
-                                                                className={`w-full rounded-xl border p-4 text-left ${
+                                                                className={`w-full rounded-xl border p-4 text-left transition-colors ${
                                                                     selectedForService === employee.id
-                                                                        ? "border-black bg-neutral-200"
-                                                                        : "border-neutral-200 bg-white"
+                                                                        ? "border-[#B76E79] bg-[#F9F0F1]"
+                                                                        : "border-neutral-200 bg-white hover:border-[#B76E79]"
                                                                 }`}
                                                             >
-                                                                <span className="font-semibold text-black">
-                                                                    {employee.name}
-                                                                </span>
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <span className="font-semibold text-black">
+                                                                        {employee.name}
+                                                                    </span>
+
+                                                                    {selectedForService === employee.id && (
+                                                                        <span
+                                                                            aria-hidden="true"
+                                                                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#B76E79] text-sm font-bold text-white"
+                                                                        >
+                                                                            ✓
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                             </button>
                                                         ))}
                                                     </div>
@@ -1755,11 +1853,16 @@ export default function BookPage() {
                                 {language === "es" ? "Elige una fecha" : "Choose a date"}
                             </h2>
 
-                            <input 
-                                type="date" 
+                            <input
+                                type="date"
                                 value={selectedDate}
                                 onChange={(event) => setSelectedDate(event.target.value)}
-                                className="mt-4 w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
+                                aria-label={
+                                    language === "es"
+                                        ? "Fecha de la cita"
+                                        : "Appointment date"
+                                }
+                                className="mt-4 w-full min-w-0 rounded-2xl border border-neutral-200 bg-white px-4 py-4 text-base font-medium text-black shadow-sm outline-none transition-colors focus:border-[#B76E79] focus:ring-2 focus:ring-[#B76E79]/20"
                             />
                         </div>
                     )}
@@ -1775,45 +1878,93 @@ export default function BookPage() {
                             </h2>
 
                             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                {availableTimeSlots.map((time) => (
-                                    <button
-                                        key={time}
-                                        onClick={() => setSelectedTime(time)}
-                                        className={`rounded-xl border p-3 ${
-                                            selectedTime === time
-                                                ? "border-black bg-neutral-200 text-black"
-                                                : "border-neutral-300 bg-white text-black"
-                                        }`}
-                                    >
-                                        {formatTime(time)}
-                                    </button>
-                                    ))}
+                                {availableTimeSlots.map((time) => {
+                                    const isSelected = selectedTime === time;
+
+                                    return (
+                                        <button
+                                            key={time}
+                                            type="button"
+                                            onClick={() => setSelectedTime(time)}
+                                            aria-pressed={isSelected}
+                                            className={`flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${
+                                                isSelected
+                                                    ? "border-[#B76E79] bg-[#F9F0F1] text-[#9F5663] ring-1 ring-[#B76E79]/20"
+                                                    : "border-neutral-200 bg-white text-neutral-700 hover:border-[#B76E79]"
+                                            }`}
+                                        >
+                                            {formatTime(time)}
+
+                                            {isSelected && (
+                                                <span aria-hidden="true" className="text-[#B76E79]">
+                                                    ✓
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
 
                     {/* Customer Information */}
                     {selectedTime && (
-                        <div className="mt-8">
-                            <h2 className="text-xl font-semibold text-black">
-                                {language === "es" ? "Tus datos" : "Your information"}
-                            </h2>
+                        <div className="mt-8 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+                            {/* Customer information header */}
+                            <div className="border-b border-neutral-100 px-5 py-5 sm:px-6">
+                                <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#B76E79]">
+                                    TEFF BEAUTY SALON
+                                </p>
 
-                            <div className="mt-4 space-y-4">
-                                <input 
-                                    type="text"
-                                    value={customerName}
-                                    onChange={(event) => setCustomerName(event.target.value)}
-                                    placeholder={language === "es" ? "Nombre" : "Name"}
-                                    className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black" 
-                                />
+                                <h2 className="mt-1 text-xl font-semibold tracking-tight text-black">
+                                    {language === "es" ? "Tus datos" : "Your information"}
+                                </h2>
+
+                                <p className="mt-1 text-sm text-neutral-500">
+                                    {language === "es"
+                                        ? "Completa tus datos para continuar con la reserva."
+                                        : "Enter your information to continue your booking."}
+                                </p>
+                            </div>
+
+                            <div className="space-y-4 px-5 py-5 sm:px-6">
+                                <div>
+                                    <label
+                                        htmlFor="booking-customer-name"
+                                        className="mb-2 block text-sm font-medium text-neutral-700"
+                                    >
+                                        {language === "es" ? "Nombre completo" : "Full name"}
+                                    </label>
+
+                                    <input
+                                        id="booking-customer-name"
+                                        type="text"
+                                        autoComplete="name"
+                                        value={customerName}
+                                        onChange={(event) => setCustomerName(event.target.value)}
+                                        placeholder={
+                                            language === "es"
+                                                ? "Escribe tu nombre"
+                                                : "Enter your name"
+                                        }
+                                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3.5 text-base text-black outline-none transition-colors placeholder:text-neutral-400 focus:border-[#B76E79] focus:ring-2 focus:ring-[#B76E79]/20"
+                                    />
+                                </div>
 
                                 {/* Country code + customer's local phone number */}
-                                <div className="flex gap-2">
-                                    <select 
+                                <div>
+                                    <label
+                                        htmlFor="booking-customer-phone"
+                                        className="mb-2 block text-sm font-medium text-neutral-700"
+                                    >
+                                        {language === "es" ? "Teléfono / WhatsApp" : "Phone / WhatsApp"}
+                                    </label>
+
+                                    <div className="flex min-w-0 gap-2">
+                                        <select
                                         value={countryCode}
                                         onChange={(event) => setCountryCode(event.target.value)}
-                                        className="rounded-xl border border-neutral-300 bg-white p-4 text-black"
+                                        className="w-[116px] shrink-0 rounded-xl border border-neutral-200 bg-white px-2 py-3.5 text-sm text-black outline-none focus:border-[#B76E79] focus:ring-2 focus:ring-[#B76E79]/20 sm:w-[180px]"
                                         aria-label={language === "es" ? "Código de País" : "Country Code"}
                                     >
                                         {/* Colombia remains the default */}
@@ -1866,16 +2017,18 @@ export default function BookPage() {
                                     <input
                                         type="tel"
                                         value={customerPhone}
+                                        id="booking-customer-phone"
+                                        autoComplete="tel-national"
                                         onChange={(event) => setCustomerPhone(event.target.value)}
                                         placeholder={
                                         language === "es"
                                             ? "Teléfono / WhatsApp"
                                             : "Phone / WhatsApp"
                                         }
-                                        className="min-w-0 flex-1 rounded-xl border border-neutral-300 bg-white p-4 text-black disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+                                        className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-3.5 text-base text-black outline-none placeholder:text-neutral-400 focus:border-[#B76E79] focus:ring-2 focus:ring-[#B76E79]/20"
                                         />
                                     </div>
-                            </div>
+                                </div>
 
                                 <input 
                                     type="email"
@@ -1886,7 +2039,7 @@ export default function BookPage() {
                                             ? "Correo electrónico (opcional)"
                                             : "Email (optional)"
                                     }
-                                    className="mt-4 w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
+                                    className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3.5 text-base text-black outline-none transition-colors placeholder:text-neutral-400 focus:border-[#B76E79] focus:ring-2 focus:ring-[#B76E79]/20"
                                 />
 
                                 <textarea 
@@ -1897,9 +2050,10 @@ export default function BookPage() {
                                             ? "Notas para el salon (opcional)"
                                             : "Notes for the salon (optional)"
                                     }
-                                    className="min-h-28 w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
+                                    className="min-h-28 w-full resize-y rounded-xl border border-neutral-200 bg-white px-4 py-3.5 text-base text-black outline-none transition-colors placeholder:text-neutral-400 focus:border-[#B76E79] focus:ring-2 focus:ring-[#B76E79]/20"
                                 />
                             </div>
+                        </div>
                     )}
 
                     {/* Continue Button */}
@@ -1917,13 +2071,14 @@ export default function BookPage() {
                                 setIsReviewing(true);
                             }}
                             disabled={!customerName.trim()}
-                            className={`mt-8 w-full rounded-xl px-6 py-3 font-semibold ${
+                            className={`mt-6 flex w-full items-center justify-center gap-3 rounded-xl px-6 py-4 font-semibold transition-colors ${
                                 customerName.trim()
-                                    ? "bg-black text-white"
-                                    : "cursor-not-allowed bg-neutral-300 text-neutral-500"
+                                    ? "bg-black text-white hover:bg-neutral-800"
+                                    : "cursor-not-allowed bg-neutral-200 text-neutral-400"
                             }`}
                         >
                             {language === "es" ? "Revisar cita" : "Review Appointment"}
+                            <span aria-hidden="true">→</span>
                         </button>
                     )}
 
@@ -1988,64 +2143,177 @@ export default function BookPage() {
 
                     {/* Review Appointment */}
                     {isReviewing && (
-                        <div className="mt-8 rounded-xl bg-white p-6">
-                            <h2 className="text-2xl font-semibold text-black">
-                                {language === "es" ? "Revisa tu cita" : "Review Your Appointment"}
-                            </h2>
+                        <div className="mt-8 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+                            {/* Review header */}
+                            <div className="border-b border-neutral-100 px-5 py-5 sm:px-6">
+                                <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#B76E79]">
+                                    TEFF BEAUTY SALON
+                                </p>
 
-                            <div className="mt-6 space-y-5">
+                                <h2 className="mt-1 text-xl font-semibold tracking-tight text-black">
+                                    {language === "es"
+                                        ? "Revisa tu cita"
+                                        : "Review Your Appointment"}
+                                </h2>
 
-                                <div>
-                                    <p className="text-sm text-neutral-500">
+                                <p className="mt-1 text-sm text-neutral-500">
+                                    {language === "es"
+                                        ? "Verifica los detalles antes de confirmar tu reserva."
+                                        : "Check your appointment details before confirming."}
+                                </p>
+                            </div>
+
+                            <div className="space-y-5 px-5 py-5 sm:px-6">
+
+                                <div className="rounded-xl bg-neutral-50 p-4">
+                                    <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
                                         {language === "es" ? "Cliente" : "Customer"}
                                     </p>
-                                    <p className="font-semibold text-black">{customerName}</p>
-                                    <p className="text-neutral-600">
+
+                                    <p className="mt-2 text-base font-semibold text-black">
+                                        {customerName}
+                                    </p>
+
+                                    <p className="mt-1 text-sm text-neutral-600">
                                         {displayCustomerPhone}
                                     </p>
                                 </div>
 
                                 <div>
-                                    <p className="text-sm text-neutral-500">
+                                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
                                         {language === "es" ? "Servicios" : "Services"}
-                                    </p>
+                                    </h3>
 
-                                    {selectedServiceDetails.map((service) => (
-                                        <p key={service.id} className="text-black">
-                                            {language === "es" ? service.nameEs : service.nameEn}
-                                        </p>
-                                    ))}
+                                    <div className="space-y-3">
+                                        {selectedServiceDetails.map((service) => (
+                                            <div
+                                                key={service.id}
+                                                className="flex items-start justify-between gap-3"
+                                            >
+                                                <div className="flex min-w-0 items-start gap-2">
+                                                    <span
+                                                        aria-hidden="true"
+                                                        className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#F9F0F1] text-xs font-bold text-[#B76E79]"
+                                                    >
+                                                        ✓
+                                                    </span>
+
+                                                    <span className="text-sm font-medium leading-6 text-neutral-800">
+                                                        {language === "es"
+                                                            ? service.nameEs
+                                                            : service.nameEn}
+                                                    </span>
+                                                </div>
+
+                                                <span className="shrink-0 text-sm font-semibold leading-6 text-black">
+                                                    ${service.price.toLocaleString("es-CO")}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
 
                                 {selectedAddonDetails.length > 0 && (
                                     <div>
-                                        <p className="text-sm text-neutral-500">
+                                        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
                                             {language === "es" ? "Complementos" : "Add-ons"}
-                                        </p>
+                                        </h3>
 
-                                        {selectedAddonDetails.map((addon) => (
-                                            <p
-                                                key={`${addon.id}-${addon.serviceId}`}
-                                                className="text-black"
-                                            >
-                                                {language === "es" ? addon.nameEs : addon.nameEn}
-                                            </p>
-                                        ))}
+                                        <div className="space-y-3">
+                                            {selectedAddonDetails.map((addon) => {
+                                                const assignedService = selectedServiceDetails.find(
+                                                    (service) => service.id === addon.serviceId
+                                                );
+
+                                                return (
+                                                    <div
+                                                        key={`${addon.id}-${addon.serviceId}`}
+                                                        className="flex items-start justify-between gap-3"
+                                                    >
+                                                        <div className="flex min-w-0 items-start gap-2">
+                                                            <span
+                                                                aria-hidden="true"
+                                                                className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#F9F0F1] text-xs font-bold text-[#B76E79]"
+                                                            >
+                                                                ✓
+                                                            </span>
+
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-medium leading-6 text-neutral-800">
+                                                                    {language === "es"
+                                                                        ? addon.nameEs
+                                                                        : addon.nameEn}
+                                                                </p>
+
+                                                                {assignedService && (
+                                                                    <p className="text-xs text-neutral-500">
+                                                                        {language === "es" ? "Para: " : "For: "}
+                                                                        {language === "es"
+                                                                            ? assignedService.nameEs
+                                                                            : assignedService.nameEn}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <span className="shrink-0 text-sm font-semibold leading-6 text-black">
+                                                            +${addon.price.toLocaleString("es-CO")}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 )}
 
+                                {/* Technician assignments for each selected service */}
                                 <div>
-                                    <p className="text-sm text-neutral-500">
-                                        {language === "es" ? "Técnica" : "Technician"}
-                                    </p>
+                                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                                        {language === "es"
+                                            ? "Técnicas para tus servicios"
+                                            : "Technicians for your services"}
+                                    </h3>
 
-                                    <p className="font-semibold text-black">
-                                        {selectedEmployee === "any"
-                                            ? language === "es"
-                                                ? "Cualquier técnica"
-                                                : "Any Technician"
-                                            : selectedEmployeeDetails?.name}
-                                    </p>
+                                    <div className="space-y-3">
+                                        {serviceAssignments.map(({ service }) => {
+                                            const employeeChoice =
+                                                selectedEmployeesByService[service.id];
+
+                                            const technician =
+                                                typeof employeeChoice === "number"
+                                                    ? employees.find(
+                                                        (employee) => employee.id === employeeChoice
+                                                    )
+                                                    : null;
+
+                                            const technicianName =
+                                                employeeChoice === "any"
+                                                    ? language === "es"
+                                                        ? "Cualquier técnica"
+                                                        : "Any Technician"
+                                                    : technician?.name ??
+                                                        (language === "es"
+                                                            ? "Pendiente de asignación"
+                                                            : "Pending assignment");
+
+                                            return (
+                                                <div
+                                                    key={service.id}
+                                                    className="flex items-start justify-between gap-3"
+                                                >
+                                                    <span className="min-w-0 text-sm text-neutral-600">
+                                                        {language === "es"
+                                                            ? service.nameEs
+                                                            : service.nameEn}
+                                                    </span>
+
+                                                    <span className="text-right text-sm font-semibold text-black">
+                                                        {technicianName}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
 
                                 <div>
@@ -2058,32 +2326,52 @@ export default function BookPage() {
                                     </p>
                                 </div>
 
-                                <div>
-                                    <p className="text-sm text-neutral-500">
-                                        {language === "es" ? "Precio estimado" : "Estimated Price"}
+                                {/* Estimated total and duration */}
+                                <div className="border-t border-neutral-200 pt-5">
+                                    <p className="text-sm font-medium text-neutral-500">
+                                        {language === "es"
+                                            ? "Total estimado"
+                                            : "Estimated total"}
                                     </p>
 
-                                    <p className="font-semibold text-black">
-                                        ${totalPrice.toLocaleString("es-CO")} COP
-                                    </p>
-                                </div>
-
-                                <div>
-                                    <p className="text-sm text-neutral-500">
-                                        {language === "es" ? "Duración estimada" : "Estimated Duration"}
+                                    <p className="mt-1 text-3xl font-bold tracking-tight text-black">
+                                        ${totalPrice.toLocaleString("es-CO")}
+                                        <span className="ml-2 text-sm font-medium text-neutral-500">
+                                            COP
+                                        </span>
                                     </p>
 
-                                    <p className="font-semibold text-black">
-                                        {totalDuration} min
-                                    </p>
+                                    <div className="mt-4 flex items-center gap-2 text-sm text-neutral-600">
+                                        <svg
+                                            aria-hidden="true"
+                                            className="h-4 w-4 shrink-0 text-[#B76E79]"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="1.8"
+                                            strokeLinecap="round"
+                                        >
+                                            <circle cx="12" cy="12" r="9" />
+                                            <path d="M12 7v5l3 2" />
+                                        </svg>
+
+                                        <span>
+                                            {language === "es"
+                                                ? "Duración estimada:"
+                                                : "Estimated duration:"}{" "}
+                                            <span className="font-semibold text-neutral-800">
+                                                {totalDuration} min
+                                            </span>
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Add Edit and Confirm Buttons */}
-                            <div className="mt-8 flex gap-3">
+                            <div className="mx-5 mb-5 flex flex-col gap-3 sm:mx-6 sm:flex-row">
                                 <button
                                     onClick={() => setIsReviewing(false)}
-                                    className="flex-1 rounded-xl border border-black px-4 py-3 font-semibold text-black"
+                                    className="min-h-12 flex-1 rounded-xl border border-neutral-200 bg-white px-4 py-3 font-semibold text-neutral-800 transition-colors hover:border-[#B76E79] hover:bg-[#F9F0F1]"
                                 >
                                     {language === "es" ? "Editar" : "Edit"}
                                 </button>
@@ -2091,7 +2379,7 @@ export default function BookPage() {
                                 <button
                                     onClick={handleConfirmBooking}
                                     disabled={isSubmitting}
-                                    className="flex-1 rounded-xl bg-black px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="min-h-12 flex-1 rounded-xl bg-black px-4 py-3 font-semibold text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {isSubmitting
                                         ? language === "es"
@@ -2102,85 +2390,130 @@ export default function BookPage() {
                                             : "Confirm Appointment"}
                                 </button>
 
-                                {bookingError && (
-                                    <p className="mt-4 text-sm text-red-600">
-                                        {bookingError}
-                                    </p>
-                                )}
                             </div>
+
+                            {/* Display booking errors below the action buttons */}
+                            {bookingError && (
+                                <div
+                                    role="alert"
+                                    className="mx-5 mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 sm:mx-6"
+                                >
+                                    {bookingError}
+                                </div>
+                            )}
                         </div>
                     )}
 
-                    {/* Service Selection Summary */}
+                   {/* Service Selection Summary */}
                     {selectedServices.length > 0 && !servicesConfirmed && (
-                        <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
-                            <div className="flex items-center justify-between">
-                                <h2 className="font-semibold text-black">
-                                    {language === "es" ? "Tu Selección" : "Your Selection"}
-                                </h2>
+                        <div className="mt-8 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+                            {/* Summary heading */}
+                            <div className="border-b border-neutral-100 px-5 py-5 sm:px-6">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                        <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#B76E79]">
+                                            TEFF BEAUTY SALON
+                                        </p>
 
-                                <span className="text-sm text-neutral-500">
-                                    {selectedServices.length}{" "}
-                                    {language === "es"
-                                        ? selectedServices.length === 1
-                                            ? "servicio"
-                                            : "servicios"
-                                        : selectedServices.length === 1
-                                            ? "service"
-                                            : "services"}
-                                </span>
+                                        <h2 className="mt-1 text-xl font-semibold tracking-tight text-black">
+                                            {language === "es" ? "Tu Selección" : "Your Selection"}
+                                        </h2>
+                                    </div>
+
+                                    <span className="shrink-0 rounded-full bg-[#F9F0F1] px-3 py-1.5 text-xs font-semibold text-[#9F5663]">
+                                        {selectedServices.length}{" "}
+                                        {language === "es"
+                                            ? selectedServices.length === 1
+                                                ? "servicio"
+                                                : "servicios"
+                                            : selectedServices.length === 1
+                                                ? "service"
+                                                : "services"}
+                                    </span>
+                                </div>
                             </div>
 
-                            {/* Show every selected service */}
-                            <div className="mt-4 space-y-3">
-                                {selectedServiceDetails.map((service) => (
-                                    <div
-                                        key={service.id}
-                                        className="flex items-center justify-between gap-4"
-                                    >
-                                        <span className="text-sm text-neutral-700">
-                                            {language === "es" ? service.nameEs : service.nameEn}
-                                        </span>
+                            {/* Selected services */}
+                            <div className="px-5 py-5 sm:px-6">
+                                <div className="space-y-4">
+                                    {selectedServiceDetails.map((service) => (
+                                        <div
+                                            key={service.id}
+                                            className="flex items-start justify-between gap-4"
+                                        >
+                                            <div className="flex min-w-0 items-start gap-3">
+                                                <span
+                                                    aria-hidden="true"
+                                                    className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#F9F0F1] text-xs font-bold text-[#B76E79]"
+                                                >
+                                                    ✓
+                                                </span>
 
-                                        <span className="shrink-0 text-sm font-medium text-black">
-                                            ${service.price.toLocaleString("es-CO")}
+                                                <span className="text-sm font-medium leading-6 text-neutral-800">
+                                                    {language === "es"
+                                                        ? service.nameEs
+                                                        : service.nameEn}
+                                                </span>
+                                            </div>
+
+                                            <span className="shrink-0 text-sm font-semibold leading-6 text-black">
+                                                ${service.price.toLocaleString("es-CO")}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Estimated total */}
+                                <div className="mt-6 border-t border-neutral-200 pt-5">
+                                    <p className="text-sm font-medium text-neutral-500">
+                                        {language === "es"
+                                            ? "Total estimado"
+                                            : "Estimated total"}
+                                    </p>
+
+                                    <p className="mt-1 text-3xl font-bold tracking-tight text-black">
+                                        ${totalPrice.toLocaleString("es-CO")}
+                                        <span className="ml-2 text-sm font-medium text-neutral-500">
+                                            COP
+                                        </span>
+                                    </p>
+
+                                    {/* Estimated duration */}
+                                    <div className="mt-4 flex items-center gap-2 text-sm text-neutral-600">
+                                        <svg
+                                            aria-hidden="true"
+                                            className="h-4 w-4 shrink-0 text-[#B76E79]"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="1.8"
+                                            strokeLinecap="round"
+                                        >
+                                            <circle cx="12" cy="12" r="9" />
+                                            <path d="M12 7v5l3 2" />
+                                        </svg>
+
+                                        <span>
+                                            {language === "es"
+                                                ? "Duración estimada:"
+                                                : "Estimated duration:"}{" "}
+                                            <span className="font-semibold text-neutral-800">
+                                                {totalDuration} min
+                                            </span>
                                         </span>
                                     </div>
-                                ))}
-                            </div>
-
-                            <div className="mt-5 border-t border-neutral-200 pt-4">
-                                <div className="flex justify-between">
-                                    <span className="text-neutral-600">
-                                        {language === "es"
-                                            ? "Precio Estimado"
-                                            : "Estimated Price"}
-                                    </span>
-                                        
-                                    <span className="font-semibold text-black">
-                                        ${totalPrice.toLocaleString("es-CO")} COP
-                                    </span>
                                 </div>
 
-                                <div className="mt-2 flex justify-between">
-                                    <span className="text-neutral-600">
-                                        {language === "es"
-                                            ? "Duración Estimada"
-                                            : "Estimated Time"}
-                                    </span>
-                                        
-                                    <span className="font-semibold text-black">
-                                        {totalDuration} min
-                                    </span>
-                                </div>
+                                {/* Continue to appointment configuration */}
+                                <button
+                                    type="button"
+                                    onClick={() => setServicesConfirmed(true)}
+                                    className="mt-6 flex w-full items-center justify-center gap-3 rounded-xl bg-black px-6 py-4 font-semibold text-white transition-colors hover:bg-neutral-800"
+                                >
+                                    {language === "es" ? "Continuar" : "Continue"}
+                                    <span aria-hidden="true">→</span>
+                                </button>
                             </div>
-
-                            <button
-                                onClick={() => setServicesConfirmed(true)}
-                                className="mt-5 w-full rounded-xl bg-black px-6 py-3 font-semibold text-white"
-                            >
-                                {language === "es" ? "Continuar" : "Continue"}
-                            </button>
                         </div>
                     )}
                 </div>
