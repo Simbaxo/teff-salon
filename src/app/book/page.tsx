@@ -1730,11 +1730,51 @@ export default function BookPage() {
                                         className="rounded-xl border border-neutral-300 bg-white p-4 text-black"
                                         aria-label={language === "es" ? "Código de País" : "Country Code"}
                                     >
-                                        <option value="+57">🇨🇴 +57</option>
-                                        <option value="+1">🇺🇸/🇨🇦 +1</option>
-                                        <option value="+44">🇬🇧 +44</option>
-                                        <option value="+34">🇪🇸 +34</option>
-                                        <option value="+52">🇲🇽 +52</option>
+                                        {/* Colombia remains the default */}
+                                        <option value="+57">🇨🇴 Colombia (+57)</option>
+
+                                        {/* North America */}
+                                        <option value="+1">🇺🇸🇨🇦 Estados Unidos / Canadá (+1)</option>
+                                        <option value="+52">🇲🇽 México (+52)</option>
+
+                                        {/* South America */}
+                                        <option value="+54">🇦🇷 Argentina (+54)</option>
+                                        <option value="+55">🇧🇷 Brasil (+55)</option>
+                                        <option value="+56">🇨🇱 Chile (+56)</option>
+                                        <option value="+51">🇵🇪 Perú (+51)</option>
+                                        <option value="+593">🇪🇨 Ecuador (+593)</option>
+                                        <option value="+58">🇻🇪 Venezuela (+58)</option>
+                                        <option value="+591">🇧🇴 Bolivia (+591)</option>
+                                        <option value="+595">🇵🇾 Paraguay (+595)</option>
+                                        <option value="+598">🇺🇾 Uruguay (+598)</option>
+
+                                        {/* Central America and Caribbean */}
+                                        <option value="+507">🇵🇦 Panamá (+507)</option>
+                                        <option value="+506">🇨🇷 Costa Rica (+506)</option>
+                                        <option value="+502">🇬🇹 Guatemala (+502)</option>
+                                        <option value="+503">🇸🇻 El Salvador (+503)</option>
+                                        <option value="+504">🇭🇳 Honduras (+504)</option>
+                                        <option value="+505">🇳🇮 Nicaragua (+505)</option>
+                                        <option value="+53">🇨🇺 Cuba (+53)</option>
+                                        <option value="+1">🇩🇴 República Dominicana (+1)</option>
+
+                                        {/* Europe */}
+                                        <option value="+34">🇪🇸 España (+34)</option>
+                                        <option value="+44">🇬🇧 Reino Unido (+44)</option>
+                                        <option value="+33">🇫🇷 Francia (+33)</option>
+                                        <option value="+49">🇩🇪 Alemania (+49)</option>
+                                        <option value="+39">🇮🇹 Italia (+39)</option>
+                                        <option value="+351">🇵🇹 Portugal (+351)</option>
+                                        <option value="+31">🇳🇱 Países Bajos (+31)</option>
+                                        <option value="+41">🇨🇭 Suiza (+41)</option>
+
+                                        {/* Other international destinations */}
+                                        <option value="+61">🇦🇺 Australia (+61)</option>
+                                        <option value="+64">🇳🇿 Nueva Zelanda (+64)</option>
+                                        <option value="+81">🇯🇵 Japón (+81)</option>
+                                        <option value="+82">🇰🇷 Corea del Sur (+82)</option>
+                                        <option value="+86">🇨🇳 China (+86)</option>
+                                        <option value="+971">🇦🇪 Emiratos Árabes Unidos (+971)</option>
                                     </select>
 
                                     <input

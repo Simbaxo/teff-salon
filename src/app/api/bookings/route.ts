@@ -89,6 +89,15 @@ export async function POST(request: Request) {
       typeof customerPhone === "string" && customerPhone.trim() !== ""
         ? normalizePhoneNumber(customerPhone)
         : null;
+
+    // Reject invalid phone numbers instead of silently treating
+    // them as customers who declined to provide a phone number.
+    if (customerPhone.trim() !== "" && normalizedCustomerPhone === null) {
+      return Response.json(
+        { error: "Invalid customer phone number" },
+        { status: 400 }
+      );
+    }
     
     const normalizedCustomerEmail =
       typeof customerEmail === "string" ? customerEmail.trim() : "";
