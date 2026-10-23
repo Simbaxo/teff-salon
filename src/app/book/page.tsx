@@ -191,6 +191,10 @@ export default function BookPage() {
     const [countryCode, setCountryCode] = useState("+57");
     const [customerPhone, setCustomerPhone] = useState("");
     const [noPhone, setNoPhone] = useState(false);
+
+    // Show a confirmation before allowing customers to skip their phone number.
+    const [showSkipPhoneConfirmation, setShowSkipPhoneConfirmation] = useState(false);
+
     const [customerEmail, setCustomerEmail] = useState("");
     const [customerNotes, setCustomerNotes] = useState("");
     const [isReviewing, setIsReviewing] = useState(false);
@@ -1809,7 +1813,6 @@ export default function BookPage() {
                                     <select 
                                         value={countryCode}
                                         onChange={(event) => setCountryCode(event.target.value)}
-                                        disabled={noPhone}
                                         className="rounded-xl border border-neutral-300 bg-white p-4 text-black"
                                         aria-label={language === "es" ? "Código de País" : "Country Code"}
                                     >
@@ -1864,7 +1867,6 @@ export default function BookPage() {
                                         type="tel"
                                         value={customerPhone}
                                         onChange={(event) => setCustomerPhone(event.target.value)}
-                                        disabled={noPhone}
                                         placeholder={
                                         language === "es"
                                             ? "Teléfono / WhatsApp"
@@ -1873,29 +1875,6 @@ export default function BookPage() {
                                         className="min-w-0 flex-1 rounded-xl border border-neutral-300 bg-white p-4 text-black disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
                                         />
                                     </div>
-
-                                    <label className="flex items-center gap-3 text-sm text-neutral-700">
-                                    <input
-                                        type="checkbox"
-                                        checked={noPhone}
-                                        onChange={(event) => {
-                                            const checked = event.target.checked;
-
-                                            setNoPhone(checked);
-
-                                            if (checked) {
-                                                setCustomerPhone("");
-                                            }
-                                        }}
-                                        className="h-4 w-4"
-                                    />
-
-                                    <span>
-                                        {language === "es"
-                                            ? "Cliente no desea proporcionar teléfono"
-                                            : "Customer does not want to provide a phone number"}
-                                    </span>
-                                </label>                     
                             </div>
 
                                 <input 
@@ -1907,7 +1886,7 @@ export default function BookPage() {
                                             ? "Correo electrónico (opcional)"
                                             : "Email (optional)"
                                     }
-                                    className="w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"     
+                                    className="mt-4 w-full rounded-xl border border-neutral-300 bg-white p-4 text-black"
                                 />
 
                                 <textarea 
@@ -1926,16 +1905,85 @@ export default function BookPage() {
                     {/* Continue Button */}
                     {selectedTime && !isReviewing && (
                         <button
-                            onClick={() => setIsReviewing(true)}
-                            disabled={!customerName || (!customerPhone && !noPhone)}
+                            type="button"
+                            onClick={() => {
+                                if (!customerPhone.trim()) {
+                                    setShowSkipPhoneConfirmation(true);
+                                    return;
+                                }
+
+                                setNoPhone(false);
+                                setShowSkipPhoneConfirmation(false);
+                                setIsReviewing(true);
+                            }}
+                            disabled={!customerName.trim()}
                             className={`mt-8 w-full rounded-xl px-6 py-3 font-semibold ${
-                                customerName && (customerPhone || noPhone)
+                                customerName.trim()
                                     ? "bg-black text-white"
                                     : "cursor-not-allowed bg-neutral-300 text-neutral-500"
                             }`}
                         >
                             {language === "es" ? "Revisar cita" : "Review Appointment"}
                         </button>
+                    )}
+
+                    {/* Confirmation before continuing without a phone number */}
+                    {selectedTime && !isReviewing && showSkipPhoneConfirmation && (
+                        <div
+                            role="alertdialog"
+                            aria-modal="false"
+                            aria-labelledby="skip-phone-title"
+                            aria-describedby="skip-phone-description"
+                            className="mt-4 rounded-2xl border border-[#B76E79]/40 bg-white p-5 shadow-sm"
+                        >
+                            <h3
+                                id="skip-phone-title"
+                                className="text-lg font-semibold text-black"
+                            >
+                                {language === "es"
+                                    ? "¿Continuar sin número de teléfono?"
+                                    : "Continue without a phone number?"}
+                            </h3>
+
+                            <p
+                                id="skip-phone-description"
+                                className="mt-3 text-sm leading-6 text-neutral-600"
+                            >
+                                {language === "es"
+                                    ? "Sin tu número, no podremos contactarte por WhatsApp para informarte sobre cambios o novedades de tu cita."
+                                    : "Without your phone number, we won't be able to contact you on WhatsApp about changes or updates to your appointment."}
+                            </p>
+
+                            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowSkipPhoneConfirmation(false);
+                                        setNoPhone(false);
+                                    }}
+                                    className="flex-1 rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white"
+                                >
+                                    {language === "es"
+                                        ? "Agregar número"
+                                        : "Add phone number"}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setNoPhone(true);
+                                        setCustomerPhone("");
+                                        setShowSkipPhoneConfirmation(false);
+                                        setIsReviewing(true);
+                                    }}
+                                    className="flex-1 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-neutral-50"
+                                >
+                                    {language === "es"
+                                        ? "Continuar sin teléfono"
+                                        : "Continue without phone"}
+                                </button>
+                            </div>
+                        </div>
                     )}
 
                     {/* Review Appointment */}
