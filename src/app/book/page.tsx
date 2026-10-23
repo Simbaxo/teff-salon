@@ -18,6 +18,7 @@ const SERVICE_IMAGES: Record<number, string> = {
     10: "/images/services/acrilico.webp",
     12: "/images/services/extensions.webp",
     13: "/images/services/polygel.webp",
+    14: "/images/services/dip-powder.webp",
     21: "/images/services/lashes.webp",
     40: "/images/services/brows.webp",
     46: "/images/services/facial.webp",
@@ -142,7 +143,7 @@ export default function BookPage() {
         {
             id: "LASHES",
             emoji: "👁️",
-            image: "/images/services/lashes.webp",
+            image: "/images/services/lashes-cover.webp",
             nameEs: "Pestañas",
             nameEn: "Lashes",
             descriptionEs: "Sets, Retoques y Lifting",
