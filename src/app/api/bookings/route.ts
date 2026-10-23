@@ -429,14 +429,15 @@ export async function POST(request: Request) {
         ? 10 * 60 + 30 // Sunday: 10:30
         : 9 * 60 + 30; // Monday-Saturday 9:30
     
-    const closingMinutes = 
+    // Latest permitted appointment start time.
+    // Services may finish after this time.
+    const latestStartMinutes =
       dayOfWeek === 0
-      ? 17 * 60 + 30 // Sunday: 17:30
-      : 18 * 60 + 30; // Monday-Saturday: 18:30
+        ? 17 * 60 // Sunday: 5:00 PM
+        : 18 * 60 + 30; // Monday-Saturday: 6:30 PM
       
     const [startHour, startMinute] = startTime.split(":").map(Number);
     const bookingStartMinutes = startHour * 60 + startMinute;
-    const bookingEndMinutes = bookingStartMinutes + totalDuration;
 
     // Prevent bookings for a time that has already passed today in Medellin.
     if (
@@ -449,9 +450,11 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validate appointment start time, not finishing time.
+    // Keep opening-hour and latest-start restrictions.
     if (
       bookingStartMinutes < openingMinutes ||
-      bookingEndMinutes > closingMinutes
+      bookingStartMinutes > latestStartMinutes
     ) {
       return Response.json(
         { error: "Appointment is outside business hours" },

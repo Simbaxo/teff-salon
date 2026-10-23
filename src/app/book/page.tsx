@@ -33,17 +33,18 @@ function getTimeSlots(date: string) {
         dayOfWeek === 0
             ? 10 * 60 + 30 // Sunday: 10:30
             : 9 * 60 + 30; // Monday-Saturday: 9:30
-    const closingMinutes =
+    // Latest permitted appointment start time.
+    const latestStartMinutes =
         dayOfWeek === 0
-            ? 17 * 60 + 30 // Sunday: 17:30
-            : 18 * 60 + 30; // Monday-Saturday: 18:30
+            ? 17 * 60 // Sunday: 5:00 PM
+            : 18 * 60 + 30; // Monday-Saturday: 6:30 PM
     
     const slots: string[] = [];
 
     // Create 30-minute start time throughout the day
     for (
         let minutes = openingMinutes;
-        minutes < closingMinutes;
+        minutes <= latestStartMinutes;
         minutes += 30
     ) {
         const hours = Math.floor(minutes / 60);
@@ -596,14 +597,13 @@ export default function BookPage() {
         ? getTeffDayOfWeek(selectedDate)
         : undefined;
 
-    const closingTime =
+    const latestStartTime =
         dayOfWeek === 0
-            ? 17 * 60 + 30 // Sunday: 17:30
-            : 18 * 60 + 30; // Monday-Saturday: 18:30
+            ? 17 * 60 // Sunday: 5:00 PM
+            : 18 * 60 + 30; // Monday-Saturday: 6:30 PM
 
     const availableTimeSlots = timeSlots.filter((time) => {
         const bookingStart = timeToMinutes(time);
-        const bookingEnd = bookingStart + totalDuration;
 
         // Hide time slots that have already passed today in Medellin
         if (
@@ -613,8 +613,9 @@ export default function BookPage() {
             return false;
         }
 
-        // The complete sequence must finish before the salon closes
-        if (bookingEnd > closingTime) {
+        // Appointments may finish after closing, but must start
+        // no later than the final permitted booking time.
+        if (bookingStart > latestStartTime) {
             return false;
         }
 
