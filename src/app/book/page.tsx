@@ -965,9 +965,20 @@ export default function BookPage() {
                             {/* Show the appropriate message based on booking approval status. */}
                             <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-neutral-600 sm:text-base">
                                 {allServicesBooked
-                                    ? language === "es"
-                                        ? `¡Gracias, ${customerName.trim().split(/\s+/)[0]}! 💗 Tu cita está confirmada. ¡Te esperamos!`
-                                        : `Thank you, ${customerName.trim().split(/\s+/)[0]}! 💗 Your appointment is confirmed. We look forward to seeing you!`
+                                    ? (
+                                        <>
+                                            <span className="block text-xl font-semibold text-[#B76E79]">
+                                                {customerName.trim().split(/\s+/)[0]}{" "}
+                                                <span aria-hidden="true">💗</span>
+                                            </span>
+
+                                            <span className="mt-2 block text-sm leading-6 text-neutral-600 sm:text-base">
+                                                {language === "es"
+                                                    ? "¡Gracias por elegir TEFF! Nos encantará recibirte."
+                                                    : "Thank you for choosing TEFF! We look forward to welcoming you."}
+                                            </span>
+                                        </>
+                                    )
                                     : allServicesRequested
                                         ? language === "es"
                                             ? "Recibimos tu solicitud. Tus servicios están pendientes de aprobación por TEFF."
