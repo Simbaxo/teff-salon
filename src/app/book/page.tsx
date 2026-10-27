@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useLanguage } from "@/context/LanguageContext";
+import { getBookingConfirmationStatus } from "@/lib/booking/confirmation-status";
 import {
   getTeffCurrentMinutes,
   getTeffDayOfWeek,
@@ -842,10 +843,20 @@ export default function BookPage() {
             0
         );
 
-    const requiresApproval =
-        confirmationServices.some(
-            (item) => item.service.requiresApproval
-        );
+    // Use the tested helper to determine the actual booking status.
+    const bookingConfirmationStatus = getBookingConfirmationStatus(
+        confirmationAppointments,
+        confirmationServices.length
+    );
+
+    const allServicesBooked =
+        bookingConfirmationStatus === "CONFIRMED";
+
+    const allServicesRequested =
+        bookingConfirmationStatus === "REQUESTED";
+
+    const hasMixedApprovalStatuses =
+        bookingConfirmationStatus === "MIXED";
 
     function formatConfirmationDate(date: string) {
         if (!date) {
@@ -870,29 +881,35 @@ export default function BookPage() {
     return (
         <main className="min-h-screen bg-neutral-100 px-6 py-12">
             {bookingSuccess && (
-                <div className="mx-auto mt-8 max-w-2xl">
-                    <div className="rounded-3xl bg-white p-5 sm:p-8">
+                <div className="mx-auto mt-4 max-w-2xl sm:mt-8">
+                    <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-8">
                         {/* TEFF branding */}
-                        <div className="mb-5 text-center sm:mb-8">
-                            <p className="text-3xl font-bold tracking-[0.2em] text-black">
+                        <div className="mb-7 flex flex-col items-center text-center sm:mb-9">
+                            <div className="font-serif text-4xl font-normal tracking-[0.3em] text-black sm:text-5xl">
                                 TEFF
-                            </p>
-                            <p className="mt-1 text-xs font-medium uppercase tracking-[0.3em] text-neutral-500">
-                                Beauty Salon
-                            </p>
+                            </div>
+
+                            <div className="mt-1 text-[9px] font-semibold uppercase tracking-[0.35em] text-black">
+                                BEAUTY SALON
+                            </div>
+
+                            <div
+                                aria-hidden="true"
+                                className="mt-5 h-px w-16 bg-[#B76E79]/50"
+                            />
                         </div>
 
                         {/* Confirmation status icon */}
                         <div
-                            className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${
-                                requiresApproval
-                                    ? "bg-amber-100 text-amber-700"
-                                    : "bg-green-100 text-green-700"
+                            className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full border ${
+                                allServicesBooked
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : allServicesRequested
+                                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                                        : "border-neutral-200 bg-neutral-50 text-neutral-600"
                             }`}
                         >
-                            {requiresApproval ? (
-                                <span className="text-3xl">⏳</span>
-                            ) : (
+                            {allServicesBooked ? (
                                 <svg
                                     viewBox="0 0 24 24"
                                     fill="none"
@@ -905,36 +922,70 @@ export default function BookPage() {
                                 >
                                     <path d="M5 12.5l4.5 4.5L19 7" />
                                 </svg>
+                            ) : allServicesRequested ? (
+                                <span className="text-3xl" aria-hidden="true">
+                                    ⏳
+                                </span>
+                            ) : (
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="h-8 w-8"
+                                    aria-hidden="true"
+                                >
+                                    <rect x="5" y="4" width="14" height="17" rx="2" />
+                                    <path d="M9 4.5h6M9 11h6M9 15h4" />
+                                </svg>
                             )}
                         </div>
 
-                        <div className="mt-5 text-center">
-                            <h2 className="text-2xl font-bold tracking-tight text-black sm:text-3xl">
-                                {requiresApproval
+                        <div className="mt-6 text-center">
+                            <h2 className="text-2xl font-semibold leading-tight tracking-tight text-black sm:text-3xl">
+                                {allServicesBooked
                                     ? language === "es"
-                                        ? "¡Solicitud recibida!"
-                                        : "Request received!"
-                                    : language === "es"
-                                    ? `¡Gracias, ${customerName.trim().split(/\s+/)[0]}! 💗`
-                                    : `Thank you, ${customerName.trim().split(/\s+/)[0]}! 💗`}
+                                        ? "¡Cita confirmada!"
+                                        : "Appointment confirmed!"
+                                    : allServicesRequested
+                                        ? language === "es"
+                                            ? "¡Solicitud recibida!"
+                                            : "Request received!"
+                                        : hasMixedApprovalStatuses
+                                            ? language === "es"
+                                                ? "¡Reserva recibida!"
+                                                : "Booking received!"
+                                            : language === "es"
+                                                ? "¡Reserva recibida!"
+                                                : "Booking received!"}
                             </h2>
 
                             {/* Show the appropriate message based on booking approval status. */}
-                            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-neutral-600 sm:text-base">
-                                {requiresApproval
+                            <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-neutral-600 sm:text-base">
+                                {allServicesBooked
                                     ? language === "es"
-                                        ? `¡Gracias, ${customerName.trim().split(/\s+/)[0]}! 💗 Recibimos tu solicitud y te avisaremos cuando sea confirmada.`
-                                        : `Thank you, ${customerName.trim().split(/\s+/)[0]}! 💗 We received your request and will let you know when it is confirmed.`
-                                    : language === "es"
-                                    ? "Tu cita ha sido reservada con éxito. ¡Te esperamos!"
-                                    : "Your appointment has been booked successfully. We look forward to seeing you!"}
+                                        ? `¡Gracias, ${customerName.trim().split(/\s+/)[0]}! 💗 Tu cita está confirmada. ¡Te esperamos!`
+                                        : `Thank you, ${customerName.trim().split(/\s+/)[0]}! 💗 Your appointment is confirmed. We look forward to seeing you!`
+                                    : allServicesRequested
+                                        ? language === "es"
+                                            ? "Recibimos tu solicitud. Tus servicios están pendientes de aprobación por TEFF."
+                                            : "We received your request. Your services are awaiting approval from TEFF."
+                                        : hasMixedApprovalStatuses
+                                            ? language === "es"
+                                                ? "Algunos servicios están confirmados y otros pendientes de aprobación. Revisa el estado de cada servicio a continuación."
+                                                : "Some services are confirmed while others are awaiting approval. Review each service's status below."
+                                            : language === "es"
+                                                ? "Recibimos tu reserva, pero no pudimos verificar el estado de todos los servicios. Comunícate con TEFF para confirmar los detalles."
+                                                : "We received your booking, but couldn't verify every service's status. Please contact TEFF to confirm the details."}
                             </p>
                         </div>
 
                         {/* Date and starting time */}
-                        <div className="mt-6 rounded-2xl bg-neutral-100 p-4 text-center sm:mt-8 sm:p-6">
+                        <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50/50 p-5 text-left sm:mt-8 sm:p-6">
                             {/* Appointment summary heading */}
-                            <h3 className="mb-5 text-left text-xl font-bold text-black">
+                            <h3 className="mb-5 text-xl font-semibold tracking-tight text-black sm:text-2xl">
                                 {language === "es" ? "Tu próxima cita" : "Your upcoming appointment"}
                             </h3>
 
@@ -977,7 +1028,7 @@ export default function BookPage() {
                                     return (
                                     <div
                                         key={item.service.id}
-                                        className="border-b border-neutral-200 pb-4 last:border-b-0"
+                                        className="border-b border-neutral-200/70 pb-5 last:border-b-0 last:pb-0"
                                     >
                                         {confirmationServices.length > 1 && (
                                             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
@@ -987,11 +1038,38 @@ export default function BookPage() {
                                             </p>
                                         )}
 
+                                        {/* Individual appointment approval status */}
+                                        {createdAppointment && (
+                                            <div className="mb-3">
+                                                <span
+                                                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                                                        createdAppointment.status === "BOOKED"
+                                                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                                            : createdAppointment.status === "REQUESTED"
+                                                                ? "border-amber-200 bg-amber-50 text-amber-700"
+                                                                : "border-neutral-200 bg-neutral-50 text-neutral-600"
+                                                    }`}
+                                                >
+                                                    {createdAppointment.status === "BOOKED"
+                                                        ? language === "es"
+                                                            ? "Confirmado"
+                                                            : "Confirmed"
+                                                        : createdAppointment.status === "REQUESTED"
+                                                            ? language === "es"
+                                                                ? "Pendiente de aprobación"
+                                                                : "Pending approval"
+                                                            : language === "es"
+                                                                ? "Estado por verificar"
+                                                                : "Status to verify"}
+                                                </span>
+                                            </div>
+                                        )}
+
                                         <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 sm:flex-nowrap">
                                             {/* Service name with decorative icon */}
                                             <div className="flex min-w-0 items-start gap-3">
                                                 <svg
-                                                    className="mt-0.5 h-5 w-5 shrink-0 text-neutral-500"
+                                                    className="mt-0.5 h-5 w-5 shrink-0 text-[#B76E79]"
                                                     viewBox="0 0 24 24"
                                                     fill="none"
                                                     stroke="currentColor"
@@ -1003,14 +1081,14 @@ export default function BookPage() {
                                                     <path d="M12 2l2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5L12 2z" />
                                                 </svg>
 
-                                                <p className="font-semibold text-black">
+                                                <p className="font-semibold leading-6 text-neutral-900">
                                                     {language === "es"
                                                         ? item.service.nameEs
                                                         : item.service.nameEn}
                                                 </p>
                                             </div>
 
-                                            <p className="whitespace-nowrap font-semibold text-black">
+                                            <p className="shrink-0 whitespace-nowrap text-base font-semibold tracking-tight text-black">
                                                 $
                                                 {item.service.price.toLocaleString(
                                                     "es-CO"
@@ -1079,36 +1157,50 @@ export default function BookPage() {
                             </div>
 
                             {/* Booking total */}
-                            <div className="mt-6 flex items-center justify-between border-t border-neutral-300 pt-5">
-                                <span className="font-bold text-black">
-                                    Total
-                                </span>
+                            <div className="mt-6 border-t border-neutral-200 pt-5">
+                                <p className="text-sm font-medium text-neutral-500">
+                                    {language === "es" ? "Total estimado" : "Estimated total"}
+                                </p>
 
-                                <span className="text-2xl font-bold tracking-tight text-black">
-                                    $
-                                    {confirmationTotal.toLocaleString(
-                                        "es-CO"
-                                    )}
-                                </span>
+                                <p className="mt-1 text-3xl font-bold tracking-tight text-black">
+                                    ${confirmationTotal.toLocaleString("es-CO")}
+                                    <span className="ml-2 text-sm font-medium text-neutral-500">
+                                        COP
+                                    </span>
+                                </p>
                             </div>
                         </div>
 
                         {/* Salon location and directions */}
                         <div className="mt-8">
                             {/* Location heading */}
-                            <h3 className="text-xl font-bold tracking-tight text-black sm:text-2xl">
-                                {language === "es"
-                                    ? "Te esperamos en TEFF 📍"
-                                    : "We look forward to seeing you at TEFF 📍"}
-                            </h3>
+                            <div className="mb-5">
+                                <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#B76E79]">
+                                    {language === "es" ? "Ubicación" : "Location"}
+                                </p>
 
-                            <p className="mt-2 font-medium text-black">
-                                TEFF Beauty Salon
-                            </p>
+                                <h3 className="mt-2 text-xl font-semibold tracking-tight text-black sm:text-2xl">
+                                    {language === "es"
+                                        ? "Te esperamos en TEFF"
+                                        : "We look forward to seeing you at TEFF"}
+                                </h3>
 
-                            <p className="mt-1 text-sm text-neutral-600">
-                                Cra. 43A #11-73, El Poblado, Medellín
-                            </p>
+                                <div className="mt-4 flex items-start gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-4">
+                                    <span aria-hidden="true" className="text-xl">
+                                        📍
+                                    </span>
+
+                                    <div>
+                                        <p className="font-semibold text-black">
+                                            TEFF Beauty Salon
+                                        </p>
+
+                                        <p className="mt-1 text-sm leading-6 text-neutral-600">
+                                            Cra. 43A #11-73, El Poblado, Medellín
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
 
                             {/* Lightweight static map of TEFF's location */}
                             {process.env.NEXT_PUBLIC_GOOGLE_MAPS_STATIC_API_KEY && (
