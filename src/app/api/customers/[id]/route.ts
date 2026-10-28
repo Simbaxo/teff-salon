@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
+import { calculateLifetimeSpend } from "@/lib/customers/calculate-lifetime-spend";
+import { groupCustomerVisits } from "@/lib/customers/group-customer-visits";
 
 export async function GET(
     request: Request,
@@ -84,10 +86,19 @@ export async function GET(
                             sale: {
                                 select: {
                                     id: true,
-                                subtotal: true,
-                                discountTotal: true,
-                                finalTotal: true,
-                                createdAt: true,
+                                    subtotal: true,
+                                    discountTotal: true,
+                                    finalTotal: true,
+                                    createdAt: true,
+                                    saleAppointments: {
+                                        select: {
+                                            appointment: {
+                                                select: {
+                                                    customerId: true,
+                                                },
+                                            },
+                                        },
+                                    },
                                 },
                             },
                         },
@@ -109,21 +120,22 @@ export async function GET(
         (appointment) => appointment.status === "COMPLETED"
     );
 
+    // Count completed salon visits rather than individual service blocks.
+    const completedVisitCount = groupCustomerVisits(
+        completedAppointments
+    ).length;
+
     const noShows = customer.appointments.filter(
         (appointment) => appointment.status === "NO_SHOW"
     );
 
-    const lifetimeSpend = completedAppointments.reduce(
-        (total, appointment) => {
-            const appointmentSpend = appointment.saleAppointments.reduce(
-                (saleTotal, saleAppointment) =>
-                    saleTotal + saleAppointment.sale.finalTotal,
-                0
-            );
-
-            return total + appointmentSpend;
-        },
-        0
+    // Count finalized sales once and verify customer ownership.
+    const {
+        lifetimeSpend,
+        ambiguousSaleIds,
+    } = calculateLifetimeSpend(
+        customerId,
+        completedAppointments
     );
 
     const lastVisit =
@@ -134,9 +146,10 @@ export async function GET(
     return Response.json({
         customer,
         summary: {
-            completedVisits: completedAppointments.length,
+            completedVisits: completedVisitCount,
             noShows: noShows.length,
             lifetimeSpend,
+            ambiguousSaleIds,
             lastVisit,
         },
     });

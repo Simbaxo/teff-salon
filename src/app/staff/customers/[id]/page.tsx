@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
+import { calculateLifetimeSpend } from "@/lib/customers/calculate-lifetime-spend";
+import { groupCustomerVisits } from "@/lib/customers/group-customer-visits";
 
 // Convert database statuses into Spanish labels for staff
 function getStatusLabel(status: string) {
@@ -93,6 +95,42 @@ export default async function CustomerProfilePage({
                                 select: {
                                     id: true,
                                     finalTotal: true,
+                                    // Finalized services and add-ons recorded at checkout.
+                                    lineItems: {
+                                        select: {
+                                            id: true,
+                                            itemType: true,
+                                            itemId: true,
+                                            itemName: true,
+                                            unitPrice: true,
+                                            employeeId: true,
+                                            appointmentId: true,
+                                            parentLineItemId: true,
+                                            // Technician recorded on the finalized sale line item.
+                                            // Null for legacy sales without individual attribution.
+                                            employee: {
+                                                select: {
+                                                    id: true,
+                                                    name: true,
+                                                },
+                                            },
+                                        },
+                                        orderBy: {
+                                            id: "asc",
+                                        },
+                                    },
+                                    // Identify every customer associated with this sale.
+                                    // This prevents incorrectly attributing a shared sale
+                                    // to multiple customers.
+                                    saleAppointments: {
+                                        select: {
+                                            appointment: {
+                                                select: {
+                                                    customerId: true,
+                                                },
+                                            },
+                                        },
+                                    },
                                 },
                             },
                         },
@@ -115,17 +153,19 @@ export default async function CustomerProfilePage({
         (appointment) => appointment.status === "NO_SHOW"
     );
 
-    const lifetimeSpend = completedAppointments.reduce(
-        (total, appointment) => {
-            const appointmentSpend = appointment.saleAppointments.reduce(
-                (saleTotal, saleAppointment) =>
-                    saleTotal + saleAppointment.sale.finalTotal,
-                0
-            );
+    // Count completed salon visits rather than individual service blocks.
+    // Multiple completed appointments linked to one sale count as one visit.
+    const completedVisitCount = groupCustomerVisits(
+        completedAppointments
+    ).length;
 
-            return total + appointmentSpend;
-        },
-        0
+    // Count each finalized sale once and flag ambiguous ownership.
+    const {
+        lifetimeSpend,
+        ambiguousSaleIds,
+    } = calculateLifetimeSpend(
+        customerId,
+        completedAppointments
     );
 
     const lastVisit =
@@ -133,164 +173,343 @@ export default async function CustomerProfilePage({
             ? completedAppointments[0].date
             : null;
 
+    // Group related appointments into customer visits.
+    // Keep the original appointments for individual service details.
+    const visitGroups = groupCustomerVisits(
+        customer.appointments
+    );
+
     return (
-        <main className="mx-auto max-w-5xl p-6">
+        <main className="min-h-screen w-full bg-neutral-100 px-4 py-8 text-neutral-900 sm:px-6 sm:py-10">
+            <div className="mx-auto max-w-5xl">
 
-            {/* Return to the staff appointment list */}
-            <Link
-                href="/staff"
-                className="mb-6 inline-block text-sm font-medium text-neutral-600 hover:text-black"
-            >
-                ← Volver a Citas
-            </Link>
+                {/* Return to the staff appointment list */}
+                <Link
+                    href="/staff"
+                    className="mb-6 inline-block text-sm font-medium text-neutral-600 hover:text-black"
+                >
+                    ← Volver a Citas
+                </Link>
 
-            {/* Customer Identity */}
-            <div className="mb-8">
-                <p className="text-sm text-gray-500">Cliente</p>
+                {/* Customer Identity */}
+                <div className="mb-8">
+                    <p className="text-sm text-gray-500">Cliente</p>
 
-                <h1 className="text-3xl font-semibold">
-                    {customer.name}
-                </h1>
+                    <h1 className="text-3xl font-semibold">
+                        {customer.name}
+                    </h1>
 
-                <div className="mt-2 space-y-1 text-sm text-gray-600">
-                    <p>{customer.phone}</p>
+                    <div className="mt-2 space-y-1 text-sm text-gray-600">
+                        <p>{customer.phone}</p>
 
-                    {customer.email && <p>{customer.email}</p>}
-                </div>
-            </div>
-
-            {/* Customer History Summary */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-xl border p-4">
-                    <p className="text-sm text-gray-500">
-                        Visitas completadas
-                    </p>
-
-                    <p className="mt-1 text-2xl font-semibold">
-                        {completedAppointments.length}
-                    </p>
+                        {customer.email && <p>{customer.email}</p>}
+                    </div>
                 </div>
 
-                <div className="rounded-xl border p-4">
-                    <p className="text-sm text-gray-500">
-                        No asistió
-                    </p>
+                {/* Customer History Summary */}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                        <p className="text-sm text-gray-500">
+                            Visitas completadas
+                        </p>
 
-                    <p className="mt-1 text-2xl font-semibold">
-                        {noShows.length}
-                    </p>
+                        <p className="mt-1 text-2xl font-semibold">
+                            {completedVisitCount}
+                        </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                        <p className="text-sm text-gray-500">
+                            No asistió
+                        </p>
+
+                        <p className="mt-1 text-2xl font-semibold">
+                            {noShows.length}
+                        </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                        <p className="text-sm text-gray-500">
+                            {ambiguousSaleIds.length > 0
+                                ? "Gasto verificado"
+                                : "Gasto total"}
+                        </p>
+
+                        <p className="mt-1 text-2xl font-semibold">
+                            ${lifetimeSpend.toLocaleString("es-CO")}
+                        </p>
+
+                        {ambiguousSaleIds.length> 0 && (
+                            <div
+                                role="status"
+                                className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800"
+                            >
+                                <p className="font-semibold">
+                                    Transacciones pendientes de revisión
+                                </p>
+
+                                <p className="mt-1">
+                                    {ambiguousSaleIds.length}{" "}
+                                    {ambiguousSaleIds.length === 1
+                                        ? "venta no pudo atribuirse"
+                                        : "ventas no pudieron atribuirse"}{" "}
+                                    exclusivamente a este cliente.
+                                    El gasto mostrado excluye esas transacciones.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                        <p className="text-sm text-gray-500">
+                            Ultima visita
+                        </p>
+
+                        <p className="mt-1 text-lg font-semibold">
+                            {lastVisit
+                                ? new Intl.DateTimeFormat("es-CO", {
+                                    timeZone: "America/Bogota",
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric",
+                                }).format(lastVisit)
+                                : "Sin visitas"}
+                        </p>
+                    </div>
                 </div>
 
-                <div className="rounded-xl border p-4">
-                    <p className="text-sm text-gray=500">
-                        Gasto total
-                    </p>
+                {/* Appointment History */}
+                <section className="mt-10">
+                    <h2 className="mb-4 text-xl font-semibold">
+                        Historial de Visitas
+                    </h2>
 
-                    <p className="mt-1 text-2xl font-semibold">
-                        ${lifetimeSpend.toLocaleString("es-CO")}
-                    </p>
-                </div>
-
-                <div className="rounded-xl border p-4">
-                    <p className="text-sm text-gray-500">
-                        Ultima visita
-                    </p>
-
-                    <p className="mt-1 text-lg font-semibold">
-                        {lastVisit
-                            ? new Intl.DateTimeFormat("es-CO", {
-                                timeZone: "America/Bogota",
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                            }).format(lastVisit)
-                            : "Sin visitas"}
-                    </p>
-                </div>
-            </div>
-
-            {/* Appointment History */}
-            <section className="mt-10">
-                <h2 className="mb-4 text-xl font-semibold">
-                    Historial de Visitas
-                </h2>
-
-                {customer.appointments.length === 0 ? (
+                {visitGroups.length === 0 ? (
                     <p className="text-sm text-gray-500">
                         Este cliente todavía no tiene citas.
                     </p>
                 ) : (
                     <div className="space-y-4">
-                        {customer.appointments.map((appointment) => (
-                            <div
-                                key={appointment.id}
-                                className="rounded-xl border p-4"
-                            >
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div>
-                                        <p className="font-semibold">
-                                            {new Intl.DateTimeFormat("es-CO", {
-                                                timeZone: "America/Bogota",
-                                                day: "numeric",
-                                                month: "long",
-                                                year: "numeric",
-                                            }).format(appointment.date)}
-                                        </p>
+                        {visitGroups.map((group) => {
+                            const firstAppointment = group.appointments[0];
 
-                                        <p className="text-sm text-gray-500">
-                                            {appointment.startTime} · {appointment.employee.name}
-                                        </p>
+                            // Retrieve the sale once for the entire visit.
+                            const linkedSale =
+                                group.saleId !== null
+                                    ? group.appointments
+                                        .flatMap((appointment) =>
+                                            appointment.saleAppointments
+                                        )
+                                        .find(
+                                            (link) => link.sale.id === group.saleId
+                                        )?.sale
+                                    : null;
+
+                            return (
+                                <div
+                                    key={group.key}
+                                    className="overflow-hidden rounded-2xl border border-neutral-200 bg-white"
+                                >
+                                    {/* Visit heading */}
+                                    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-neutral-100 p-4 sm:p-5">
+                                        <div>
+                                            <p className="font-semibold text-black">
+                                                {new Intl.DateTimeFormat("es-CO", {
+                                                    timeZone: "America/Bogota",
+                                                    day: "numeric",
+                                                    month: "long",
+                                                    year: "numeric",
+                                                }).format(firstAppointment.date)}
+                                            </p>
+
+                                            <p className="mt-1 text-xs text-neutral-500">
+                                                {linkedSale
+                                                    ? `Venta #${linkedSale.id}`
+                                                    : group.bookingId !== null
+                                                        ? `Reserva #${group.bookingId}`
+                                                        : `Cita #${firstAppointment.id}`}
+                                                {" · "}
+                                                {linkedSale ? (
+                                                    <>
+                                                        {linkedSale.lineItems.filter(
+                                                            (item) => item.itemType === "SERVICE"
+                                                        ).length}{" "}
+                                                        {linkedSale.lineItems.filter(
+                                                            (item) => item.itemType === "SERVICE"
+                                                        ).length === 1
+                                                            ? "servicio"
+                                                            : "servicios"}
+
+                                                        {linkedSale.lineItems.some(
+                                                            (item) => item.itemType === "ADDON"
+                                                        ) && (
+                                                            <>
+                                                                {" · "}
+                                                                {linkedSale.lineItems.filter(
+                                                                    (item) => item.itemType === "ADDON"
+                                                                ).length}{" "}
+                                                                {linkedSale.lineItems.filter(
+                                                                    (item) => item.itemType === "ADDON"
+                                                                ).length === 1
+                                                                    ? "complemento"
+                                                                    : "complementos"}
+                                                            </>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        {group.appointments.length}{" "}
+                                                        {group.appointments.length === 1
+                                                            ? "cita"
+                                                            : "citas"}
+                                                    </>
+                                                )}
+                                            </p>
+                                        </div>
+
+                                        {linkedSale && (
+                                            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                                Venta registrada
+                                            </span>
+                                        )}
                                     </div>
 
-                                    <span className="rounded-full border px-3 py-1 text-xs">
-                                        {getStatusLabel(appointment.status)}
-                                    </span>
-                                </div>
+                                    {/* Finalized items actually charged at checkout */}
+                                    {linkedSale && (
+                                        <div className="border-b border-neutral-100 px-4 py-4 sm:px-5">
+                                            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#B76E79]">
+                                                Servicios cobrados
+                                            </p>
 
-                                <div className="mt-4">
-                                    <p className="text-sm font-medium">Servicios</p>
+                                            {linkedSale.lineItems.length > 0 ? (
+                                                <div className="space-y-3">
+                                                    {linkedSale.lineItems.map((item) => (
+                                                        <div
+                                                            key={item.id}
+                                                            className="flex items-start justify-between gap-4"
+                                                        >
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-medium text-black">
+                                                                    {item.itemType === "ADDON" ? "+ " : ""}
+                                                                    {item.itemName}
+                                                                </p>
 
-                                    <div className="mt-1 space-y-1 text-sm text-gray-600">
-                                        {appointment.appointmentServices.map(
-                                            (appointmentService) => (
-                                                <p key={appointmentService.serviceId}>
-                                                    {appointmentService.service.nameEs}
+                                                                <p className="mt-0.5 text-xs text-neutral-500">
+                                                                    {item.itemType === "ADDON"
+                                                                        ? "Complemento"
+                                                                        : "Servicio"}
+
+                                                                    {item.employee && (
+                                                                        <span className="block mt-1 text-neutral-600">
+                                                                            Técnica registrada: {item.employee.name}
+                                                                        </span>
+                                                                    )}
+                                                                </p>
+                                                            </div>
+
+                                                            <span className="shrink-0 text-sm font-semibold text-black">
+                                                                ${item.unitPrice.toLocaleString("es-CO")}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-neutral-500">
+                                                    No hay detalles de servicios registrados para esta venta.
                                                 </p>
-                                            )
-                                        )}
+                                            )}
+                                        </div>
+                                    )}
 
-                                        {appointment.appointmentAddons.map(
-                                            (appointmentAddon) => (
-                                                <p key={appointmentAddon.addonId}>
-                                                    + {appointmentAddon.addon.nameEs}
-                                                </p>
-                                            )
-                                        )}
-                                    </div>
+                                    {/* Preserve original booking details without confusing
+                                        them with finalized checkout services. */}
+                                    <details
+                                        className="border-t border-neutral-100 px-4 py-3 sm:px-5"
+                                        open={!linkedSale}
+                                    >
+                                        <summary className="cursor-pointer text-sm font-medium text-neutral-500 hover:text-black">
+                                            {linkedSale
+                                                ? "Ver reserva original"
+                                                : "Detalles de la cita"}
+                                        </summary>
+
+                                        <div className="divide-y divide-neutral-100">
+                                            {group.appointments.map((appointment) => (
+                                                <div
+                                                    key={appointment.id}
+                                                    className="py-4"
+                                                >
+                                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                                        <p className="text-sm font-medium text-neutral-700">
+                                                            {appointment.startTime}
+                                                            {" · "}
+                                                            {appointment.employee.name}
+                                                        </p>
+
+                                                        <span className="rounded-full border border-neutral-200 px-2.5 py-1 text-xs text-neutral-600">
+                                                            {getStatusLabel(appointment.status)}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="mt-3 space-y-1">
+                                                        {appointment.appointmentServices.map(
+                                                            (item) => (
+                                                                <p
+                                                                    key={item.serviceId}
+                                                                    className="text-sm font-semibold text-black"
+                                                                >
+                                                                    {item.service.nameEs}
+                                                                </p>
+                                                            )
+                                                        )}
+
+                                                        {appointment.appointmentAddons.map(
+                                                            (item) => (
+                                                                <p
+                                                                    key={item.id}
+                                                                    className="text-sm text-neutral-600"
+                                                                >
+                                                                    + {item.addon.nameEs}
+                                                                </p>
+                                                            )
+                                                        )}
+                                                    </div>
+
+                                                    <p className="mt-2 text-xs text-neutral-500">
+                                                        Duración de la cita: {appointment.duration} min
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </details>
+
+                                    {/* Display the finalized sale amount only once. */}
+                                    {linkedSale ? (
+                                        <div className="flex items-center justify-between gap-3 border-t border-neutral-200 bg-neutral-50 px-4 py-4 sm:px-5">
+                                            <span className="text-sm font-semibold text-neutral-700">
+                                                Total de la venta
+                                            </span>
+
+                                            <span className="text-lg font-bold text-black">
+                                                ${linkedSale.finalTotal.toLocaleString("es-CO")}
+                                            </span>
+                                        </div>
+                                    ) : group.appointments.some(
+                                        (appointment) =>
+                                            appointment.status === "COMPLETED"
+                                    ) ? (
+                                        <div className="border-t border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800 sm:px-5">
+                                            Servicio completado sin venta vinculada.
+                                            Pago no verificado en el sistema.
+                                        </div>
+                                    ) : null}
                                 </div>
-
-                                <p className="mt-4 text-sm text-gray-500">
-                                    Duración: {appointment.duration} min
-                                </p>
-
-                                {/* Show actual checkout total when this appointment has a completed sale */}
-                                {appointment.saleAppointments.length > 0 && (
-                                    <p className="mt-2 text-sm font-medium">
-                                        Total Pagado: $
-                                        {appointment.saleAppointments
-                                            .reduce(
-                                                (total, saleAppointment) =>
-                                                    total + saleAppointment.sale.finalTotal,
-                                                0
-                                            )
-                                            .toLocaleString("es-CO")}
-                                    </p>
-                                )}
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
-            </section>
+                </section>
+            </div>
         </main>
     );
 }
