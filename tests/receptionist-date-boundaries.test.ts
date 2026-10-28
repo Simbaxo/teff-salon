@@ -83,3 +83,85 @@ test("December reporting ends in the following year", () => {
     assert.equal(start.toISOString(), "2026-12-01T05:00:00.000Z");
     assert.equal(end.toISOString(), "2027-01-01T05:00:00.000Z");
 });
+
+
+test("appointment calendar dates use UTC midnight", () => {
+    const date = "2026-10-28";
+
+    const appointmentDate = new Date(
+        `${date}T00:00:00.000Z`
+    );
+
+    assert.equal(
+        appointmentDate.toISOString(),
+        "2026-10-28T00:00:00.000Z"
+    );
+});
+
+test("appointment dates differ from sales timestamp boundaries", () => {
+    const date = "2026-10-28";
+
+    const appointmentDate = new Date(
+        `${date}T00:00:00.000Z`
+    );
+
+    const salesDayStart = getTeffDayStart(date);
+
+    assert.notEqual(
+        appointmentDate.getTime(),
+        salesDayStart.getTime()
+    );
+});
+
+test("appointment date equality matches the stored calendar date", () => {
+    const date = "2026-10-28";
+
+    const storedAppointmentDate = new Date(
+        "2026-10-28T00:00:00.000Z"
+    );
+
+    const queryDate = new Date(
+        `${date}T00:00:00.000Z`
+    );
+
+    assert.equal(
+        storedAppointmentDate.getTime(),
+        queryDate.getTime()
+    );
+});
+
+
+test("weekly appointment boundaries use UTC calendar dates", () => {
+    const today = "2026-10-28";
+    const weekday = getTeffDayOfWeek(today);
+    const daysSinceMonday = weekday === 0 ? 6 : weekday - 1;
+
+    const monday = addTeffDays(today, -daysSinceMonday);
+    const nextMonday = addTeffDays(monday, 7);
+
+    const start = new Date(`${monday}T00:00:00.000Z`);
+    const end = new Date(`${nextMonday}T00:00:00.000Z`);
+
+    assert.equal(
+        start.toISOString(),
+        "2026-10-26T00:00:00.000Z"
+    );
+
+    assert.equal(
+        end.toISOString(),
+        "2026-11-02T00:00:00.000Z"
+    );
+});
+
+test("weekly appointment query includes Monday through Sunday only", () => {
+    const start = new Date("2026-10-26T00:00:00.000Z");
+    const end = new Date("2026-11-02T00:00:00.000Z");
+
+    const monday = new Date("2026-10-26T00:00:00.000Z");
+    const sunday = new Date("2026-11-01T00:00:00.000Z");
+    const followingMonday = new Date("2026-11-02T00:00:00.000Z");
+
+    assert.ok(monday >= start && monday < end);
+    assert.ok(sunday >= start && sunday < end);
+    assert.ok(!(followingMonday >= start && followingMonday < end));
+});

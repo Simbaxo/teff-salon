@@ -25,6 +25,12 @@ export default async function AdminPage() {
     const todayStart =
         getTeffDayStart(today);
 
+    // Appointment dates are stored as UTC-midnight calendar dates.
+    // Keep this separate from Medellín-local sales timestamps.
+    const todayAppointmentDate = new Date(
+        `${today}T00:00:00.000Z`
+    );
+
     const tomorrow =
         getTeffDayStart(
             addTeffDays(today, 1)
@@ -174,7 +180,7 @@ export default async function AdminPage() {
 
     const todaysAppointments = await prisma.appointment.count({
         where: {
-            date: todayStart,
+            date: todayAppointmentDate,
             status: {
                 in: [
                     "BOOKED",
@@ -192,7 +198,7 @@ export default async function AdminPage() {
             by: ["status"],
 
             where: {
-                date: todayStart,
+                date: todayAppointmentDate,
             },
 
             _count: {
@@ -340,11 +346,13 @@ export default async function AdminPage() {
             : 0;
     
     const weeklyAppointments = await prisma.appointment.count({
-        where: {
-            date: {
-                gte: weekStart,
-                lt: weekEnd,
-            },
+    where: {
+        // Appointment dates use UTC-midnight calendar dates,
+        // unlike sale timestamps, which use Medellín midnight.
+        date: {
+            gte: new Date(`${weekStartDate}T00:00:00.000Z`),
+            lt: new Date(`${weekEndDate}T00:00:00.000Z`),
+        },
             status: {
                 in: [
                     "BOOKED",
@@ -357,24 +365,20 @@ export default async function AdminPage() {
         }
     })
 
-    // Calculate the current calendar month
-    // monthStart = first day of this month
-    // monthEnd = first day of next month
-    const monthStart = new Date(
-        Date.UTC(
-            todayStart.getUTCFullYear(),
-            todayStart.getUTCMonth(),
-            1
-        )
+    // Current calendar month using Medellín-local boundaries.
+    const [year, month] = today.split("-").map(Number);
+
+    // First day of this month at midnight in Medellín.
+    const monthStart = getTeffDayStart(
+        `${today.slice(0, 7)}-01`
     );
 
-    const monthEnd = new Date(
-        Date.UTC(
-            todayStart.getUTCFullYear(),
-            todayStart.getUTCMonth() + 1,
-            1
-        )
-    );
+    // First day of next month, exclusive.
+    const nextMonthDate = new Date(
+        Date.UTC(year, month, 1)
+    ).toISOString().slice(0, 10);
+
+    const monthEnd = getTeffDayStart(nextMonthDate);
 
     // Get all sales recorded durning the current month
     const monthlySales = await prisma.sale.findMany({
