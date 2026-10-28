@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { getTeffToday } from "@/lib/datetime";
+import { getTeffToday, getTeffDayStart } from "@/lib/datetime";
 import ReceptionistPageClient from "./ReceptionistPageClient";
 import { prisma } from "@/lib/prisma";
 import InternalNav from "@/components/InternalNav";
@@ -27,7 +27,8 @@ export default async function ReceptionistPage() {
         timeZone: "America/Bogota",
     }).format(new Date(`${today}T12:00:00-05:00`));
 
-    const todayStart = new Date(`${today}T00:00:00.000Z`);
+    // Use Medellín midnight for timestamp-based reporting.
+    const todayStart = getTeffDayStart(today);
 
     // Current TEFF week: Monday through Sunday.
     const weekStart = new Date(todayStart);
@@ -59,22 +60,20 @@ export default async function ReceptionistPage() {
     const weeklySalesTotal =
         weeklySales._sum.finalTotal ?? 0;
 
-    // Current Calendar Month
-    const monthStart = new Date(
-        Date.UTC(
-            todayStart.getUTCFullYear(),
-            todayStart.getUTCMonth(),
-            1
-        )
+    // Current calendar month using Medellín's local timezone.
+    const [year, month] = today.split("-").map(Number);
+
+    // First day of the current month at midnight in Medellín.
+    const monthStart = getTeffDayStart(
+        `${today.slice(0, 7)}-01`
     );
 
-    const monthEnd = new Date(
-        Date.UTC(
-            todayStart.getUTCFullYear(),
-            todayStart.getUTCMonth() + 1,
-            1
-        )
-    );
+    // First day of the next month, exclusive.
+    const nextMonthDate = new Date(
+        Date.UTC(year, month, 1)
+    ).toISOString().slice(0, 10);
+
+    const monthEnd = getTeffDayStart(nextMonthDate);
 
     const monthlySales = await prisma.sale.aggregate({
         where: {
