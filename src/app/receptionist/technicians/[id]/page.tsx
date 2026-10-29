@@ -1,6 +1,12 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getTeffToday } from "@/lib/datetime";
+import { groupFinalizedTechnicianItems } from "@/lib/technicians/group-finalized-items";
+import { resolveSaleItemCustomer } from "@/lib/technicians/resolve-sale-item-customer";
+import {
+    getTeffToday,
+    getTeffDayStart,
+    addTeffDays,
+} from "@/lib/datetime";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -99,6 +105,28 @@ export default async function TechnicianReceptionPage({
         )
     );
 
+    // Financial timestamps use Medellín-local calendar boundaries.
+    // Appointment calendar dates continue using UTC midnight.
+    const financialTodayStart = getTeffDayStart(today);
+
+    const financialTomorrow = getTeffDayStart(
+        addTeffDays(today, 1)
+    );
+
+    const [year, month] = today.split("-").map(Number);
+
+    const financialMonthStart = getTeffDayStart(
+        `${today.slice(0, 7)}-01`
+    );
+
+    const nextMonthDate = new Date(
+        Date.UTC(year, month, 1)
+    ).toISOString().slice(0, 10);
+
+    const financialMonthEnd = getTeffDayStart(
+        nextMonthDate
+    );
+
     // Production comes from commissionBase so this page reconciles
     // with the Reception dashboard without exposing commission pay.
     const monthlyCommissions =
@@ -106,8 +134,8 @@ export default async function TechnicianReceptionPage({
             where: {
                 employeeId,
                 createdAt: {
-                    gte: monthStart,
-                    lt: monthEnd,
+                    gte: financialMonthStart,
+                    lt: financialMonthEnd,
                 },
             },
             select: {
@@ -124,6 +152,77 @@ export default async function TechnicianReceptionPage({
             },
         });
 
+    // Finalized checkout items attributed to this technician.
+    // Includes services added at checkout without an appointmentId.
+    const monthlyFinalizedItems = await prisma.saleLineItem.findMany({
+        where: {
+            employeeId,
+            sale: {
+                createdAt: {
+                    gte: financialMonthStart,
+                    lt: financialMonthEnd,
+                },
+            },
+        },
+        select: {
+            id: true,
+            saleId: true,
+            itemType: true,
+            itemName: true,
+            unitPrice: true,
+            employeeId: true,
+            appointmentId: true,
+            parentLineItemId: true,
+
+            // Customer linked to this finalized service, when available.
+            appointment: {
+                select: {
+                    customerId: true,
+                    customer: {
+                        select: {
+                            name: true,
+                        },
+                    },
+                },
+            },
+            sale: {
+                select: {
+                    createdAt: true,
+                    saleAppointments: {
+                        select: {
+                            appointment: {
+                                select: {
+                                    customerId: true,
+                                    customer: {
+                                        select: {
+                                            name: true,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        orderBy: {
+            id: "asc",
+        },
+    });
+
+    // Group finalized checkout items by sale and credited technician.
+    // Preserve customer attribution without guessing ownership.
+    const finalizedSaleGroups = groupFinalizedTechnicianItems(
+        employeeId,
+        monthlyFinalizedItems
+    ).map((group) => ({
+        ...group,
+        items: group.items.map((item) => ({
+            ...item,
+            resolvedCustomer: resolveSaleItemCustomer(item),
+        })),
+    }));
+
     const monthlyProduction =
         monthlyCommissions.reduce(
             (total, commission) =>
@@ -135,8 +234,8 @@ export default async function TechnicianReceptionPage({
         monthlyCommissions
             .filter(
                 (commission) =>
-                    commission.sale.createdAt >= todayStart &&
-                    commission.sale.createdAt < tomorrow
+                    commission.sale.createdAt >= financialTodayStart &&
+                    commission.sale.createdAt < financialTomorrow
             )
             .reduce(
                 (total, commission) =>
@@ -280,10 +379,117 @@ export default async function TechnicianReceptionPage({
                     </div>
                 </div>
 
-                <div className="mt-8">
-                    <h2 className="text-xl font-bold text-black">
-                        Citas completadas este mes
-                    </h2>
+                {/* Finalized checkout activity attributed to this technician */}
+                {finalizedSaleGroups.length > 0 && (
+                    <section className="mt-8">
+                        <h2 className="text-xl font-bold text-black">
+                            Servicios Finalizados Este Mes
+                        </h2>
+
+                        <p className="mt-2 text-sm text-neutral-500">
+                            Servicios y complementos registrados en ventas,
+                            atribuidos a esta técnica durante el checkout.
+                        </p>
+
+                        <div className="mt-4 space-y-4">
+                            {finalizedSaleGroups.map((group) => (
+                                <div
+                                    key={group.saleId}
+                                    className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm"
+                                >
+                                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 p-4">
+                                        <div>
+                                            <p className="font-semibold text-black">
+                                                Venta #{group.saleId}
+                                            </p>
+
+                                            <p className="mt-1 text-xs text-neutral-500">
+                                                {new Intl.DateTimeFormat("es-CO", {
+                                                    timeZone: "America/Bogota",
+                                                    day: "numeric",
+                                                    month: "long",
+                                                    year: "numeric",
+                                                }).format(group.items[0].sale.createdAt)}
+                                            </p>
+                                        </div>
+
+                                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                                            Venta registrada
+                                        </span>
+                                    </div>
+
+                                    <div className="divide-y divide-neutral-100 px-4">
+                                        {group.items.map((item) => (
+                                            <div
+                                                key={item.id}
+                                                className="flex flex-wrap items-start justify-between gap-3 py-4"
+                                            >
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-semibold text-black">
+                                                        {item.itemType === "ADDON"
+                                                            ? "+ "
+                                                            : ""}
+                                                        {item.itemName}
+                                                    </p>
+
+                                                    <p className="mt-1 text-xs text-neutral-500">
+                                                        {item.itemType === "ADDON"
+                                                            ? "Complemento"
+                                                            : "Servicio"}
+                                                    </p>
+
+                                                    {item.resolvedCustomer.status === "RESOLVED" ? (
+                                                        <Link
+                                                            href={`/staff/customers/${item.resolvedCustomer.customerId}`}
+                                                            className="mt-1 inline-block text-xs font-medium text-[#B76E79] hover:underline"
+                                                        >
+                                                            {item.resolvedCustomer.customerName}
+                                                        </Link>
+                                                    ) : (
+                                                        <p className="mt-1 text-xs text-amber-700">
+                                                            {item.resolvedCustomer.status === "AMBIGUOUS"
+                                                                ? "Cliente pendiente de verificar"
+                                                                : "Cliente no identificado"}
+                                                        </p>
+                                                    )}
+                                                </div>
+
+                                                <span className="shrink-0 text-sm font-semibold text-black">
+                                                    {formatCOP(item.unitPrice)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="border-t border-neutral-100 bg-neutral-50 px-4 py-3">
+                                        <p className="text-xs text-neutral-500">
+                                            Precios registrados antes de posibles
+                                            descuentos. La producción se calcula
+                                            desde las comisiones de la venta.
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                <details className="mt-8 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                    <summary className="cursor-pointer text-lg font-bold text-black">
+                        Ver historial de citas originales
+                    </summary>
+
+                    <p className="mt-3 text-sm text-neutral-500">
+                        Estas son las citas originalmente programadas.
+                        Los servicios pueden haber cambiado durante el checkout.
+                        Consulta Servicios Finalizados Este Mes para ver
+                        los servicios registrados en las ventas.
+                    </p>
+
+                    <div className="mt-4">
+                        <h2 className="text-lg font-semibold text-black">
+                            Citas completadas este mes
+                        </h2>
 
                     {monthlyAppointments.length === 0 ? (
                         <div className="mt-4 rounded-xl bg-white p-5 shadow-sm">
@@ -346,9 +552,10 @@ export default async function TechnicianReceptionPage({
                                 </div>
                             ))}
                         </div>
-                    )}
-                </div>
-            </div>
+                         )}
+                    </div>       {/* Original appointment history */}
+                </details>       {/* Collapsible history */}
+            </div>               {/* Main content container */}
         </main>
     );
 }
