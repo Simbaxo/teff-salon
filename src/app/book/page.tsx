@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useLanguage } from "@/context/LanguageContext";
 import { getBookingConfirmationStatus } from "@/lib/booking/confirmation-status";
@@ -122,6 +122,12 @@ type ScheduleBlock = {
 export default function BookPage() {
     // State
     const { language } = useLanguage();
+
+    // Scroll target for booking-stage navigation.
+    const bookingStageRef = useRef<HTMLDivElement>(null);
+
+    // Only scroll after an intentional booking-stage transition.
+    const pendingStageScrollRef = useRef(false);
     
     // Customers choose a service category before viewing the full service list
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -131,6 +137,7 @@ export default function BookPage() {
     const [addonsConfirmed, setAddonsConfirmed] = useState(false);
     // Controls the separate technician, date, and time scheduling stage.
     const [scheduleStarted, setScheduleStarted] = useState(false);
+
     const serviceCategories = [
         {
         id: "NAILS",
@@ -232,6 +239,23 @@ export default function BookPage() {
         useState<Appointment[]>([]);
     const [scheduleBlocks, setScheduleBlocks] =
     useState<ScheduleBlock[]>([]);
+
+    useEffect(() => {
+        if (!pendingStageScrollRef.current) {
+            return;
+        }
+
+        pendingStageScrollRef.current = false;
+
+        const prefersReducedMotion = window.matchMedia(
+            "(prefers-reduced-motion: reduce)"
+        ).matches;
+
+        bookingStageRef.current?.scrollIntoView({
+            behavior: prefersReducedMotion ? "instant" : "smooth",
+            block: "start",
+        });
+    }, [servicesConfirmed, scheduleStarted, isReviewing]);
 
     // Fetch the services from API
     useEffect(() => {
@@ -727,6 +751,17 @@ export default function BookPage() {
     const isScheduleStage =
         servicesConfirmed &&
         (scheduleStarted || availableAddons.length === 0);
+
+    // Customer-facing booking progress.
+    // Service selection = 1
+    // Add-ons, technician, scheduling and contact details = 2
+    // Final booking review = 3
+    const bookingProgressStep =
+        !servicesConfirmed
+            ? 1
+            : isReviewing
+                ? 3
+                : 2;
 
     // Confirm Booking Details
     async function handleConfirmBooking() {
@@ -1293,11 +1328,74 @@ export default function BookPage() {
                 </div>
 
                 {/* Heading */}
-                <h1 className="text-3xl font-bold text-black">
+                <h1
+                    ref={bookingStageRef}
+                    className="scroll-mt-6 text-3xl font-bold text-black"
+                >
                         {language === "es"
                             ? "Reserva Tu Cita"
                             : "Book Your Appointment"}
-                    </h1>
+                </h1>
+
+                {/* Customer booking progress */}
+                <div
+                    className="mt-5"
+                    aria-label={
+                        language === "es"
+                            ? `Paso ${bookingProgressStep} de 3`
+                            : `Step ${bookingProgressStep} of 3`
+                    }
+                >
+                    <div className="mb-3 flex items-center justify-between">
+                        <p className="text-xs font-semibold text-[#B76E79]">
+                            {language === "es"
+                                ? `Paso ${bookingProgressStep} de 3`
+                                : `Step ${bookingProgressStep} of 3`}
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                        {[
+                            {
+                                id: 1,
+                                es: "Servicios",
+                                en: "Services",
+                            },
+                            {
+                                id: 2,
+                                es: "Personaliza y agenda",
+                                en: "Customize & Schedule",
+                            },
+                            {
+                                id: 3,
+                                es: "Confirmar",
+                                en: "Confirm",
+                            },
+                        ].map((step) => (
+                            <div key={step.id} className="min-w-0">
+                                <div
+                                    className={`h-1.5 rounded-full ${
+                                        bookingProgressStep >= step.id
+                                            ? "bg-[#B76E79]"
+                                            : "bg-neutral-200"
+                                    }`}
+                                />
+
+                                <p
+                                    className={`mt-2 text-center text-[11px] leading-4 ${
+                                        bookingProgressStep === step.id
+                                            ? "font-semibold text-black"
+                                            : "text-neutral-500"
+                                    }`}
+                                >
+                                    {language === "es"
+                                        ? step.es
+                                        : step.en}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
                     {!servicesConfirmed && (
                         <p className="mt-2 text-neutral-600">
                             {language === "es"
@@ -1305,6 +1403,10 @@ export default function BookPage() {
                                 : "Select the services you would like to book."}
                         </p>
                     )}
+
+                    {/* Hide booking forms during final appointment review */}
+                    {!isReviewing && (
+                        <>
                     
                     {/* Service Browser */}
                     {!servicesConfirmed && (
@@ -1542,6 +1644,7 @@ export default function BookPage() {
                                 <button
                                     type="button"
                                     onClick={() => {
+                                        pendingStageScrollRef.current = true;
                                         setServicesConfirmed(false);
                                         setAddonsConfirmed(false);
                                         setScheduleStarted(false);
@@ -1685,6 +1788,7 @@ export default function BookPage() {
                             <button
                                 type="button"
                                 onClick={() => {
+                                    pendingStageScrollRef.current = true;
                                     setAddonsConfirmed(true);
                                     setScheduleStarted(true);
                                 }}
@@ -1709,6 +1813,12 @@ export default function BookPage() {
                                 <button
                                     type="button"
                                     onClick={() => {
+                                        pendingStageScrollRef.current = true;
+
+                                        if (availableAddons.length === 0) {
+                                            setServicesConfirmed(false);
+                                        }
+
                                         setScheduleStarted(false);
                                         setAddonsConfirmed(false);
                                     }}
@@ -2171,6 +2281,7 @@ export default function BookPage() {
 
                                 setNoPhone(false);
                                 setShowSkipPhoneConfirmation(false);
+                                pendingStageScrollRef.current = true;
                                 setIsReviewing(true);
                             }}
                             disabled={!customerName.trim()}
@@ -2232,6 +2343,7 @@ export default function BookPage() {
                                         setNoPhone(true);
                                         setCustomerPhone("");
                                         setShowSkipPhoneConfirmation(false);
+                                        pendingStageScrollRef.current = true;
                                         setIsReviewing(true);
                                     }}
                                     className="flex-1 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-neutral-50"
@@ -2242,6 +2354,8 @@ export default function BookPage() {
                                 </button>
                             </div>
                         </div>
+                    )}
+                        </>
                     )}
 
                     {/* Review Appointment */}
@@ -2473,7 +2587,10 @@ export default function BookPage() {
                             {/* Add Edit and Confirm Buttons */}
                             <div className="mx-5 mb-5 flex flex-col gap-3 sm:mx-6 sm:flex-row">
                                 <button
-                                    onClick={() => setIsReviewing(false)}
+                                    onClick={() => {
+                                        pendingStageScrollRef.current = true;
+                                        setIsReviewing(false);
+                                    }}
                                     className="min-h-12 flex-1 rounded-xl border border-neutral-200 bg-white px-4 py-3 font-semibold text-neutral-800 transition-colors hover:border-[#B76E79] hover:bg-[#F9F0F1]"
                                 >
                                     {language === "es" ? "Editar" : "Edit"}
@@ -2610,7 +2727,10 @@ export default function BookPage() {
                                 {/* Continue to appointment configuration */}
                                 <button
                                     type="button"
-                                    onClick={() => setServicesConfirmed(true)}
+                                    onClick={() => {
+                                        pendingStageScrollRef.current = true;
+                                        setServicesConfirmed(true);
+                                    }}
                                     className="mt-6 flex w-full items-center justify-center gap-3 rounded-xl bg-black px-6 py-4 font-semibold text-white transition-colors hover:bg-neutral-800"
                                 >
                                     {language === "es" ? "Continuar" : "Continue"}
