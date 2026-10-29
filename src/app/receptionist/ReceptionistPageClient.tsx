@@ -6,6 +6,10 @@ import {
     getTeffToday,
     hasTeffAppointmentStarted,
 } from "@/lib/datetime";
+import {
+    countReceptionBookings,
+    groupReceptionBookings,
+} from "@/lib/receptionist/group-bookings";
 
 type Appointment = {
     id: number;
@@ -247,9 +251,9 @@ export default function ReceptionistPageClient({
     // Keep the schedule-blocking form collapsed until needed.
     const [showBlockForm, setShowBlockForm] = useState(false);
 
-    // Track which customer groups have their appointment controls expanded.
-    const [expandedCustomerIds, setExpandedCustomerIds] =
-        useState<number[]>([]);
+    // Expand individual bookings, not all bookings for one customer.
+    const [expandedBookingKeys, setExpandedBookingKeys] =
+        useState<string[]>([]);
 
     // Load the current appointment data for Reception.
     async function loadAppointments() {
@@ -728,35 +732,33 @@ export default function ReceptionistPageClient({
         .sort((a, b) =>
             a.startTime.localeCompare(b.startTime)
         );
-    
-    // Group the selected day's appointments by customer.
-    // Keep individual appointments intact for scheduling and checkout.
-    const groupedCustomerAppointments = Array.from(
+
+    // Count bookings separately from their scheduled service blocks.
+    // Legacy appointments without bookingId remain independent.
+    const selectedDateBookingCount = countReceptionBookings(
+        selectedDateAppointments
+    );
+
+    const selectedDateServiceCount =
         selectedDateAppointments.reduce(
-            (groups, appointment) => {
-                const customerId = appointment.customer.id;
+            (total, appointment) =>
+                total + appointment.appointmentServices.length,
+            0
+        );
 
-                if (!groups.has(customerId)) {
-                    groups.set(customerId, []);
-                }
+    // Group appointments by booking while preserving individual
+    // service blocks and their scheduling controls.
+    const groupedCustomerAppointments = groupReceptionBookings(
+        selectedDateAppointments
+    );
 
-                groups.get(customerId)!.push(appointment);
-
-                return groups;
-            },
-            new Map<number, Appointment[]>()
+    // Count active customer bookings rather than service blocks.
+    const todaysAppointmentCount = countReceptionBookings(
+        todaysAppointments.filter(
+            (appointment) =>
+                !["CANCELLED", "NO_SHOW"].includes(appointment.status)
         )
-    ).map(([customerId, customerAppointments]) => ({
-        customerId,
-        customer: customerAppointments[0].customer,
-        appointments: customerAppointments,
-    }));
-
-    // Reception snapshot for today's salon activity.
-    const todaysAppointmentCount = todaysAppointments.filter(
-        (appointment) =>
-            !["CANCELLED", "NO_SHOW"].includes(appointment.status)
-    ).length;
+    );
 
     const todaysCompletedCustomers = new Set(
         todaysAppointments
@@ -1261,10 +1263,13 @@ export default function ReceptionistPageClient({
                         </h2>
 
                         <p className="mt-1 text-sm text-neutral-500">
-                            {selectedDateAppointments.length}{" "}
-                            {selectedDateAppointments.length === 1
-                                ? "cita"
-                                : "citas"}
+                            {selectedDateBookingCount}{" "}
+                            {selectedDateBookingCount === 1 ? "cita" : "citas"}
+                            {" · "}
+                            {selectedDateServiceCount}{" "}
+                            {selectedDateServiceCount === 1
+                                ? "servicio"
+                                : "servicios"}
                         </p>
                     </div>
 
@@ -1313,7 +1318,7 @@ export default function ReceptionistPageClient({
                 ) : (
                     <div className="mt-4 space-y-3">
                         {groupedCustomerAppointments.map((group) => (
-                            <div key={group.customerId} className="space-y-3">
+                            <div key={group.groupKey} className="space-y-3">
                                 {/* Compact summary for customers with multiple appointments. */}
                                 {group.appointments.length > 1 && (
                                     <div className="rounded-xl bg-white p-5 shadow-sm">
@@ -1327,7 +1332,20 @@ export default function ReceptionistPageClient({
                                                 </Link>
 
                                                 <p className="mt-1 text-sm text-neutral-500">
-                                                    {group.appointments.length} citas · Desde{" "}
+                                                    1 cita ·{" "}
+                                                    {group.appointments.reduce(
+                                                        (total, appointment) =>
+                                                            total + appointment.appointmentServices.length,
+                                                        0
+                                                    )}{" "}
+                                                    {group.appointments.reduce(
+                                                        (total, appointment) =>
+                                                            total + appointment.appointmentServices.length,
+                                                        0
+                                                    ) === 1
+                                                        ? "servicio"
+                                                        : "servicios"}
+                                                    {" · Desde "}
                                                     {formatTime(group.appointments[0].startTime)}
                                                 </p>
                                             </div>
@@ -1335,16 +1353,16 @@ export default function ReceptionistPageClient({
                                             <button
                                                 type="button"
                                                 onClick={() =>
-                                                    setExpandedCustomerIds((current) =>
-                                                        current.includes(group.customerId)
-                                                            ? current.filter((id) => id !== group.customerId)
-                                                            : [...current, group.customerId]
+                                                    setExpandedBookingKeys((current) =>
+                                                        current.includes(group.groupKey)
+                                                            ? current.filter((id) => id !== group.groupKey)
+                                                            : [...current, group.groupKey]
                                                     )
                                                 }
-                                                aria-expanded={expandedCustomerIds.includes(group.customerId)}
+                                                aria-expanded={expandedBookingKeys.includes(group.groupKey)}
                                                 className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-black"
                                             >
-                                                {expandedCustomerIds.includes(group.customerId)
+                                                {expandedBookingKeys.includes(group.groupKey)
                                                     ? "Ocultar gestión −"
                                                     : "Gestionar servicios +"}
                                             </button>
@@ -1377,7 +1395,7 @@ export default function ReceptionistPageClient({
 
                                 {/* Keep individual appointment controls available when expanded. */}
                                 {(group.appointments.length === 1 ||
-                                    expandedCustomerIds.includes(group.customerId)) && (
+                                    expandedBookingKeys.includes(group.groupKey)) && (
                                     <div className="space-y-3">
                                         {group.appointments.map((appointment) => (
                                         <div
