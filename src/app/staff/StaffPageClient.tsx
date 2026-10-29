@@ -7,6 +7,12 @@ import {
   getTeffToday,
   hasTeffAppointmentStarted,
 } from "@/lib/datetime";
+import {
+    getUniqueFinalizedSales,
+} from "@/lib/appointments/get-unique-finalized-sales";
+import {
+    classifyFinalizedSaleItems,
+} from "@/lib/appointments/classify-finalized-sale-items";
 import InternalNav from "@/components/InternalNav";
 
 type Appointment = {
@@ -48,6 +54,30 @@ type Appointment = {
             id: number;
             nameEs: string;
             nameEn: string;
+        };
+    }[];
+    // Finalized checkout data, available only from the staff API.
+    saleAppointments: {
+        sale: {
+            id: number;
+            finalTotal: number;
+
+            lineItems: {
+                id: number;
+                itemType: string;
+                itemName: string;
+                unitPrice: number;
+                employeeId: number | null;
+                appointmentId: number | null;
+                parentLineItemId: number | null;
+            }[];
+
+            saleAppointments: {
+                appointment: {
+                    id: number,
+                    customerId: number;
+                };
+            }[];
         };
     }[];
 };
@@ -219,6 +249,31 @@ export default  function StaffPage({
     const appointmentsForDate = appointments.filter(
         (appointment) =>
             appointment.date.slice(0, 10) === selectedDate
+    );
+
+    // Collect finalized sales once for the selected agenda date.
+    // Multiple appointment blocks may reference the same sale.
+    // This does not modify the original appointment information.
+    const finalizedSalesForDate = getUniqueFinalizedSales(
+        appointmentsForDate
+    );
+
+    // Classify each finalized service exactly once.
+    // Keep appointment-linked items separate from items whose
+    // individual appointment ownership cannot be verified.
+    const classifiedFinalizedSales = finalizedSalesForDate.map(
+        (sale) => {
+            const classification = classifyFinalizedSaleItems(
+                sale,
+                appointmentsForDate
+            );
+
+            return {
+                ...sale,
+                assignedItems: classification.assignedItems,
+                unassignedItems: classification.unassignedItems,
+            };
+        }
     );
 
     // Count how many appointment blocks belong to the same customer booking
@@ -596,6 +651,128 @@ export default  function StaffPage({
                         </div>
                     )}
 
+                    {/* Finalized sales for the selected appointment date */}
+                    {!isLoading && !loadError && classifiedFinalizedSales.length > 0 && (
+                        <details
+                            open
+                            className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4 sm:p-5"
+                        >
+                            <summary className="cursor-pointer text-xl font-bold text-black">
+                                Ventas Finalizadas del Día
+                                <span className="ml-2 text-sm font-normal text-neutral-500">
+                                    ({classifiedFinalizedSales.length})
+                                </span>
+                            </summary>
+
+                            <p className="mt-2 text-sm text-neutral-600">
+                                Servicios registrados en checkout.
+                                Cada venta aparece una sola vez, aunque incluya
+                                varias citas o técnicas.
+                            </p>
+
+                            <div className="mt-4 space-y-4">
+                                {classifiedFinalizedSales.map((sale) => (
+                                    <div
+                                        key={sale.id}
+                                        className="overflow-hidden rounded-xl border border-neutral-200 bg-white"
+                                    >
+                                        <div className="flex items-center justify-between gap-3 border-b border-neutral-100 p-4">
+                                            <p className="font-semibold text-black">
+                                                Venta #{sale.id}
+                                            </p>
+
+                                            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                                Finalizada
+                                            </span>
+                                        </div>
+
+                                        {sale.assignedItems.length > 0 && (
+                                            <div className="p-4">
+                                                <h3 className="text-xs font-semibold uppercase text-neutral-500">
+                                                    Servicios con cita vinculada
+                                                </h3>
+
+                                                <div className="mt-3 space-y-3">
+                                                    {sale.assignedItems.map(({ appointmentId, item }) => (
+                                                        <div
+                                                            key={item.id}
+                                                            className="flex items-start justify-between gap-3"
+                                                        >
+                                                            <div>
+                                                                <p className="text-sm font-medium text-black">
+                                                                    {item.itemType === "ADDON" ? "+ " : ""}
+                                                                    {item.itemName}
+                                                                </p>
+
+                                                                <p className="mt-1 text-xs text-neutral-500">
+                                                                    Cita #{appointmentId}
+                                                                </p>
+                                                            </div>
+
+                                                            <span className="shrink-0 text-sm font-semibold text-black">
+                                                                ${item.unitPrice.toLocaleString("es-CO")}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {sale.unassignedItems.length > 0 && (
+                                            <div className="border-t border-neutral-100 p-4">
+                                                <h3 className="text-xs font-semibold uppercase text-amber-700">
+                                                    Sin cita individual verificada
+                                                </h3>
+
+                                                <div className="mt-3 space-y-3">
+                                                    {sale.unassignedItems.map((item) => (
+                                                        <div
+                                                            key={item.id}
+                                                            className="flex items-start justify-between gap-3"
+                                                        >
+                                                            <div>
+                                                                <p className="text-sm font-medium text-black">
+                                                                    {item.itemType === "ADDON" ? "+ " : ""}
+                                                                    {item.itemName}
+                                                                </p>
+
+                                                                <p className="mt-1 text-xs text-neutral-500">
+                                                                    {item.employeeId !== null
+                                                                        ? "Técnica registrada en checkout"
+                                                                        : "Sin atribución individual registrada"}
+                                                                </p>
+                                                            </div>
+
+                                                            <span className="shrink-0 text-sm font-semibold text-black">
+                                                                ${item.unitPrice.toLocaleString("es-CO")}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center justify-between gap-3 border-t border-neutral-200 bg-neutral-50 px-4 py-4">
+                                            <span className="text-sm font-semibold text-neutral-700">
+                                                Total de la venta
+                                            </span>
+
+                                            <span className="text-lg font-bold text-black">
+                                                ${sale.finalTotal.toLocaleString("es-CO")}
+                                            </span>
+                                        </div>
+
+                                        <p className="px-4 py-3 text-xs text-neutral-500">
+                                            Los precios individuales son los registrados
+                                            antes de posibles descuentos. El total corresponde
+                                            a la venta finalizada.
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        </details>
+                    )}
+
                     {Object.entries(reservationGroupsByEmployee).map(
                         ([employeeName, reservationGroups]) => (
                             <section key={employeeName}>
@@ -807,7 +984,9 @@ export default  function StaffPage({
 
                                                 <div className="mt-4">
                                                     <p className="text-sm font-semibold text-black">
-                                                        Servicios
+                                                        {appointment.status === "COMPLETED"
+                                                            ? "Servicios de la reserva original"
+                                                            : "Servicios"}
                                                     </p>
 
                                                     {appointment.appointmentServices.map((item) => (
@@ -824,7 +1003,9 @@ export default  function StaffPage({
                                                 {appointment.appointmentAddons.length > 0 && (
                                                     <div className="mt-4">
                                                         <p className="text-sm font-semibold text-black">
-                                                            Adicionales
+                                                            {appointment.status === "COMPLETED"
+                                                                ? "Adicionales de la reserva original"
+                                                                : "Adicionales"}
                                                         </p>
 
                                                         {appointment.appointmentAddons.map((item) => (
@@ -838,6 +1019,15 @@ export default  function StaffPage({
                                                         ))}
                                                     </div>
                                                 )}
+
+                                                {/* Warn when a completed appointment has no linked sale */}
+                                                {appointment.status === "COMPLETED" &&
+                                                    appointment.saleAppointments.length === 0 && (
+                                                        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                                                            Servicio completado sin venta vinculada.
+                                                            Pago no verificado en el sistema.
+                                                        </p>
+                                                    )}
 
                                                 {(
                                                     userRole === "OWNER" ||

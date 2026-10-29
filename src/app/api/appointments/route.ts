@@ -120,6 +120,42 @@ export async function GET(request: Request) {
             },
           },
         },
+        // Finalized checkout records linked to this appointment.
+        // Staff may view sold services, but not commissions or payroll.
+        saleAppointments: {
+          select: {
+            sale: {
+              select: {
+                id: true,
+                finalTotal: true,
+                lineItems: {
+                  select: {
+                    id: true,
+                    itemType: true,
+                    itemName: true,
+                    unitPrice: true,
+                    employeeId: true,
+                    appointmentId: true,
+                    parentLineItemId: true,
+                  },
+                  orderBy: {
+                    id: "asc",
+                  },
+                },
+                saleAppointments: {
+                  select: {
+                    appointment: {
+                      select: {
+                        id: true,
+                        customerId: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
 
       orderBy: {
