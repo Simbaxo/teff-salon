@@ -195,6 +195,10 @@ export default function ReceptionistPageClient({
 }: ReceptionistPageClientProps) {
     const today = getTeffToday();
 
+    const [activeTab, setActiveTab] = useState<
+        "resumen" | "agenda" | "rendimiento"
+    >("resumen");
+
     // Reception opens on today, but staff can review previous appointment dates.
     const [selectedAppointmentDate, setSelectedAppointmentDate] =
         useState(today);
@@ -258,9 +262,6 @@ export default function ReceptionistPageClient({
     // Load the current appointment data for Reception.
     async function loadAppointments() {
         try {
-            setIsLoading(true);
-            setLoadError(false);
-
             const response = await fetch("/api/appointments");
 
             if (response.status === 401) {
@@ -277,6 +278,7 @@ export default function ReceptionistPageClient({
                 await response.json();
 
             setAppointments(data);
+            setLoadError(false);
         } catch (error) {
             console.error(error);
             setLoadError(true);
@@ -327,15 +329,9 @@ export default function ReceptionistPageClient({
             "PushManager" in window &&
             "Notification" in window;
 
-        setPushSupported(supportsPush);
-
         if (!supportsPush) {
             return;
         }
-
-        setNotificationPermission(
-            Notification.permission
-        );
 
         async function registerServiceWorker() {
             try {
@@ -345,6 +341,9 @@ export default function ReceptionistPageClient({
 
                 const registration =
                     await navigator.serviceWorker.ready;
+
+                setPushSupported(true);
+                setNotificationPermission(Notification.permission);
 
                 setServiceWorkerReady(true);
 
@@ -360,7 +359,8 @@ export default function ReceptionistPageClient({
                     "Failed to register TEFF service worker:",
                     error
                 );
-
+                setPushSupported(true);
+                setNotificationPermission(Notification.permission);
                 setServiceWorkerReady(false);
             }
         }
@@ -368,10 +368,22 @@ export default function ReceptionistPageClient({
         registerServiceWorker();
     }, []);
 
+    // Load reception data asynchronously after the effect starts.
+    // Preserve the existing refresh functions and error handling.
     useEffect(() => {
-        loadAppointments();
-        loadEmployees();
-        loadScheduleBlocks();
+        let active = true;
+
+        void Promise.resolve().then(() => {
+            if (!active) return;
+
+            void loadAppointments();
+            void loadEmployees();
+            void loadScheduleBlocks();
+        });
+
+        return () => {
+            active = false;
+        };
     }, []);
 
     async function createScheduleBlock() {
@@ -897,7 +909,10 @@ export default function ReceptionistPageClient({
 
                 <button
                     type="button"
-                    onClick={() => loadAppointments()}
+                    onClick={() => {
+                        setIsLoading(true);
+                        void loadAppointments();
+                    }}
                     className="mt-4 rounded-lg bg-black px-4 py-3 text-sm font-semibold text-white"
                 >
                     Reintentar
@@ -934,6 +949,44 @@ export default function ReceptionistPageClient({
     return (
         <div className="mt-8">
 
+
+            {/* Receptionist dashboard navigation */}
+            <div
+                role="tablist"
+                aria-label="Secciones de recepción"
+                className="grid grid-cols-3 gap-2 rounded-xl bg-white p-2 shadow-sm"
+            >
+                {([
+                    ["resumen", "Resumen"],
+                    ["agenda", "Agenda"],
+                    ["rendimiento", "Rendimiento"],
+                ] as const).map(([value, label]) => (
+                    <button
+                        key={value}
+                        type="button"
+                        role="tab"
+                        id={`tab-${value}`}
+                        aria-selected={activeTab === value}
+                        aria-controls={`panel-${value}`}
+                        onClick={() => setActiveTab(value)}
+                        className={`rounded-lg px-2 py-3 text-sm font-semibold transition-colors sm:text-base ${
+                            activeTab === value
+                                ? "bg-[#B76E79] text-white"
+                                : "text-neutral-600 hover:bg-neutral-100"
+                        }`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            {activeTab === "resumen" && (
+                <section
+                    id="panel-resumen"
+                    role="tabpanel"
+                    aria-labelledby="tab-resumen"
+                    className="mt-6"
+                >
             {/* Web Push notification controls */}
             {pushSupported && (
                 <div className="mb-6 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
@@ -986,273 +1039,57 @@ export default function ReceptionistPageClient({
             )}
 
             {/* Today's reception snapshot */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-xl bg-white p-5 shadow-sm">
-                    <p className="text-sm font-medium text-neutral-500">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <div className="rounded-xl border border-neutral-200 bg-white p-3 shadow-sm sm:p-4">
+                    <p className="text-xs font-medium text-neutral-500 sm:text-sm">
                         Citas de Hoy
                     </p>
 
-                    <p className="mt-2 text-2xl font-bold text-black">
+                    <p className="mt-1 text-xl font-bold text-black sm:text-2xl">
                         {todaysAppointmentCount}
                     </p>
                 </div>
 
-                <div className="rounded-xl bg-white p-5 shadow-sm">
-                    <p className="text-sm font-medium text-neutral-500">
+                <div className="rounded-xl border border-neutral-200 bg-white p-3 shadow-sm sm:p-4">
+                    <p className="text-xs font-medium text-neutral-500 sm:text-sm">
                         Clientes Atendidos
                     </p>
 
-                    <p className="mt-2 text-2xl font-bold text-black">
+                    <p className="mt-1 text-xl font-bold text-black sm:text-2xl">
                         {todaysCompletedCustomers}
                     </p>
                 </div>
 
-                <div className="rounded-xl bg-white p-5 shadow-sm">
-                    <p className="text-sm font-medium text-neutral-500">
+                <div className="rounded-xl border border-neutral-200 bg-white p-3 shadow-sm sm:p-4">
+                    <p className="text-xs font-medium text-neutral-500 sm:text-sm">
                         En Servicio
                     </p>
 
-                    <p className="mt-2 text-2xl font-bold text-black">
+                    <p className="mt-1 text-xl font-bold text-black sm:text-2xl">
                         {todaysInService}
                     </p>
                 </div>
 
-                <div className="rounded-xl bg-white p-5 shadow-sm">
-                    <p className="text-sm font-medium text-neutral-500">
+                <div className="rounded-xl border border-neutral-200 bg-white p-3 shadow-sm sm:p-4">
+                    <p className="text-xs font-medium text-neutral-500 sm:text-sm">
                         Ventas de Hoy
                     </p>
 
-                    <p className="mt-2 text-2xl font-bold text-black">
+                    <p className="mt-1 text-xl font-bold text-black sm:text-2xl">
                         {formatCOP(todaysSalesTotal)}
                     </p>
                 </div>
             </div>
 
-            {/* Technician schedule blocking */}
-            <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
-                {/* Click to expand or collapse the schedule-blocking form. */}
-                <button
-                    type="button"
-                    onClick={() => setShowBlockForm((current) => !current)}
-                    disabled={isSavingBlock}
-                    aria-expanded={showBlockForm}
-                    aria-controls="receptionist-block-form"
-                    className="flex w-full items-center justify-between gap-4 text-left"
+                </section>
+            )}
+
+            {activeTab === "agenda" && (
+                <section
+                    id="panel-agenda"
+                    role="tabpanel"
+                    aria-labelledby="tab-agenda"
                 >
-                    <div>
-                        <h2 className="text-xl font-bold text-black">
-                            Bloquear horario
-                        </h2>
-
-                        <p className="mt-1 text-sm text-neutral-500">
-                            Gestionar disponibilidad de técnicas
-                        </p>
-                    </div>
-
-                    <span
-                        aria-hidden="true"
-                        className="text-xl font-semibold text-neutral-500"
-                    >
-                        {showBlockForm ? "−" : "+"}
-                    </span>
-                </button>
-                {/* Only display the blocking form when expanded. */}
-                <div
-                    id="receptionist-block-form"
-                    hidden={!showBlockForm}
-                >
-
-                <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-                    <div>
-                        <label className="block text-sm font-semibold text-black">
-                            Técnica
-                        </label>
-
-                        <select
-                            value={blockEmployeeId}
-                            onChange={(event) =>
-                                setBlockEmployeeId(
-                                    Number(event.target.value)
-                                )
-                            }
-                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
-                        >
-                            <option value={0}>
-                                Seleccionar
-                            </option>
-
-                            {employees.map((employee) => (
-                                <option
-                                    key={employee.id}
-                                    value={employee.id}
-                                >
-                                    {employee.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-black">
-                            Fecha
-                        </label>
-
-                        <input
-                            type="date"
-                            value={blockDate}
-                            onChange={(event) =>
-                                setBlockDate(event.target.value)
-                            }
-                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-black">
-                            Desde
-                        </label>
-
-                        <select
-                            value={blockStartTime}
-                            onChange={(event) =>
-                                setBlockStartTime(
-                                    event.target.value
-                                )
-                            }
-                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
-                        >
-                            {receptionTimeOptions.map((time) => (
-                                <option key={time} value={time}>
-                                    {formatTime(time)}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-black">
-                            Hasta
-                        </label>
-
-                        <select
-                            value={blockEndTime}
-                            onChange={(event) =>
-                                setBlockEndTime(
-                                    event.target.value
-                                )
-                            }
-                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
-                        >
-                            {receptionTimeOptions.map((time) => (
-                                <option key={time} value={time}>
-                                    {formatTime(time)}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-black">
-                            Motivo
-                        </label>
-
-                        <input
-                            type="text"
-                            maxLength={200}
-                            value={blockReason}
-                            onChange={(event) =>
-                                setBlockReason(event.target.value)
-                            }
-                            placeholder="Ej. Llega tarde"
-                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
-                        />
-                    </div>
-                </div>
-
-                {blockError && (
-                    <p className="mt-4 text-sm font-medium text-red-700">
-                        {blockError}
-                    </p>
-                )}
-
-                <button
-                    type="button"
-                    onClick={createScheduleBlock}
-                    disabled={isSavingBlock}
-                    className="mt-5 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
-                >
-                    {isSavingBlock
-                        ? "Bloqueando..."
-                        : "Bloquear horario"}
-                </button>
-            </div>
-            </div>
-
-            {/* Schedule blocks for the selected block date */}
-            <div className="mt-6 rounded-xl bg-white p-5 shadow-sm">
-                <h2 className="text-lg font-bold text-black">
-                    Horarios bloqueados
-                </h2>
-
-                <p className="mt-1 text-sm text-neutral-500">
-                    {blockDate}
-                </p>
-
-                {scheduleBlocks.filter(
-                    (block) =>
-                        block.date.slice(0, 10) === blockDate
-                ).length === 0 ? (
-                    <p className="mt-4 text-sm text-neutral-500">
-                        No hay horarios bloqueados para esta fecha.
-                    </p>
-                ) : (
-                    <div className="mt-4 space-y-3">
-                        {scheduleBlocks
-                            .filter(
-                                (block) =>
-                                    block.date.slice(0, 10) ===
-                                    blockDate
-                            )
-                            .map((block) => (
-                                <div
-                                    key={block.id}
-                                    className="flex flex-col gap-3 rounded-xl border border-neutral-200 p-4 sm:flex-row sm:items-center sm:justify-between"
-                                >
-                                    <div>
-                                        <p className="font-semibold text-black">
-                                            {block.employee.name}
-                                        </p>
-
-                                        <p className="mt-1 text-sm text-neutral-600">
-                                            {formatTime(block.startTime)}
-                                            {" – "}
-                                            {formatTime(block.endTime)}
-                                        </p>
-
-                                        {block.reason && (
-                                            <p className="mt-1 text-sm text-neutral-500">
-                                                {block.reason}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            deleteScheduleBlock(
-                                                block.id
-                                            )
-                                        }
-                                        className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
-                                    >
-                                        Eliminar
-                                    </button>
-                                </div>
-                            ))}
-                    </div>
-                )}
-            </div>
-
             <div className="mt-8">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
@@ -1674,6 +1511,240 @@ export default function ReceptionistPageClient({
             )}
             </div>
 
+            {/* Technician schedule blocking */}
+            <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
+                {/* Click to expand or collapse the schedule-blocking form. */}
+                <button
+                    type="button"
+                    onClick={() => setShowBlockForm((current) => !current)}
+                    disabled={isSavingBlock}
+                    aria-expanded={showBlockForm}
+                    aria-controls="receptionist-block-form"
+                    className="flex w-full items-center justify-between gap-4 text-left"
+                >
+                    <div>
+                        <h2 className="text-xl font-bold text-black">
+                            Bloquear horario
+                        </h2>
+
+                        <p className="mt-1 text-sm text-neutral-500">
+                            Gestionar disponibilidad de técnicas
+                        </p>
+                    </div>
+
+                    <span
+                        aria-hidden="true"
+                        className="text-xl font-semibold text-neutral-500"
+                    >
+                        {showBlockForm ? "−" : "+"}
+                    </span>
+                </button>
+                {/* Only display the blocking form when expanded. */}
+                <div
+                    id="receptionist-block-form"
+                    hidden={!showBlockForm}
+                >
+
+                <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                    <div>
+                        <label className="block text-sm font-semibold text-black">
+                            Técnica
+                        </label>
+
+                        <select
+                            value={blockEmployeeId}
+                            onChange={(event) =>
+                                setBlockEmployeeId(
+                                    Number(event.target.value)
+                                )
+                            }
+                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                        >
+                            <option value={0}>
+                                Seleccionar
+                            </option>
+
+                            {employees.map((employee) => (
+                                <option
+                                    key={employee.id}
+                                    value={employee.id}
+                                >
+                                    {employee.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-black">
+                            Fecha
+                        </label>
+
+                        <input
+                            type="date"
+                            value={blockDate}
+                            onChange={(event) =>
+                                setBlockDate(event.target.value)
+                            }
+                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-black">
+                            Desde
+                        </label>
+
+                        <select
+                            value={blockStartTime}
+                            onChange={(event) =>
+                                setBlockStartTime(
+                                    event.target.value
+                                )
+                            }
+                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                        >
+                            {receptionTimeOptions.map((time) => (
+                                <option key={time} value={time}>
+                                    {formatTime(time)}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-black">
+                            Hasta
+                        </label>
+
+                        <select
+                            value={blockEndTime}
+                            onChange={(event) =>
+                                setBlockEndTime(
+                                    event.target.value
+                                )
+                            }
+                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                        >
+                            {receptionTimeOptions.map((time) => (
+                                <option key={time} value={time}>
+                                    {formatTime(time)}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-black">
+                            Motivo
+                        </label>
+
+                        <input
+                            type="text"
+                            maxLength={200}
+                            value={blockReason}
+                            onChange={(event) =>
+                                setBlockReason(event.target.value)
+                            }
+                            placeholder="Ej. Llega tarde"
+                            className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                        />
+                    </div>
+                </div>
+
+                {blockError && (
+                    <p className="mt-4 text-sm font-medium text-red-700">
+                        {blockError}
+                    </p>
+                )}
+
+                <button
+                    type="button"
+                    onClick={createScheduleBlock}
+                    disabled={isSavingBlock}
+                    className="mt-5 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                    {isSavingBlock
+                        ? "Bloqueando..."
+                        : "Bloquear horario"}
+                </button>
+            </div>
+            </div>
+
+            {/* Schedule blocks for the selected block date */}
+            <div className="mt-6 rounded-xl bg-white p-5 shadow-sm">
+                <h2 className="text-lg font-bold text-black">
+                    Horarios bloqueados
+                </h2>
+
+                <p className="mt-1 text-sm text-neutral-500">
+                    {blockDate}
+                </p>
+
+                {scheduleBlocks.filter(
+                    (block) =>
+                        block.date.slice(0, 10) === blockDate
+                ).length === 0 ? (
+                    <p className="mt-4 text-sm text-neutral-500">
+                        No hay horarios bloqueados para esta fecha.
+                    </p>
+                ) : (
+                    <div className="mt-4 space-y-3">
+                        {scheduleBlocks
+                            .filter(
+                                (block) =>
+                                    block.date.slice(0, 10) ===
+                                    blockDate
+                            )
+                            .map((block) => (
+                                <div
+                                    key={block.id}
+                                    className="flex flex-col gap-3 rounded-xl border border-neutral-200 p-4 sm:flex-row sm:items-center sm:justify-between"
+                                >
+                                    <div>
+                                        <p className="font-semibold text-black">
+                                            {block.employee.name}
+                                        </p>
+
+                                        <p className="mt-1 text-sm text-neutral-600">
+                                            {formatTime(block.startTime)}
+                                            {" – "}
+                                            {formatTime(block.endTime)}
+                                        </p>
+
+                                        {block.reason && (
+                                            <p className="mt-1 text-sm text-neutral-500">
+                                                {block.reason}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            deleteScheduleBlock(
+                                                block.id
+                                            )
+                                        }
+                                        className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                                    >
+                                        Eliminar
+                                    </button>
+                                </div>
+                            ))}
+                    </div>
+                )}
+            </div>
+
+                </section>
+            )}
+
+            {activeTab === "rendimiento" && (
+                <section
+                    id="panel-rendimiento"
+                    role="tabpanel"
+                    aria-labelledby="tab-rendimiento"
+                >
             {/* Weekly salon performance */}
             <div className="mt-8">
                 <h2 className="text-xl font-bold text-black">
@@ -1706,7 +1777,15 @@ export default function ReceptionistPageClient({
 
                     <div className="mt-4 h-3 overflow-hidden rounded-full bg-neutral-200">
                         <div
-                            className="h-full rounded-full bg-black transition-all"
+                            className={`h-full rounded-full transition-all duration-500 ${
+                                weeklyGoalProgress < 40
+                                    ? "bg-[#D97777]"
+                                    : weeklyGoalProgress < 75
+                                    ? "bg-[#D9A441]"
+                                    : weeklyGoalProgress < 100
+                                        ? "bg-[#B76E79]"
+                                        : "bg-[#329D7B]"
+                            }`}
                             style={{ width: `${weeklyGoalProgress}%` }}
                         />
                     </div>
@@ -1734,39 +1813,47 @@ export default function ReceptionistPageClient({
                         Producción por Técnica
                     </h3>
 
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        {weeklyTechnicianSummary.map((employee) => (
-                            <div
-                                key={employee.id}
-                                className="rounded-xl bg-white p-5 shadow-sm"
-                            >
-                                <div className="flex items-center justify-between">
-                                    <Link
-                                        href={`/receptionist/technicians/${employee.id}`}
-                                        className="font-bold text-black hover:underline"
-                                    >
-                                        {employee.name}
-                                    </Link>
-
-                                    <p className="font-bold text-black">
-                                        {formatCOP(employee.sales)}
-                                    </p>
-                                    <Link
-                                        href={`/receptionist/technicians/${employee.id}`}
-                                        className="mt-3 inline-block text-sm font-semibold text-black"
-                                    >
-                                        Ver actividad →
-                                    </Link>
-                                </div>
-
-                                <p className="mt-2 text-sm text-neutral-500">
-                                    {employee.customers}{" "}
-                                    {employee.customers === 1
-                                        ? "cliente"
-                                        : "clientes"}
-                                </p>
-                            </div>
-                        ))}
+                    <div className="mt-3 overflow-x-auto rounded-xl border border-neutral-200 bg-white shadow-sm">
+                        <table className="w-full min-w-[420px] text-sm">
+                            <thead className="bg-neutral-50 text-neutral-600">
+                                <tr>
+                                    <th scope="col" className="px-4 py-3 text-left font-semibold">
+                                        Técnica
+                                    </th>
+                                    <th scope="col" className="px-4 py-3 text-right font-semibold">
+                                        Clientes
+                                    </th>
+                                    <th scope="col" className="px-4 py-3 text-right font-semibold">
+                                        Producción
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-neutral-100">
+                                {weeklyTechnicianSummary.map((employee) => (
+                                    <tr key={employee.id}>
+                                        <td className="px-4 py-3">
+                                            <Link
+                                                href={`/receptionist/technicians/${employee.id}`}
+                                                className="font-semibold text-black hover:underline"
+                                            >
+                                                {employee.name}
+                                            </Link>
+                                        </td>
+                                        <td className="px-4 py-3 text-right text-neutral-600">
+                                            {employee.customers}
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-semibold text-black">
+                                            {formatCOP(employee.sales)}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {weeklyTechnicianSummary.length === 0 && (
+                            <p className="p-4 text-sm text-neutral-500">
+                                No hay técnicas para mostrar.
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>
@@ -1803,7 +1890,15 @@ export default function ReceptionistPageClient({
 
                     <div className="mt-4 h-3 overflow-hidden rounded-full bg-neutral-200">
                         <div
-                            className="h-full rounded-full bg-black transition-all"
+                            className={`h-full rounded-full transition-all duration-500 ${
+                                monthlyGoalProgress < 40
+                                    ? "bg-[#D97777]"
+                                    : monthlyGoalProgress < 75
+                                    ? "bg-[#D9A441]"
+                                    : monthlyGoalProgress < 100
+                                        ? "bg-[#B76E79]"
+                                        : "bg-[#329D7B]"
+                            }`}
                             style={{ width: `${monthlyGoalProgress}%` }}
                         />
                     </div>
@@ -1831,42 +1926,52 @@ export default function ReceptionistPageClient({
                         Producción por Técnica
                     </h3>
 
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        {monthlyTechnicianSummary.map((employee) => (
-                            <div
-                                key={employee.id}
-                                className="rounded-xl bg-white p-5 shadow-sm"
-                            >
-                                <div className="flex items-center justify-between">
-                                    <Link
-                                        href={`/receptionist/technicians/${employee.id}`}
-                                        className="font-bold text-black hover:underline"
-                                    >
-                                        {employee.name}
-                                    </Link>
-
-                                    <p className="font-bold text-black">
-                                        {formatCOP(employee.sales)}
-                                    </p>
-                                    <Link
-                                        href={`/receptionist/technicians/${employee.id}`}
-                                        className="mt-3 inline-block text-sm font-semibold text-black"
-                                    >
-                                        Ver actividad →
-                                    </Link>
-                                </div>
-
-                                <p className="mt-2 text-sm text-neutral-500">
-                                    {employee.customers}{" "}
-                                    {employee.customers === 1
-                                        ? "cliente"
-                                        : "clientes"}
-                                </p>
-                            </div>
-                        ))}
+                    <div className="mt-3 overflow-x-auto rounded-xl border border-neutral-200 bg-white shadow-sm">
+                        <table className="w-full min-w-[420px] text-sm">
+                            <thead className="bg-neutral-50 text-neutral-600">
+                                <tr>
+                                    <th scope="col" className="px-4 py-3 text-left font-semibold">
+                                        Técnica
+                                    </th>
+                                    <th scope="col" className="px-4 py-3 text-right font-semibold">
+                                        Clientes
+                                    </th>
+                                    <th scope="col" className="px-4 py-3 text-right font-semibold">
+                                        Producción
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-neutral-100">
+                                {monthlyTechnicianSummary.map((employee) => (
+                                    <tr key={employee.id}>
+                                        <td className="px-4 py-3">
+                                            <Link
+                                                href={`/receptionist/technicians/${employee.id}`}
+                                                className="font-semibold text-black hover:underline"
+                                            >
+                                                {employee.name}
+                                            </Link>
+                                        </td>
+                                        <td className="px-4 py-3 text-right text-neutral-600">
+                                            {employee.customers}
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-semibold text-black">
+                                            {formatCOP(employee.sales)}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {monthlyTechnicianSummary.length === 0 && (
+                            <p className="p-4 text-sm text-neutral-500">
+                                No hay técnicas para mostrar.
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>
+                </section>
+            )}
         </div>
     );
 }

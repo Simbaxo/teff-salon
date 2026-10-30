@@ -4,7 +4,7 @@ import { getTeffToday, getTeffDayStart } from "@/lib/datetime";
 import ReceptionistPageClient from "./ReceptionistPageClient";
 import { prisma } from "@/lib/prisma";
 import InternalNav from "@/components/InternalNav";
-
+import { resolveSaleItemCustomer } from "@/lib/technicians/resolve-sale-item-customer";
 
 export default async function ReceptionistPage() {
     const session = await auth();
@@ -126,6 +126,7 @@ export default async function ReceptionistPage() {
         await prisma.employee.findMany({
             where: {
                 active: true,
+                isBookable: true,
             },
             select: {
                 id: true,
@@ -146,6 +147,7 @@ export default async function ReceptionistPage() {
                                         appointment: {
                                             select: {
                                                 customerId: true,
+                                                employeeId: true,
                                             },
                                         },
                                     },
@@ -160,6 +162,48 @@ export default async function ReceptionistPage() {
             },
         });
 
+    // Finalized services, including services added directly at checkout.
+    // Read customer ownership only; never expose payroll information.
+    const weeklyServiceItems = await prisma.saleLineItem.findMany({
+        where: {
+            itemType: "SERVICE",
+            employeeId: { not: null },
+            sale: {
+                createdAt: {
+                    gte: weekStart,
+                    lt: weekEnd,
+                },
+            },
+        },
+        select: {
+            employeeId: true,
+            appointment: {
+                select: {
+                    customerId: true,
+                    customer: {
+                        select: { name: true },
+                    },
+                },
+            },
+            sale: {
+                select: {
+                    saleAppointments: {
+                        select: {
+                            appointment: {
+                                select: {
+                                    customerId: true,
+                                    customer: {
+                                        select: { name: true },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    });
+
     const weeklyTechnicianSummary =
         weeklyTechnicianData.map((employee) => {
             const sales = employee.commissions.reduce(
@@ -168,15 +212,33 @@ export default async function ReceptionistPage() {
                 0
             );
 
-            const customerIds = new Set(
-                employee.commissions.flatMap(
-                    (commission) =>
-                        commission.sale.saleAppointments.map(
-                            (saleAppointment) =>
-                                saleAppointment.appointment.customerId
-                        )
-                )
-            );
+        const customerIds = new Set(
+            employee.commissions.flatMap((commission) =>
+                commission.sale.saleAppointments
+                    .filter(
+                        (saleAppointment) =>
+                            saleAppointment.appointment.employeeId === employee.id
+                    )
+                    .map(
+                        (saleAppointment) =>
+                            saleAppointment.appointment.customerId
+                    )
+            )
+        );
+
+            // Include checkout-added services attributed to this technician.
+            // The Set prevents counting the same customer twice.
+            for (const item of weeklyServiceItems) {
+                if (item.employeeId !== employee.id) {
+                    continue;
+                }
+
+                const customer = resolveSaleItemCustomer(item);
+
+                if (customer.status === "RESOLVED") {
+                    customerIds.add(customer.customerId);
+                }
+            }
 
             return {
                 id: employee.id,
@@ -192,6 +254,7 @@ export default async function ReceptionistPage() {
         await prisma.employee.findMany({
             where: {
                 active: true,
+                isBookable: true,
             },
             select: {
                 id: true,
@@ -212,6 +275,7 @@ export default async function ReceptionistPage() {
                                         appointment: {
                                             select: {
                                                 customerId: true,
+                                                employeeId: true,
                                             },
                                         },
                                     },
@@ -226,6 +290,46 @@ export default async function ReceptionistPage() {
             },
         });
 
+    const monthlyServiceItems = await prisma.saleLineItem.findMany({
+        where: {
+            itemType: "SERVICE",
+            employeeId: { not: null },
+            sale: {
+                createdAt: {
+                    gte: monthStart,
+                    lt: monthEnd,
+                },
+            },
+        },
+        select: {
+            employeeId: true,
+            appointment: {
+                select: {
+                    customerId: true,
+                    customer: {
+                        select: { name: true },
+                    },
+                },
+            },
+            sale: {
+                select: {
+                    saleAppointments: {
+                        select: {
+                            appointment: {
+                                select: {
+                                    customerId: true,
+                                    customer: {
+                                        select: { name: true },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    });
+
     const monthlyTechnicianSummary =
         monthlyTechnicianData.map((employee) => {
             const sales = employee.commissions.reduce(
@@ -234,15 +338,31 @@ export default async function ReceptionistPage() {
                 0
             );
 
-            const customerIds = new Set(
-                employee.commissions.flatMap(
-                    (commission) =>
-                        commission.sale.saleAppointments.map(
-                            (saleAppointment) =>
-                                saleAppointment.appointment.customerId
-                        )
-                )
-            );
+        const customerIds = new Set(
+            employee.commissions.flatMap((commission) =>
+                commission.sale.saleAppointments
+                    .filter(
+                        (saleAppointment) =>
+                            saleAppointment.appointment.employeeId === employee.id
+                    )
+                    .map(
+                        (saleAppointment) =>
+                            saleAppointment.appointment.customerId
+                    )
+            )
+        );
+
+        for (const item of monthlyServiceItems) {
+            if (item.employeeId !== employee.id) {
+                continue;
+            }
+
+            const customer = resolveSaleItemCustomer(item);
+
+            if (customer.status === "RESOLVED") {
+                customerIds.add(customer.customerId);
+            }
+        }
 
             return {
                 id: employee.id,
