@@ -758,6 +758,7 @@ export async function POST(request: Request) {
                     date: historicalDate,
                     notes: normalizedCustomerNotes || null,
                     createdAt: historicalTimestamp,
+                    source: "INTERNAL",
                 },
             });
 

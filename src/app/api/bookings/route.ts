@@ -501,6 +501,7 @@ export async function POST(request: Request) {
                 customerId: customer.id,
                 date: new Date(`${date}T00:00:00.000Z`),
                 notes: normalizedCustomerNotes || null,
+                source: "WEB",
               },
             });
 

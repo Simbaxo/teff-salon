@@ -103,6 +103,8 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  bookingReadReceipts BookingReadReceipt[]
 }
 
 model PushSubscription {
@@ -198,8 +200,26 @@ model Booking {
   notes     String?
   createdAt DateTime @default(now())
 
+  // Null for bookings created before source tracking.
+  source BookingSource?
+
   customer     Customer      @relation(fields: [customerId], references: [id])
   appointments Appointment[]
+
+  readReceipts BookingReadReceipt[]
+}
+
+model BookingReadReceipt {
+  bookingId Int
+  userId    Int
+
+  readAt DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([bookingId, userId])
+  @@index([userId, readAt])
 }
 
 model Appointment {
@@ -624,4 +644,9 @@ enum PayrollAdjustmentType {
 enum EmployeeCompensationType {
   COMMISSION
   FIXED_WEEKLY
+}
+
+enum BookingSource {
+  WEB
+  INTERNAL
 }

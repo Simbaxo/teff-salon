@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+    useState,
+    useEffect,
+    useCallback,
+    useRef,
+} from "react";
 import Link from "next/link";
 import {
     getTeffToday,
@@ -182,6 +187,17 @@ function urlBase64ToUint8Array(base64String: string) {
     );
 }
 
+type BookingNotification = {
+    bookingId: number;
+    customerName: string;
+    date: string;
+    createdAt: string;
+    startTime: string | null;
+    serviceNames: string[];
+    isRead: boolean;
+    readAt: string | null;
+};
+
 export default function ReceptionistPageClient({
     todaysSalesTotal,
     weeklySalesTotal,
@@ -198,6 +214,38 @@ export default function ReceptionistPageClient({
     const [activeTab, setActiveTab] = useState<
         "resumen" | "agenda" | "rendimiento"
     >("resumen");
+
+    // Unread online reservations for the authenticated staff member.
+    const [unreadBookingCount, setUnreadBookingCount] =
+        useState<number | null>(null);
+
+    const [bookingNotifications, setBookingNotifications] =
+        useState<BookingNotification[]>([]);
+
+    // Pagination for unread online reservations.
+    const [nextNotificationCursor, setNextNotificationCursor] =
+        useState<string | null>(null);
+
+    const [isLoadingMoreNotifications, setIsLoadingMoreNotifications] =
+        useState(false);
+
+    const [loadMoreNotificationsError, setLoadMoreNotificationsError] =
+        useState("");
+
+    const [reviewingBookingId, setReviewingBookingId] =
+        useState<number | null>(null);
+
+    const [notificationActionError, setNotificationActionError] =
+        useState("");
+
+    // Prevent stale notification responses from overwriting newer data.
+    const notificationGenerationRef = useRef(0);
+
+    const notificationRefreshControllerRef =
+        useRef<AbortController | null>(null);
+
+    const notificationPageControllerRef =
+        useRef<AbortController | null>(null);
 
     // Reception opens on today, but staff can review previous appointment dates.
     const [selectedAppointmentDate, setSelectedAppointmentDate] =
@@ -385,6 +433,135 @@ export default function ReceptionistPageClient({
             active = false;
         };
     }, []);
+
+    // Fetch the current staff member's unread reservations.
+    const refreshBookingNotifications = useCallback(async () => {
+        const generation = ++notificationGenerationRef.current;
+
+        // Cancel previous refresh and pagination requests.
+        notificationRefreshControllerRef.current?.abort();
+        notificationPageControllerRef.current?.abort();
+
+        const controller = new AbortController();
+        notificationRefreshControllerRef.current = controller;
+
+        try {
+            const response = await fetch(
+                "/api/booking-notifications",
+                {
+                    signal: controller.signal,
+                    cache: "no-store",
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    "No se pudieron cargar las notificaciones"
+                );
+            }
+
+            const data: unknown = await response.json();
+
+            if (
+                typeof data !== "object" ||
+                data === null ||
+                !("unreadCount" in data) ||
+                !Number.isSafeInteger(data.unreadCount) ||
+                (data.unreadCount as number) < 0 ||
+                !("notifications" in data) ||
+                !Array.isArray(data.notifications) ||
+                !("nextCursor" in data) ||
+                !(
+                    data.nextCursor === null ||
+                    typeof data.nextCursor === "string"
+                )
+            ) {
+                throw new Error(
+                    "Respuesta de notificaciones inválida"
+                );
+            }
+
+            // Only the latest request may update the dashboard.
+            if (
+                controller.signal.aborted ||
+                generation !== notificationGenerationRef.current
+            ) {
+                return;
+            }
+
+            setUnreadBookingCount(data.unreadCount as number);
+            setBookingNotifications(
+                data.notifications as BookingNotification[]
+            );
+            setNextNotificationCursor(data.nextCursor);
+            setLoadMoreNotificationsError("");
+        } catch (error) {
+            if (!controller.signal.aborted) {
+                console.error(
+                    "Error al actualizar notificaciones:",
+                    error
+                );
+            }
+        } finally {
+            if (notificationRefreshControllerRef.current === controller) {
+                notificationRefreshControllerRef.current = null;
+            }
+        }
+    }, []);
+
+    // Cancel notification requests when leaving the dashboard.
+    const cancelNotificationRequests = useCallback(() => {
+        notificationGenerationRef.current += 1;
+        notificationRefreshControllerRef.current?.abort();
+        notificationPageControllerRef.current?.abort();
+    }, []);
+
+
+    // Refresh on first load and when returning to TEFF.
+    useEffect(() => {
+        let active = true;
+
+        function handleFocus() {
+            void refreshBookingNotifications();
+        }
+
+        function handleVisibilityChange() {
+            if (document.visibilityState === "visible") {
+                void refreshBookingNotifications();
+            }
+        }
+
+        // Defer initial loading to avoid synchronous
+        // state updates during effect initialization.
+        void Promise.resolve().then(() => {
+            if (active) {
+                void refreshBookingNotifications();
+            }
+        });
+
+        window.addEventListener("focus", handleFocus);
+
+        document.addEventListener(
+            "visibilitychange",
+            handleVisibilityChange
+        );
+
+        return () => {
+            active = false;
+
+            cancelNotificationRequests();
+
+            window.removeEventListener("focus", handleFocus);
+
+            document.removeEventListener(
+                "visibilitychange",
+                handleVisibilityChange
+            );
+        };
+    }, [
+        refreshBookingNotifications,
+        cancelNotificationRequests,
+    ]);
 
     async function createScheduleBlock() {
         setBlockError("");
@@ -922,6 +1099,181 @@ export default function ReceptionistPageClient({
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, 5);
 
+
+    async function loadMoreBookingNotifications() {
+        if (
+            !nextNotificationCursor ||
+            isLoadingMoreNotifications ||
+            reviewingBookingId !== null ||
+            notificationPageControllerRef.current !== null
+        ) {
+            return;
+        }
+
+        const generation = notificationGenerationRef.current;
+        const cursor = nextNotificationCursor;
+        const controller = new AbortController();
+
+        notificationPageControllerRef.current = controller;
+
+        setIsLoadingMoreNotifications(true);
+        setLoadMoreNotificationsError("");
+
+        try {
+            const response = await fetch(
+                `/api/booking-notifications?cursor=${encodeURIComponent(cursor)}`,
+                {
+                    signal: controller.signal,
+                    cache: "no-store",
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error("Unable to load more notifications");
+            }
+
+            const data: unknown = await response.json();
+
+            if (
+                typeof data !== "object" ||
+                data === null ||
+                !("notifications" in data) ||
+                !Array.isArray(data.notifications) ||
+                !("nextCursor" in data) ||
+                !(
+                    data.nextCursor === null ||
+                    typeof data.nextCursor === "string"
+                ) ||
+                !("unreadCount" in data) ||
+                !Number.isSafeInteger(data.unreadCount) ||
+                (data.unreadCount as number) < 0
+            ) {
+                throw new Error("Invalid notification response");
+            }
+
+            // Ignore requests cancelled by a newer refresh.
+            if (
+                controller.signal.aborted ||
+                generation !== notificationGenerationRef.current
+            ) {
+                return;
+            }
+
+            const additionalNotifications =
+                data.notifications as BookingNotification[];
+
+            // Append without duplicating existing bookings.
+            setBookingNotifications((current) => {
+                const existingIds = new Set(
+                    current.map((item) => item.bookingId)
+                );
+
+                return [
+                    ...current,
+                    ...additionalNotifications.filter(
+                        (item) => !existingIds.has(item.bookingId)
+                    ),
+                ];
+            });
+
+            setNextNotificationCursor(data.nextCursor);
+            setUnreadBookingCount(data.unreadCount as number);
+        } catch (error) {
+            if (!controller.signal.aborted) {
+                console.error(error);
+
+                setLoadMoreNotificationsError(
+                    "No se pudieron cargar más reservas. Intenta nuevamente."
+                );
+            }
+        } finally {
+            if (
+                notificationPageControllerRef.current === controller
+            ) {
+                notificationPageControllerRef.current = null;
+                setIsLoadingMoreNotifications(false);
+            }
+        }
+    }
+
+    async function reviewBookingNotification(
+        notification: BookingNotification
+    ) {
+        if (reviewingBookingId !== null) return;
+
+        const bookingExists = appointments.some(
+            (appointment) =>
+                appointment.bookingId === notification.bookingId
+        );
+
+        if (!bookingExists) {
+            setNotificationActionError(
+                "Esta reserva no está disponible en la agenda."
+            );
+            return;
+        }
+
+        setReviewingBookingId(notification.bookingId);
+        setNotificationActionError("");
+
+        try {
+            const response = await fetch(
+                "/api/booking-notifications",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        bookingId: notification.bookingId,
+                    }),
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    "No se pudo marcar la reserva como leída."
+                );
+            }
+
+            // Update the local notification display only
+            // after the server confirms the read receipt.
+            setBookingNotifications((current) =>
+                current.map((item) =>
+                    item.bookingId === notification.bookingId
+                        ? { ...item, isRead: true }
+                        : item
+                )
+            );
+
+            // Retrieve the authoritative unread count from Neon.
+            // Also refresh the notification list and pagination cursor.
+            await refreshBookingNotifications();
+
+            // Open the existing booking in Agenda.
+            setSelectedAppointmentDate(notification.date);
+
+            const bookingKey =
+                `booking-${notification.bookingId}`;
+
+            setExpandedBookingKeys((current) =>
+                current.includes(bookingKey)
+                    ? current
+                    : [...current, bookingKey]
+            );
+
+            setActiveTab("agenda");
+        } catch (error) {
+            console.error(error);
+
+            setNotificationActionError(
+                "No se pudo revisar la reserva. Intenta nuevamente."
+            );
+        } finally {
+            setReviewingBookingId(null);
+        }
+    }
+
     if (isLoading) {
         return (
             <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
@@ -1015,7 +1367,19 @@ export default function ReceptionistPageClient({
                                 : "text-neutral-600 hover:bg-neutral-100"
                         }`}
                     >
-                        {label}
+                        <span className="flex items-center justify-center gap-2">
+                            {label}
+
+                            {value === "resumen" &&
+                                unreadBookingCount !== null &&
+                                unreadBookingCount > 0 && (
+                                    <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
+                                        {unreadBookingCount > 99
+                                            ? "99+"
+                                            : unreadBookingCount}
+                                    </span>
+                                )}
+                        </span>
                     </button>
                 ))}
             </div>
@@ -1121,6 +1485,101 @@ export default function ReceptionistPageClient({
                 </div>
             </div>
 
+            {notificationActionError && (
+                <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                    {notificationActionError}
+                </p>
+            )}
+
+            {/* Unread online reservations */}
+            <div className="mt-6 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-5">
+                <div className="mb-4 flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-black">
+                        🔔 Reservas sin leer
+                    </h2>
+
+                    <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700">
+                        {unreadBookingCount ?? 0} nuevas
+                    </span>
+                </div>
+
+                {bookingNotifications.filter(
+                    (notification) => !notification.isRead
+                ).length === 0 ? (
+                    <p className="rounded-lg bg-neutral-50 p-4 text-sm text-neutral-500">
+                        {unreadBookingCount === null
+                            ? "Cargando notificaciones..."
+                            : unreadBookingCount > 0
+                            ? "Hay reservas sin leer fuera de las más recientes."
+                            : "No tienes reservas pendientes por revisar."}
+                    </p>
+                ) : (
+                    <div className="space-y-3">
+                        {bookingNotifications
+                            .filter((notification) => !notification.isRead)
+                            .map((notification) => (
+                                <div
+                                    key={notification.bookingId}
+                                    className="rounded-lg border border-rose-200 bg-rose-50/40 p-3"
+                                >
+                                    <p className="font-semibold text-black">
+                                        {notification.customerName}
+                                    </p>
+
+                                    <p className="mt-1 text-sm text-neutral-600">
+                                        {notification.serviceNames
+                                            .slice(0, 2)
+                                            .join(", ")}
+                                    </p>
+
+                                    <p className="mt-1 text-xs text-neutral-500">
+                                        {notification.date}
+                                        {notification.startTime &&
+                                            ` · ${formatTime(notification.startTime)}`}
+                                    </p>
+
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            void reviewBookingNotification(notification)
+                                        }
+                                        disabled={reviewingBookingId !== null}
+                                        className="mt-3 rounded-lg bg-[#B76E79] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#A45E69] disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {reviewingBookingId === notification.bookingId
+                                            ? "Abriendo..."
+                                            : "Revisar reserva →"}
+                                    </button>
+                                </div>
+                            ))}
+                    </div>
+                )}
+                {nextNotificationCursor !== null && (
+                    <button
+                        type="button"
+                        onClick={() => void loadMoreBookingNotifications()}
+                        disabled={
+                            isLoadingMoreNotifications ||
+                            reviewingBookingId !== null
+                        }
+                        className="mt-4 w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {isLoadingMoreNotifications
+                            ? "Cargando reservas..."
+                            : "Cargar más reservas"}
+                    </button>
+                )}
+
+                {loadMoreNotificationsError && (
+                    <p
+                        role="alert"
+                        className="mt-3 text-sm text-red-700"
+                    >
+                        {loadMoreNotificationsError}
+                    </p>
+                )}
+            </div>
+
             <div className="mt-6 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-5">
                 <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
@@ -1171,17 +1630,18 @@ export default function ReceptionistPageClient({
 
                                     <p className="mt-1 text-xs text-neutral-500">
                                         {booking.date} · {formatTime(booking.startTime)}
-                                        <p className="mt-1 text-xs text-neutral-400">
-                                            Registrada:{" "}
-                                            {new Intl.DateTimeFormat("es-CO", {
-                                                day: "numeric",
-                                                month: "short",
-                                                hour: "numeric",
-                                                minute: "2-digit",
-                                                hour12: true,
-                                                timeZone: "America/Bogota",
-                                            }).format(new Date(booking.createdAt))}
-                                        </p>
+                                    </p>
+
+                                    <p className="mt-1 text-xs text-neutral-400">
+                                        Registrada:{" "}
+                                        {new Intl.DateTimeFormat("es-CO", {
+                                            day: "numeric",
+                                            month: "short",
+                                            hour: "numeric",
+                                            minute: "2-digit",
+                                            hour12: true,
+                                            timeZone: "America/Bogota",
+                                        }).format(new Date(booking.createdAt))}
                                     </p>
                                 </div>
 
