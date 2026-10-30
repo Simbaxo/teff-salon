@@ -882,6 +882,46 @@ export default function ReceptionistPageClient({
         }
     }
 
+    // Recent customer bookings, grouped by booking ID.
+    // Exclude legacy standalone appointments.
+    const recentBookings = groupReceptionBookings(
+        appointments.filter(
+            (appointment) => appointment.bookingId !== null
+        )
+    )
+        .map((group) => {
+            const createdAt = Math.min(
+                ...group.appointments.map((appointment) =>
+                    new Date(appointment.createdAt).getTime()
+                )
+            );
+
+            const firstAppointment = [...group.appointments].sort(
+                (a, b) => a.startTime.localeCompare(b.startTime)
+            )[0];
+
+            const serviceNames = [
+                ...new Set(
+                    group.appointments.flatMap((appointment) =>
+                        appointment.appointmentServices.map(
+                            (item) => item.service.nameEs
+                        )
+                    )
+                ),
+            ];
+
+            return {
+                ...group,
+                createdAt,
+                date: firstAppointment.date.slice(0, 10),
+                startTime: firstAppointment.startTime,
+                serviceNames,
+            };
+        })
+        .filter((group) => Number.isFinite(group.createdAt))
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, 5);
+
     if (isLoading) {
         return (
             <div className="mt-8 rounded-xl bg-white p-5 shadow-sm">
@@ -1081,6 +1121,78 @@ export default function ReceptionistPageClient({
                 </div>
             </div>
 
+            <div className="mt-6 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-5">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-lg font-bold text-black">
+                            Reservas Recientes
+                        </h2>
+                        <p className="mt-1 text-sm text-neutral-500">
+                            Últimas reservas registradas
+                        </p>
+                    </div>
+
+                    <span className="text-sm text-neutral-500">
+                        {recentBookings.length} reservas
+                    </span>
+                </div>
+
+                {recentBookings.length === 0 ? (
+                    <p className="rounded-lg bg-neutral-50 p-4 text-sm text-neutral-500">
+                        No hay reservas recientes para mostrar.
+                    </p>
+                ) : (
+                    <div className="space-y-3">
+                        {recentBookings.map((booking) => (
+                            <button
+                                key={booking.groupKey}
+                                type="button"
+                                onClick={() => {
+                                    setSelectedAppointmentDate(booking.date);
+                                    setExpandedBookingKeys((current) =>
+                                        current.includes(booking.groupKey)
+                                            ? current
+                                            : [...current, booking.groupKey]
+                                    );
+                                    setActiveTab("agenda");
+                                }}
+                                className="flex w-full items-center justify-between gap-3 rounded-lg border border-neutral-200 p-3 text-left transition-colors hover:bg-neutral-50"
+                            >
+                                <div className="min-w-0">
+                                    <p className="font-semibold text-black">
+                                        {booking.customer.name}
+                                    </p>
+
+                                    <p className="mt-1 text-sm text-neutral-600">
+                                        {booking.serviceNames.slice(0, 2).join(", ")}
+                                        {booking.serviceNames.length > 2 &&
+                                            ` +${booking.serviceNames.length - 2} servicios más`}
+                                    </p>
+
+                                    <p className="mt-1 text-xs text-neutral-500">
+                                        {booking.date} · {formatTime(booking.startTime)}
+                                        <p className="mt-1 text-xs text-neutral-400">
+                                            Registrada:{" "}
+                                            {new Intl.DateTimeFormat("es-CO", {
+                                                day: "numeric",
+                                                month: "short",
+                                                hour: "numeric",
+                                                minute: "2-digit",
+                                                hour12: true,
+                                                timeZone: "America/Bogota",
+                                            }).format(new Date(booking.createdAt))}
+                                        </p>
+                                    </p>
+                                </div>
+
+                                <span className="shrink-0 text-sm font-semibold text-[#B76E79]">
+                                    Ver →
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
                 </section>
             )}
 
