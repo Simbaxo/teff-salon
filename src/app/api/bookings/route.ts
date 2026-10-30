@@ -1,11 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import { sendPushNotification } from "@/lib/push";
 import { normalizePhoneNumber } from "@/lib/phone";
+import { checkSlotAvailability } from "@/lib/booking/check-slot-availability";
+import { shouldSuppressBookingPush } from "@/lib/booking/test-push-safety";
 import {
   getTeffCurrentMinutes,
   getTeffDayOfWeek,
   getTeffToday,
 } from "@/lib/datetime";
+
+// Validate notification test configuration at module initialization.
+// Production and ordinary Development bookings retain notifications.
+// Unsafe test configurations fail before any booking is processed.
+const suppressBookingPush = shouldSuppressBookingPush({
+  NODE_ENV: process.env.NODE_ENV,
+  DATABASE_URL: process.env.DATABASE_URL,
+  TEFF_BOOKING_TEST_DISABLE_PUSH:
+    process.env.TEFF_BOOKING_TEST_DISABLE_PUSH,
+});
 
 export async function POST(request: Request) {
   try {
@@ -242,13 +254,18 @@ export async function POST(request: Request) {
     );
   }
 
-    // Load the active services requested by the customer
+    // Match the public services API ordering.
+    // Frontend and backend must schedule services
+    // in the same sequential order.
     const services = await prisma.service.findMany({
       where: {
         id: {
           in: uniqueServiceIds,
         },
         active: true,
+      },
+      orderBy: {
+        id: "asc",
       },
     });
 
@@ -343,10 +360,6 @@ export async function POST(request: Request) {
       },
     });
 
-    const allowedAddonIds = new Set(
-      serviceAddonRelations.map((relation) => relation.addonId)
-    );
-
     // Every add-on must be valid for the specific service it is assigned to
     const hasInvalidAddon = addonAssignments.some(
       (assignment: AddonAssignmentInput) =>
@@ -408,28 +421,6 @@ export async function POST(request: Request) {
       };
     });
 
-    // Find technicians who are qualified for every selected nail service.
-    // This keeps "Any Technician" from assigning different nail specialists.
-    const nailBlocks = serviceBlocks.filter(
-      (block) => block.service.category === "NAILS"
-    );
-
-    const commonNailEmployeeIds: number[] =
-      nailBlocks.length > 0
-        ? nailBlocks[0].qualifiedEmployeeIds.filter((employeeId) =>
-            nailBlocks.every((block) =>
-              block.qualifiedEmployeeIds.includes(employeeId)
-            )
-          )
-        : [];
-
-    // The customer-facing visit is currently scheduled sequentially,
-    // so its total duration is the sum of all service work blocks.
-    const totalDuration = serviceBlocks.reduce(
-      (total, block) => total + block.duration,
-      0
-    );
-
     // TEFF business hours depend on the day of the week
     const dayOfWeek = getTeffDayOfWeek(date);
 
@@ -470,13 +461,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
-    // Approval-required services are requests until the salon confirms them
-    const requiresApproval = services.some(
-      (service) => service.requiresApproval
-    );
-
-    const status = requiresApproval ? "REQUESTED" : "BOOKED";
 
     // Retry serializable transactions if two booking race at the same time
     const maxAttempts = 3;
@@ -537,28 +521,27 @@ export async function POST(request: Request) {
                 .padStart(2, "0")}`;
             }
 
-            let blockStart = timeToMinutes(startTime);
+            // Load availability for the entire booking inside
+            // the existing Serializable transaction.
+            const bookingDate = new Date(
+              `${date}T00:00:00.000Z`
+            );
 
-            const createdAppointments = [];
+            const qualifiedEmployeeIds = [
+              ...new Set(
+                serviceBlocks.flatMap(
+                  (block) => block.qualifiedEmployeeIds
+                )
+              ),
+            ];
 
-            // When the customer chooses "Any Technician" for multiple nail services,
-            // resolve the first nail block normally and keep that same technician
-            // for the remaining nail services in this booking.
-            let resolvedNailEmployeeId: number | null = null;
-
-            // Each service becomes its own technician work block.
-            // Customer bookings are scheduled sequentially for now.
-            for (const block of serviceBlocks) {
-              const blockEnd = blockStart + block.duration;
-
-              // Only technicians qualified for this specific service
-              // need to be checked for schedule conflicts.
-              const existingAppointments = await tx.appointment.findMany({
+            const existingAppointments =
+              await tx.appointment.findMany({
                 where: {
+                  date: bookingDate,
                   employeeId: {
-                    in: block.qualifiedEmployeeIds,
+                    in: qualifiedEmployeeIds,
                   },
-                  date: new Date(`${date}T00:00:00.000Z`),
                   status: {
                     in: [
                       "BOOKED",
@@ -570,155 +553,81 @@ export async function POST(request: Request) {
                 },
               });
 
-              // Schedule blocks represent technician unavailability such as
-              // vacation, late arrival, early departure, or personal time.
-              const existingScheduleBlocks =
-                  await tx.employeeScheduleBlock.findMany({
-                      where: {
-                          employeeId: {
-                              in: block.qualifiedEmployeeIds,
-                          },
-                          date: new Date(
-                              `${date}T00:00:00.000Z`
-                          ),
-                      },
-                  });
+            const existingScheduleBlocks =
+              await tx.employeeScheduleBlock.findMany({
+                where: {
+                  date: bookingDate,
+                  employeeId: {
+                    in: qualifiedEmployeeIds,
+                  },
+                },
+              });
 
-              // Keep only technicians who are free during this service block.
-              const availableEmployeeIds =
-                block.qualifiedEmployeeIds.filter((candidateEmployeeId) => {
-                  const hasConflict = existingAppointments.some(
-                    (appointment) => {
-                      if (
-                        appointment.employeeId !== candidateEmployeeId
-                      ) {
-                        return false;
-                      }
+            // Calculate existing workload for Any Technician.
+            const scheduledMinutesByEmployeeId:
+              Record<number, number> = {};
 
-                      const existingStart = timeToMinutes(
-                        appointment.startTime
-                      );
+            for (const appointment of existingAppointments) {
+              scheduledMinutesByEmployeeId[appointment.employeeId] =
+                (scheduledMinutesByEmployeeId[appointment.employeeId] ?? 0) +
+                appointment.duration;
+            }
 
-                      const existingEnd =
-                        existingStart + appointment.duration;
+            // Appointments and schedule blocks both prevent
+            // assigning a technician during their occupied time.
+            const busyIntervals = [
+              ...existingAppointments.map((appointment) => {
+                const start = timeToMinutes(
+                  appointment.startTime
+                );
 
-                      return (
-                        blockStart < existingEnd &&
-                        blockEnd > existingStart
-                      );
-                    }
-                  );
+                return {
+                  employeeId: appointment.employeeId,
+                  startMinutes: start,
+                  endMinutes: start + appointment.duration,
+                };
+              }),
 
-                  const hasScheduleBlockConflict =
-                    existingScheduleBlocks.some(
-                        (scheduleBlock) => {
-                            if (
-                                scheduleBlock.employeeId !==
-                                candidateEmployeeId
-                            ) {
-                                return false;
-                            }
+              ...existingScheduleBlocks.map((block) => ({
+                employeeId: block.employeeId,
+                startMinutes: timeToMinutes(block.startTime),
+                endMinutes: timeToMinutes(block.endTime),
+              })),
+            ];
 
-                            const blockedStart =
-                                timeToMinutes(
-                                    scheduleBlock.startTime
-                                );
+            // Validate the complete sequence, including add-ons.
+            const availability = checkSlotAvailability({
+              startMinutes: timeToMinutes(startTime),
+              blocks: serviceBlocks.map((block) => ({
+                serviceId: block.service.id,
+                category: block.service.category,
+                duration: block.duration,
+                requestedEmployeeId: block.requestedEmployeeId,
+                qualifiedEmployeeIds: block.qualifiedEmployeeIds,
+              })),
+              busyIntervals,
+              scheduledMinutesByEmployeeId,
+            });
 
-                            const blockedEnd =
-                                timeToMinutes(
-                                    scheduleBlock.endTime
-                                );
+            if (!availability.available) {
+              throw new Error("BOOKING_CONFLICT");
+            }
 
-                            return (
-                                blockStart < blockedEnd &&
-                                blockEnd > blockedStart
-                            );
-                        }
-                    );
+            const createdAppointments = [];
 
-                  return (
-                      !hasConflict &&
-                      !hasScheduleBlockConflict
-                  );
-                });
+            // Create appointments using the verified assignments.
+            for (const [index, block] of serviceBlocks.entries()) {
+              const assignment = availability.assignments[index];
 
-              const isNailService = block.service.category === "NAILS";
-
-              // Respect a specific technician choice when one was requested.
-              const selectableEmployeeIds: number[] =
-                block.requestedEmployeeId === "any"
-                  ? isNailService
-                    ? resolvedNailEmployeeId !== null
-                      // After choosing the nail tech, keep that same tech for later nail blocks.
-                      ? availableEmployeeIds.filter(
-                          (candidateEmployeeId: number) =>
-                            candidateEmployeeId === resolvedNailEmployeeId
-                        )
-                      // For the first nail block, only consider techs qualified
-                      // for every nail service in this booking.
-                      : availableEmployeeIds.filter(
-                          (candidateEmployeeId: number) =>
-                            commonNailEmployeeIds.includes(candidateEmployeeId)
-                        )
-                    : availableEmployeeIds
-                  : availableEmployeeIds.filter(
-                      (candidateEmployeeId: number) =>
-                        candidateEmployeeId === block.requestedEmployeeId
-                    );
-
-              if (selectableEmployeeIds.length === 0) {
+              if (
+                !assignment ||
+                assignment.serviceId !== block.service.id
+              ) {
                 throw new Error("BOOKING_CONFLICT");
               }
 
-              // "Any Technician" is balanced by scheduled workload.
-              // A specifically selected technician always keeps that choice.
-              const assignedEmployeeId: number =
-                block.requestedEmployeeId === "any"
-                  ? selectableEmployeeIds.reduce(
-                      (bestEmployeeId: number, currentEmployeeId: number) => {
-                        const scheduledMinutes = (candidateId: number) =>
-                          existingAppointments
-                            .filter(
-                              (appointment) =>
-                                appointment.employeeId === candidateId
-                            )
-                            .reduce(
-                              (total, appointment) =>
-                                total + appointment.duration,
-                              0
-                            );
-
-                        const bestMinutes =
-                          scheduledMinutes(bestEmployeeId);
-
-                        const currentMinutes =
-                          scheduledMinutes(currentEmployeeId);
-
-                        if (currentMinutes < bestMinutes) {
-                          return currentEmployeeId;
-                        }
-
-                        if (
-                          currentMinutes === bestMinutes &&
-                          currentEmployeeId < bestEmployeeId
-                        ) {
-                          return currentEmployeeId;
-                        }
-
-                        return bestEmployeeId;
-                      }
-                    )
-                  : selectableEmployeeIds[0];
-
-              // Once "Any Technician" resolves for the first nail service,
-              // keep that technician for the rest of this booking's nail services
-              if (
-                isNailService &&
-                block.requestedEmployeeId === "any" &&
-                resolvedNailEmployeeId === null
-              ) {
-                resolvedNailEmployeeId = assignedEmployeeId;
-              }
+              const blockStart = assignment.startMinutes;
+              const assignedEmployeeId = assignment.employeeId;
 
               // Approval applies to the individual service block.
               // Example: nails may be BOOKED while lashes are REQUESTED.
@@ -763,9 +672,6 @@ export async function POST(request: Request) {
               });
 
               createdAppointments.push(appointment);
-
-              // The next service begins when this one finishes.
-              blockStart = blockEnd;
             }
 
             return {
@@ -818,8 +724,11 @@ export async function POST(request: Request) {
     // Notify registered TEFF staff devices after the booking transaction
     // succeeds. Push failures must never cause a valid booking to fail
     try {
-      const pushSubscriptions =
-        await prisma.pushSubscription.findMany({
+      // In the approved booking test environment, do not load
+      // subscriptions or attempt to deliver push notifications.
+      const pushSubscriptions = suppressBookingPush
+        ? []
+        : await prisma.pushSubscription.findMany({
           where: {
             user: {
               active: true,

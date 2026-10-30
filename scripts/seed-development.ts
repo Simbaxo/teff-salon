@@ -48,7 +48,7 @@ const services: ServiceSeed[] = [
         nameEn: "Gel Manicure",
         category: "NAILS",
         price: 60000,
-        estimatedDuration: 80,
+        estimatedDuration: 60,
         requiresApproval: false,
     },
     {
@@ -56,7 +56,7 @@ const services: ServiceSeed[] = [
         nameEn: "Gel Pedicure",
         category: "NAILS",
         price: 60000,
-        estimatedDuration: 80,
+        estimatedDuration: 60,
         requiresApproval: false,
     },
     {
@@ -445,7 +445,7 @@ const addons: AddonSeed[] = [
         nameEs: "Diseño Elaborado",
         nameEn: "Detailed Nail Art",
         price: 20000,
-        estimatedDuration: 30,
+        estimatedDuration: 15,
     },
     {
         nameEs: "Reparación / Alargamiento de Uña",

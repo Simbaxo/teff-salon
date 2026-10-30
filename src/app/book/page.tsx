@@ -9,6 +9,9 @@ import {
   getTeffDayOfWeek,
   getTeffToday,
 } from "@/lib/datetime";
+import {
+    checkSlotAvailability,
+} from "@/lib/booking/check-slot-availability";
 
 // Temporary service photos, mapped by database service ID.
 // Replace these files with real TEFF photography as it becomes available.
@@ -183,12 +186,9 @@ export default function BookPage() {
     const [selectedAddons, setSelectedAddons] = useState<
         { addonId: number; serviceId: number }[]
     >([]);
-    // "any" lets the salon automatically assign an available qualified technician
-    const [selectedEmployee, setSelectedEmployee] = 
-        useState<number | "any" | null>(null);
     // Stores the technician choice for each selected service
     // This allows one booking to contain services from different specialists
-    const [selectedEmployeesByService, setSelectedEmployeesByService] =
+    const [technicianChoicesByService, setSelectedEmployeesByService] =
         useState<Record<number, number | "any">>({});
     const [selectedDate, setSelectedDate] = useState(
         getTeffToday()
@@ -356,24 +356,21 @@ export default function BookPage() {
         )
         .map((relation) => relation.addonId);
 
-    // Remove add-on selections that are no longer valid
-    // when the customer changes their selected services.
-    useEffect(() => {
-        setSelectedAddons((current) =>
-            current.filter((selection) =>
-                selectedServices.includes(selection.serviceId) &&
-                serviceAddons.some(
-                    (relation) =>
-                        relation.addonId === selection.addonId &&
-                        relation.serviceId === selection.serviceId
-                )
-            )
-        );
-    }, [selectedServices, serviceAddons]);
+    // Show Nail Repair first in the customer booking add-ons.
+    // Preserve the existing order of all other add-ons.
+    const availableAddons = addons
+        .filter((addon) => availableAddonIds.includes(addon.id))
+        .sort((a, b) => {
+            const aIsRepair =
+                a.nameEn === "Nail Repair / Extension";
+            const bIsRepair =
+                b.nameEn === "Nail Repair / Extension";
 
-    const availableAddons = addons.filter((addon) =>
-        availableAddonIds.includes(addon.id)
-    );
+            if (aIsRepair) return -1;
+            if (bIsRepair) return 1;
+
+            return 0;
+        });
 
     // Select or remove an add-on for a specific service.
     // The same add-on can be selected once for each service.
@@ -427,23 +424,23 @@ export default function BookPage() {
         );
 
     function toggleService(serviceId: number) {
+        const isRemoving = selectedServices.includes(serviceId);
+
         setSelectedServices((current) =>
             current.includes(serviceId)
                 ? current.filter((id) => id !== serviceId)
                 : [...current, serviceId]
         );
-    }
 
-    // Calculate Qualified Employees
-    const qualifiedEmployees = employees.filter((employee) =>
-        selectedServices.every((serviceId) =>
-            employeeServices.some(
-                (relation) =>
-                    relation.employeeId === employee.id &&
-                    relation.serviceId === serviceId
-            )
-        )
-    );
+        // Remove add-ons belonging to a removed service.
+        if (isRemoving) {
+            setSelectedAddons((current) =>
+                current.filter(
+                    (selection) => selection.serviceId !== serviceId
+                )
+            );
+        }
+    }
 
     // Find the technicians qualified for each individual selected service
     // This supports bookings that may require different specialist
@@ -461,6 +458,38 @@ export default function BookPage() {
             qualifiedEmployees: qualifiedForService,
         };
     });
+
+    // Resolve technician choices during rendering instead of
+    // synchronizing derived state inside an effect.
+    const selectedEmployeesByService: Record<number, number | "any"> = {};
+
+    for (const assignment of serviceAssignments) {
+        const serviceId = assignment.service.id;
+        const qualified = assignment.qualifiedEmployees;
+        const savedChoice = technicianChoicesByService[serviceId];
+
+        // Automatically assign the only qualified technician.
+        if (qualified.length === 1) {
+            selectedEmployeesByService[serviceId] = qualified[0].id;
+            continue;
+        }
+
+        // Preserve an explicitly selected, qualified technician.
+        if (
+            typeof savedChoice === "number" &&
+            qualified.some(
+                (employee) => employee.id === savedChoice
+            )
+        ) {
+            selectedEmployeesByService[serviceId] = savedChoice;
+            continue;
+        }
+
+        // Otherwise default to Any Technician.
+        if (qualified.length > 1) {
+            selectedEmployeesByService[serviceId] = "any";
+        }
+    }
 
     // Nail services share one customer-facing technician choice.
     // Staff can split the individual appointments later if needed.
@@ -500,42 +529,6 @@ export default function BookPage() {
             )
             : [];
 
-    useEffect(() => {
-        setSelectedEmployeesByService((current) => {
-            const next: Record<number, number | "any"> = {};
-
-            for (const assignment of serviceAssignments) {
-                const serviceId = assignment.service.id;
-                const qualified = assignment.qualifiedEmployees;
-
-                // If only one technician can perform this service
-                // assign them automatically
-                if (qualified.length === 1) {
-                    next[serviceId] = qualified[0].id
-                    continue;
-                }
-
-                // Preserve an existing valid technician choice
-                const currentChoice = current[serviceId];
-
-                if (
-                    typeof currentChoice === "number" &&
-                    qualified.some((employee) => employee.id === currentChoice)
-                ) {
-                    next[serviceId] = currentChoice;
-                    continue;
-                }
-
-                // Multiple qualified technicians default to Any Technician
-                if (qualified.length > 1) {
-                    next[serviceId] = "any";
-                }
-            }
-
-            return next;
-        });
-    }, [selectedServices, employees, employeeServices]);
-
     // Every selected service must have a technician choice before scheduling
     const allServicesHaveTechnicians =
         serviceAssignments.length > 0 &&
@@ -544,35 +537,6 @@ export default function BookPage() {
                 qualifiedEmployees.length > 0 &&
                 selectedEmployeesByService[service.id] !== undefined
         );
-
-    useEffect(() => {
-        // No technician can perform the current service combination
-        if (qualifiedEmployees.length === 0) {
-            setSelectedEmployee(null);
-            return;
-        }
-
-        // "Any Technician" is the default for customers
-        if (selectedEmployee === null) {
-            setSelectedEmployee("any");
-            return;
-        }
-
-        // Keep "any" selected while qualified technicians are available
-        if (selectedEmployee === "any") {
-            return;
-        }
-
-        // Reset to "any" if a specifically selected technician is no longer
-        // qualifed after the customer changes their services
-        if (
-            !qualifiedEmployees.some(
-                (employee) => employee.id == selectedEmployee
-            )
-        ) {
-            setSelectedEmployee("any");
-        }
-    }, [selectedEmployee, qualifiedEmployees])
 
     // Calculate Price
     const serviceTotal = selectedServiceDetails.reduce(
@@ -636,10 +600,69 @@ export default function BookPage() {
             ? 17 * 60 // Sunday: 5:00 PM
             : 18 * 60 + 30; // Monday-Saturday: 6:30 PM
 
+    // Build the complete duration for each selected service.
+    // Add-ons extend only the service they belong to.
+    const availabilityServiceBlocks = serviceAssignments.map(
+        ({ service, qualifiedEmployees }) => {
+            const addonMinutes = selectedAddonDetails
+                .filter((addon) => addon.serviceId === service.id)
+                .reduce(
+                    (total, addon) =>
+                        total + addon.estimatedDuration,
+                    0
+                );
+
+            return {
+                serviceId: service.id,
+                category: service.category,
+                duration: service.estimatedDuration + addonMinutes,
+                requestedEmployeeId:
+                    selectedEmployeesByService[service.id],
+                qualifiedEmployeeIds: qualifiedEmployees.map(
+                    (employee) => employee.id
+                ),
+            };
+        }
+    );
+
+    // Include both existing appointments and schedule blocks.
+    const busyIntervals = [
+        ...bookedAppointments
+            .filter(
+                (appointment) =>
+                    appointment.date.slice(0, 10) === selectedDate
+            )
+            .map((appointment) => {
+                const startMinutes = timeToMinutes(
+                    appointment.startTime
+                );
+
+                return {
+                    employeeId: appointment.employeeId,
+                    startMinutes,
+                    endMinutes:
+                        startMinutes + appointment.duration,
+                };
+            }),
+
+        ...scheduleBlocks
+            .filter(
+                (block) =>
+                    block.date.slice(0, 10) === selectedDate
+            )
+            .map((block) => ({
+                employeeId: block.employeeId,
+                startMinutes: timeToMinutes(block.startTime),
+                endMinutes: timeToMinutes(block.endTime),
+            })),
+    ];
+
+    // Evaluate the entire sequential booking rather than
+    // checking each service independently.
     const availableTimeSlots = timeSlots.filter((time) => {
         const bookingStart = timeToMinutes(time);
 
-        // Hide time slots that have already passed today in Medellin
+        // Prevent selecting a time already passed in Medellín.
         if (
             selectedDate === getTeffToday() &&
             bookingStart <= getTeffCurrentMinutes()
@@ -647,95 +670,24 @@ export default function BookPage() {
             return false;
         }
 
-        // Appointments may finish after closing, but must start
-        // no later than the final permitted booking time.
+        // Preserve TEFF's latest permitted start time.
         if (bookingStart > latestStartTime) {
             return false;
         }
 
-        let serviceStart = bookingStart;
-
-        // Every service must have an available qualified technician
-        // during its own sequential part of the booking
-        for (const assignment of serviceAssignments) {
-            const service = assignment.service;
-            const serviceEnd =
-                serviceStart + service.estimatedDuration;
-
-            const selectedForService =
-                selectedEmployeesByService[service.id];
-            
-            const isEmployeeAvailable = (employeeId: number) => {
-                const hasConflict = bookedAppointments.some((appointment) => {
-                    if (
-                        appointment.employeeId !== employeeId ||
-                        appointment.date.slice(0, 10) !== selectedDate
-                    ) {
-                        return false;
-                    }
-
-                    const bookedStart =
-                        timeToMinutes(appointment.startTime);
-                    const bookedEnd =
-                        bookedStart + appointment.duration;
-
-                    return (
-                        serviceStart < bookedEnd &&
-                        serviceEnd > bookedStart
-                    );
-                });
-
-                const hasScheduleBlockConflict =
-                    scheduleBlocks.some((block) => {
-                        if (
-                            block.employeeId !== employeeId ||
-                            block.date.slice(0, 10) !== selectedDate
-                        ) {
-                            return false;
-                        }
-
-                        const blockedStart =
-                            timeToMinutes(block.startTime);
-
-                        const blockedEnd =
-                            timeToMinutes(block.endTime);
-
-                        return (
-                            serviceStart < blockedEnd &&
-                            serviceEnd > blockedStart
-                        );
-                    });
-
-                return !hasConflict && !hasScheduleBlockConflict;
-            }
-
-            let hasAvailableTechnician = false;
-
-            if (selectedForService === "any") {
-                hasAvailableTechnician =
-                    assignment.qualifiedEmployees.some((employee) =>
-                        isEmployeeAvailable(employee.id)
-                    );
-            } else if (typeof selectedForService === "number") {
-                hasAvailableTechnician =
-                    isEmployeeAvailable(selectedForService);
-            }
-
-            if (!hasAvailableTechnician) {
-                return false;
-            }
-
-            // The next service begins when this service finishes
-            serviceStart = serviceEnd;
+        // Do not offer times before technician choices are ready.
+        if (!allServicesHaveTechnicians) {
+            return false;
         }
 
-        return true;
-    })
+        const result = checkSlotAvailability({
+            startMinutes: bookingStart,
+            blocks: availabilityServiceBlocks,
+            busyIntervals,
+        });
 
-    // Find The Selected Technician Details
-    const selectedEmployeeDetails = employees.find(
-        (employee) => employee.id === selectedEmployee
-    );
+        return result.available;
+    });
 
     // Show the full phone number without duplicating a country code
     const displayCustomerPhone = noPhone
