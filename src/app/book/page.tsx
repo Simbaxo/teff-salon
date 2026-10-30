@@ -1253,6 +1253,35 @@ export default function BookPage() {
                                     : "Get directions with Google Maps ↗"}
                             </a>
                         </div>
+
+                        {/* WhatsApp support after booking */}
+                        <a
+                            href={`https://wa.me/573505894026?text=${encodeURIComponent(
+                                language === "es"
+                                    ? "Hola, tengo una consulta sobre mi reserva en TEFF Beauty Salon."
+                                    : "Hello, I have a question about my booking at TEFF Beauty Salon."
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-5 flex min-h-11 items-center justify-center gap-2 text-sm font-medium text-[#377A55] transition-colors hover:text-[#245C3C]"
+                        >
+                            <svg
+                                aria-hidden="true"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.7"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="h-5 w-5"
+                            >
+                                <path d="M20.5 11.5a8.5 8.5 0 0 1-12.6 7.4L3 20l1.2-4.6A8.5 8.5 0 1 1 20.5 11.5Z" />
+                            </svg>
+
+                            {language === "es"
+                                ? "Consultar por WhatsApp"
+                                : "Ask us on WhatsApp"}
+                        </a>
                         
                         <button
                             type="button"
@@ -2693,6 +2722,76 @@ export default function BookPage() {
                     )}
                 </div>
             )}
+
+            {/* Minimal booking help */}
+            {!bookingSuccess && (
+                <div className="mx-auto mt-8 max-w-2xl text-center">
+                    <a
+                        href={`https://wa.me/573505894026?text=${encodeURIComponent(
+                            language === "es"
+                                ? "Hola, necesito ayuda para reservar una cita en TEFF Beauty Salon."
+                                : "Hello, I need help booking an appointment at TEFF Beauty Salon."
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 text-sm font-medium text-[#377A55] transition-colors hover:text-[#245C3C]"
+                    >
+                        <svg
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.7"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="h-5 w-5"
+                        >
+                            <path d="M20.5 11.5a8.5 8.5 0 0 1-12.6 7.4L3 20l1.2-4.6A8.5 8.5 0 1 1 20.5 11.5Z" />
+                        </svg>
+
+                        {language === "es"
+                            ? "¿Necesitas ayuda? Escríbenos"
+                            : "Need help? Message us"}
+                    </a>
+                </div>
+            )}
+
+            {/* Instagram footer */}
+            <footer className="mx-auto mt-10 w-full max-w-2xl border-t border-neutral-200 px-4 pt-8 text-center">
+                <p className="text-sm text-neutral-500">
+                    {language === "es"
+                        ? "Más inspiración para tu próxima visita"
+                        : "More inspiration for your next visit"}
+                </p>
+
+                <a
+                    href="https://www.instagram.com/teffbeautysalon/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 text-sm font-medium text-neutral-700 transition-colors hover:text-[#B76E79]"
+                >
+                    <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-5 w-5"
+                    >
+                        <rect x="2.5" y="2.5" width="19" height="19" rx="5" />
+                        <circle cx="12" cy="12" r="4" />
+                        <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+                    </svg>
+
+                    @teffbeautysalon
+                </a>
+
+                <p className="mt-5 text-xs text-neutral-400">
+                    © 2026 TEFF Beauty Salon · Medellín
+                </p>
+            </footer>
         </main>
     )
 }
