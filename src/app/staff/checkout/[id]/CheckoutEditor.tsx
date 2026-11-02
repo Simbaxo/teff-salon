@@ -137,8 +137,11 @@ export default function CheckoutEditor({
     const [serviceAddonRelations, setServiceAddonRelations] = useState<
         ServiceAddonRelation[]
     >([]);
-    // Discount entered by staff in Colombian pesos
-    const [discount, setDiscount] = useState(0);
+    // Staff can enter a fixed COP discount or a percentage.
+    const [discountMode, setDiscountMode] =
+        useState<"FIXED" | "PERCENT">("FIXED");
+
+    const [discountInput, setDiscountInput] = useState(0);
     // Stores how much was paid using each payment method
     const [payments, setPayments] = useState({
         CASH: 0,
@@ -191,6 +194,20 @@ export default function CheckoutEditor({
     const checkoutSubtotal = servicesTotal + addonsTotal;
 
     // Never allow a discount to make the final total negative
+    const validDiscountInput = Number.isFinite(discountInput)
+        ? Math.max(0, discountInput)
+        : 0;
+
+    const discount =
+        discountMode === "PERCENT"
+            ? Math.round(
+                checkoutSubtotal *
+                Math.min(validDiscountInput, 100) / 100
+            )
+            : Math.round(
+                Math.min(validDiscountInput, checkoutSubtotal)
+            );
+
     const finalTotal = Math.max(checkoutSubtotal - discount, 0);
 
     // Cash tips go directly to technicians.
@@ -398,10 +415,6 @@ export default function CheckoutEditor({
             new Set(
                 visitAppointments.map((item) => item.employeeId)
             ).size > 1;
-
-        const alreadySelected = selectedAddons.some(
-            (item) => item.addon.id === addon.id
-        );
 
         if (
             !attributedCheckoutEnabled &&
@@ -981,27 +994,85 @@ export default function CheckoutEditor({
                 </div>
             </div>
 
-            {/* Staff can enter a fixed discount in COP */}
+            {/* Staff discount: fixed amount or percentage */}
             <div className="mt-4">
-                <label 
+                <label
                     htmlFor="discount"
                     className="text-sm font-semibold text-black"
                 >
                     Descuento
                 </label>
 
-                <input 
+                <div className="mt-2 flex gap-2">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setDiscountMode("FIXED");
+                            setDiscountInput(0);
+                        }}
+                        className={`rounded-lg px-4 py-2 text-sm font-medium ${
+                            discountMode === "FIXED"
+                                ? "bg-black text-white"
+                                : "border border-neutral-300 bg-white text-black"
+                        }`}
+                    >
+                        Valor fijo ($)
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setDiscountMode("PERCENT");
+                            setDiscountInput(0);
+                        }}
+                        className={`rounded-lg px-4 py-2 text-sm font-medium ${
+                            discountMode === "PERCENT"
+                                ? "bg-black text-white"
+                                : "border border-neutral-300 bg-white text-black"
+                        }`}
+                    >
+                        Porcentaje (%)
+                    </button>
+                </div>
+
+                <input
                     id="discount"
-                    type="text"
+                    type="number"
                     min="0"
-                    onFocus={selectZeroValue}
-                    max={checkoutSubtotal}
-                    value={discount}
-                    onChange={(event) =>
-                        setDiscount(Number(event.target.value))
+                    max={
+                        discountMode === "PERCENT"
+                            ? 100
+                            : checkoutSubtotal
                     }
-                    className="mt-2 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
+                    step={discountMode === "PERCENT" ? "0.01" : "1"}
+                    onFocus={selectZeroValue}
+                    value={discountInput}
+                    onChange={(event) => {
+                        const value = Number(event.target.value);
+
+                        setDiscountInput(
+                            Number.isFinite(value)
+                                ? Math.max(
+                                    0,
+                                    Math.min(
+                                        value,
+                                        discountMode === "PERCENT"
+                                            ? 100
+                                            : checkoutSubtotal
+                                    )
+                                )
+                                : 0
+                        );
+                    }}
+                    className="mt-3 w-full rounded-xl border border-neutral-300 px-4 py-3 text-black"
                 />
+
+                <p className="mt-2 text-sm text-neutral-500">
+                    Descuento aplicado:{" "}
+                    <span className="font-semibold text-black">
+                        ${discount.toLocaleString("es-CO")} COP
+                    </span>
+                </p>
             </div>
 
             {/* Tips are assigned directly to the technicians who worked on the visit. */}
