@@ -105,6 +105,8 @@ model User {
   updatedAt DateTime @updatedAt
 
   bookingReadReceipts BookingReadReceipt[]
+  // Weekly sales reviews completed by this user.
+  weeklySalesReviews WeeklySalesReview[]
 }
 
 model PushSubscription {
@@ -620,6 +622,33 @@ model PayrollManualPayment {
   @@index([payrollEntryId])
   @@index([paymentDate])
   @@index([recordedByUserId])
+}
+
+/// Receptionist verification of weekly salon sales.
+/// Independent from payroll approval and payment.
+model WeeklySalesReview {
+  id Int @id @default(autoincrement())
+
+  // Monday of the reviewed week, stored at UTC midnight.
+  weekStart DateTime @unique
+
+  // User who confirmed the sales review.
+  reviewedById Int
+  reviewedBy   User @relation(fields: [reviewedById], references: [id], onDelete: Restrict)
+
+  reviewedAt DateTime @default(now())
+
+  // Financial snapshot at the time of review.
+  salesCount Int
+  salesTotal Int
+
+  // Server-generated fingerprint of the reviewed sales data.
+  snapshotHash String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([reviewedById])
 }
 
 enum PayrollReconciliationStatus {

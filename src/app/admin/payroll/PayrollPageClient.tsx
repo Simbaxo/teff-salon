@@ -116,6 +116,16 @@ type PayrollDraftPreparation = {
     }[];
 };
 
+type ReceptionSalesReview = {
+    week: string;
+    status: "PENDING" | "REVIEWED" | "OUTDATED";
+    canReview: boolean;
+    reviewedBy: string | null;
+    reviewedAt: string | null;
+    salesCount: number;
+    salesTotal: number;
+};
+
 function formatCOP(amount: number) {
     return new Intl.NumberFormat("es-CO", {
         style: "currency",
@@ -291,6 +301,15 @@ export default function PayrollPageClient() {
 
     const [weeklySalesError, setWeeklySalesError] =
         useState("");
+
+    const [receptionReview, setReceptionReview] = useState<{
+        week: string;
+        data: ReceptionSalesReview | null;
+        error: string;
+    } | null>(null);
+
+    const [receptionReviewRefresh, setReceptionReviewRefresh] =
+        useState(0);
 
     // Fetch only a draft preview; never change payment records.
     useEffect(() => {
@@ -1083,6 +1102,60 @@ export default function PayrollPageClient() {
         };
     }, [week, expandedSalesEmployeeId]);
 
+    useEffect(() => {
+        const controller = new AbortController();
+        const requestedWeek = week;
+
+        async function loadReceptionReview() {
+            try {
+                const response = await fetch(
+                    `/api/sales/weekly-review?week=${encodeURIComponent(requestedWeek)}`,
+                    {
+                        signal: controller.signal,
+                        cache: "no-store",
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        "No se pudo consultar la revisión de ventas."
+                    );
+                }
+
+                const data: ReceptionSalesReview =
+                    await response.json();
+
+                if (controller.signal.aborted) return;
+
+                if (data.week !== requestedWeek) {
+                    throw new Error(
+                        "La semana recibida no coincide."
+                    );
+                }
+
+                setReceptionReview({
+                    week: requestedWeek,
+                    data,
+                    error: "",
+                });
+            } catch (error) {
+                if (controller.signal.aborted) return;
+
+                console.error(error);
+
+                setReceptionReview({
+                    week: requestedWeek,
+                    data: null,
+                    error: "No se pudo consultar la revisión de ventas.",
+                });
+            }
+        }
+
+        void loadReceptionReview();
+
+        return () => controller.abort();
+    }, [week, receptionReviewRefresh]);
+
     return (
         <section className="mt-8">
             <div>
@@ -1121,6 +1194,79 @@ export default function PayrollPageClient() {
                 </button>
             </div>
 
+            {/* Reception weekly sales review — OWNER visibility */}
+            <div className="mt-5 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                    <h3 className="font-bold text-black">
+                        Revisión de ventas por recepción
+                    </h3>
+
+                    <button
+                        type="button"
+                        onClick={() =>
+                            setReceptionReviewRefresh(
+                                (current) => current + 1
+                            )
+                        }
+                        className="text-sm font-semibold text-[#B76E79] hover:underline"
+                    >
+                        Actualizar
+                    </button>
+                </div>
+
+                {receptionReview?.week !== week ? (
+                    <p className="mt-3 text-sm text-neutral-500">
+                        Consultando estado de revisión...
+                    </p>
+                ) : receptionReview.error ? (
+                    <p role="alert" className="mt-3 text-sm text-red-600">
+                        {receptionReview.error}
+                    </p>
+                ) : receptionReview.data?.status === "REVIEWED" ? (
+                    <div className="mt-3 space-y-1">
+                        <p className="font-semibold text-green-700">
+                            ✓ Ventas revisadas por recepción
+                        </p>
+
+                        <p className="text-sm text-neutral-600">
+                            Revisado por:{" "}
+                            {receptionReview.data.reviewedBy ?? "Usuario"}
+                        </p>
+
+                        {receptionReview.data.reviewedAt && (
+                            <p className="text-sm text-neutral-600">
+                                {new Intl.DateTimeFormat("es-CO", {
+                                    dateStyle: "medium",
+                                    timeStyle: "short",
+                                    timeZone: "America/Bogota",
+                                }).format(
+                                    new Date(receptionReview.data.reviewedAt)
+                                )}
+                            </p>
+                        )}
+                    </div>
+                ) : receptionReview.data?.status === "OUTDATED" ? (
+                    <div className="mt-3">
+                        <p className="font-semibold text-amber-700">
+                            ⚠ Revisión desactualizada
+                        </p>
+                        <p className="mt-1 text-sm text-neutral-600">
+                            Las ventas cambiaron después de la última revisión.
+                            Solicita una nueva verificación.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="mt-3">
+                        <p className="font-semibold text-neutral-700">
+                            Pendiente de revisión
+                        </p>
+                        <p className="mt-1 text-sm text-neutral-500">
+                            Recepción todavía no ha confirmado las ventas
+                            de esta semana.
+                        </p>
+                    </div>
+                )}
+            </div>
             <p className="mt-4 text-sm text-neutral-500">
                 Vista previa de solo lectura. No registra pagos.
             </p>

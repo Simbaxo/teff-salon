@@ -100,6 +100,12 @@ type WeeklyAuditSale = {
         amount: number;
         processingFee: number;
     }[];
+    tips: {
+        employeeId: number;
+        employeeName: string;
+        amount: number;
+        paymentMethod: string;
+    }[];
     issues: string[];
 };
 
@@ -107,6 +113,27 @@ type WeeklyAuditResponse = {
     week: string;
     readOnly: boolean;
     sales: WeeklyAuditSale[];
+    snapshotHash: string;
+    canReview: boolean;
+    reviewIssues: {
+        saleId: number;
+        codes: string[];
+    }[];
+};
+
+type WeeklyReviewStatus = {
+    week: string;
+    status: "PENDING" | "REVIEWED" | "OUTDATED";
+    canReview: boolean;
+    issues: {
+        saleId: number;
+        codes: string[];
+    }[];
+    salesCount: number;
+    salesTotal: number;
+    snapshotHash: string;
+    reviewedBy: string | null;
+    reviewedAt: string | null;
 };
 
 type DateRangeOption =
@@ -296,6 +323,21 @@ export default function SalesPageClient({
 
     const [expandedAuditEmployeeId, setExpandedAuditEmployeeId] =
         useState<number | null>(null);
+
+    const [weeklyReviewStatus, setWeeklyReviewStatus] =
+        useState<WeeklyReviewStatus | null>(null);
+
+    const [weeklyReviewError, setWeeklyReviewError] =
+        useState("");
+
+    const [weeklyReviewLoading, setWeeklyReviewLoading] =
+        useState(false);
+
+    const [isConfirmingWeeklyReview, setIsConfirmingWeeklyReview] =
+        useState(false);
+
+    const [weeklyReviewActionError, setWeeklyReviewActionError] =
+        useState("");
 
     useEffect(() => {
         const controller = new AbortController();
@@ -595,6 +637,152 @@ export default function SalesPageClient({
         return () => controller.abort();
     }, [showWeeklyAudit, auditWeek]);
 
+    useEffect(() => {
+        if (
+            !showWeeklyAudit ||
+            weeklyAudit?.week !== auditWeek ||
+            !weeklyAudit.snapshotHash
+        ) {
+            return;
+        }
+
+        const controller = new AbortController();
+
+        async function loadReviewStatus() {
+            try {
+                const response = await fetch(
+                    `/api/sales/weekly-review?week=${encodeURIComponent(auditWeek)}`,
+                    {
+                        signal: controller.signal,
+                        cache: "no-store",
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        "No se pudo consultar el estado de revisión."
+                    );
+                }
+
+                const data: WeeklyReviewStatus =
+                    await response.json();
+
+                if (controller.signal.aborted) return;
+
+                if (data.week !== auditWeek) {
+                    throw new Error(
+                        "La semana consultada no coincide."
+                    );
+                }
+
+                setWeeklyReviewStatus(data);
+                setWeeklyReviewError("");
+                setWeeklyReviewLoading(false);
+            } catch (error) {
+                if (controller.signal.aborted) return;
+
+                console.error(error);
+                setWeeklyReviewError(
+                    "No se pudo consultar el estado de revisión."
+                );
+                setWeeklyReviewLoading(false);
+            }
+        }
+
+        void loadReviewStatus();
+
+        return () => controller.abort();
+    }, [showWeeklyAudit, auditWeek, weeklyAudit]);
+
+    async function confirmWeeklyReview() {
+        const audit = weeklyAudit;
+        const review = weeklyReviewStatus;
+        const requestedWeek = auditWeek;
+
+        if (
+            !audit ||
+            !review ||
+            audit.week !== requestedWeek ||
+            review.week !== requestedWeek ||
+            audit.snapshotHash !== review.snapshotHash ||
+            !audit.canReview ||
+            !review.canReview ||
+            audit.reviewIssues.length > 0 ||
+            review.status === "REVIEWED" ||
+            isConfirmingWeeklyReview
+        ) {
+            setWeeklyReviewActionError(
+                "Actualiza la revisión antes de confirmar."
+            );
+            return;
+        }
+
+        const reviewedHash = audit.snapshotHash;
+
+        setIsConfirmingWeeklyReview(true);
+        setWeeklyReviewActionError("");
+
+        try {
+            const response = await fetch(
+                "/api/sales/weekly-review",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        week: requestedWeek,
+                        snapshotHash: reviewedHash,
+                    }),
+                }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error ??
+                        "No se pudo confirmar la revisión."
+                );
+            }
+
+            // Verify the saved review against the current data.
+            const verification = await fetch(
+                `/api/sales/weekly-review?week=${encodeURIComponent(requestedWeek)}`,
+                { cache: "no-store" }
+            );
+
+            if (!verification.ok) {
+                throw new Error(
+                    "No se pudo verificar la confirmación."
+                );
+            }
+
+            const updated: WeeklyReviewStatus =
+                await verification.json();
+
+            if (
+                updated.week !== requestedWeek ||
+                updated.snapshotHash !== reviewedHash ||
+                updated.status !== "REVIEWED"
+            ) {
+                throw new Error(
+                    "La revisión requiere una nueva verificación."
+                );
+            }
+
+            setWeeklyReviewStatus(updated);
+        } catch (error) {
+            setWeeklyReviewActionError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo confirmar la revisión."
+            );
+        } finally {
+            setIsConfirmingWeeklyReview(false);
+        }
+    }
+
     return (
         <div className="mt-8">
             {/* Weekly sales audit — OWNER and RECEPTIONIST */}
@@ -808,6 +996,72 @@ export default function SalesPageClient({
                                                                             </span>
                                                                         </div>
                                                                     ))}
+
+                                                                    {/* Complete transaction reconciliation */}
+                                                                    <div className="mt-3 border-t border-neutral-200 pt-3 text-sm text-neutral-700">
+                                                                        <p className="mb-2 text-xs font-semibold text-neutral-500">
+                                                                            Venta completa (puede incluir varias técnicas)
+                                                                        </p>
+
+                                                                        <div className="flex justify-between gap-2">
+                                                                            <span>Subtotal</span>
+                                                                            <span>{formatCOP(sale.subtotal)}</span>
+                                                                        </div>
+
+                                                                        <div className="mt-1 flex justify-between gap-2">
+                                                                            <span>Descuento</span>
+                                                                            <span>-{formatCOP(sale.discountTotal)}</span>
+                                                                        </div>
+
+                                                                        <div className="mt-2 flex justify-between gap-2 font-semibold text-black">
+                                                                            <span>Total venta</span>
+                                                                            <span>{formatCOP(sale.finalTotal)}</span>
+                                                                        </div>
+
+                                                                        <div className="mt-3 border-t border-neutral-200 pt-2">
+                                                                            <p className="font-semibold text-black">
+                                                                                Pagos recibidos
+                                                                            </p>
+
+                                                                            {sale.payments.map((payment, index) => (
+                                                                                <div
+                                                                                    key={index}
+                                                                                    className="mt-1 flex justify-between gap-2"
+                                                                                >
+                                                                                    <span>{payment.paymentMethod}</span>
+                                                                                    <span>{formatCOP(payment.amount)}</span>
+                                                                                </div>
+                                                                            ))}
+
+                                                                            {sale.payments.some(
+                                                                                (payment) => payment.processingFee > 0
+                                                                            ) && (
+                                                                                <p className="mt-2 text-xs text-neutral-500">
+                                                                                    Recargo Bold registrado por separado.
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {sale.tips.length > 0 && (
+                                                                            <div className="mt-3 border-t border-neutral-200 pt-2">
+                                                                                <p className="font-semibold text-black">
+                                                                                    Propinas
+                                                                                </p>
+
+                                                                                {sale.tips.map((tip, index) => (
+                                                                                    <div
+                                                                                        key={index}
+                                                                                        className="mt-1 flex justify-between gap-2"
+                                                                                    >
+                                                                                        <span>
+                                                                                            {tip.employeeName} · {tip.paymentMethod}
+                                                                                        </span>
+                                                                                        <span>{formatCOP(tip.amount)}</span>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                     {sale.issues.length > 0 && (
                                                                         <p className="mt-2 text-xs font-semibold text-amber-700">
                                                                             Revisar venta:{" "}
@@ -868,6 +1122,104 @@ export default function SalesPageClient({
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* Weekly receptionist review status */}
+                                    <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
+                                        <h3 className="font-semibold text-black">
+                                            Estado de revisión
+                                        </h3>
+
+                                        {(() => {
+                                            const currentReview =
+                                                weeklyReviewStatus?.week === auditWeek &&
+                                                weeklyReviewStatus.snapshotHash ===
+                                                    weeklyAudit.snapshotHash
+                                                    ? weeklyReviewStatus
+                                                    : null;
+
+                                            if (weeklyReviewError) {
+                                                return (
+                                                    <p className="mt-2 text-sm text-red-600">
+                                                        {weeklyReviewError}
+                                                    </p>
+                                                );
+                                            }
+
+                                            if (!currentReview || weeklyReviewLoading) {
+                                                return (
+                                                    <p className="mt-2 text-sm text-neutral-500">
+                                                        Consultando revisión...
+                                                    </p>
+                                                );
+                                            }
+
+                                            if (currentReview.status === "REVIEWED") {
+                                                return (
+                                                    <div className="mt-2">
+                                                        <p className="font-semibold text-green-700">
+                                                            ✓ Revisada por recepción
+                                                        </p>
+
+                                                        <p className="mt-1 text-sm text-neutral-600">
+                                                            Por: {currentReview.reviewedBy ?? "Usuario"}
+                                                        </p>
+
+                                                        {currentReview.reviewedAt && (
+                                                            <p className="text-sm text-neutral-600">
+                                                                {formatSaleDateTime(
+                                                                    currentReview.reviewedAt
+                                                                )}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div className="mt-3 space-y-3">
+                                                    <p className="text-sm font-semibold text-amber-700">
+                                                        {currentReview.status === "OUTDATED"
+                                                            ? "⚠ Revisión desactualizada"
+                                                            : "Pendiente de revisión"}
+                                                    </p>
+
+                                                    <p className="text-sm text-neutral-600">
+                                                        Verifica las ventas, técnicas, descuentos,
+                                                        pagos y propinas antes de confirmar.
+                                                    </p>
+
+                                                    {!weeklyAudit.canReview && (
+                                                        <p className="text-sm font-medium text-red-600">
+                                                            Hay ventas pendientes de revisión.
+                                                            Corrige las diferencias antes de continuar.
+                                                        </p>
+                                                    )}
+
+                                                    {weeklyReviewActionError && (
+                                                        <p role="alert" className="text-sm text-red-600">
+                                                            {weeklyReviewActionError}
+                                                        </p>
+                                                    )}
+
+                                                    <button
+                                                        type="button"
+                                                        disabled={
+                                                            isConfirmingWeeklyReview ||
+                                                            !weeklyAudit.canReview ||
+                                                            !currentReview.canReview ||
+                                                            weeklyAudit.reviewIssues.length > 0
+                                                        }
+                                                        onClick={() => void confirmWeeklyReview()}
+                                                        className="w-full rounded-xl bg-black px-5 py-3 font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                                    >
+                                                        {isConfirmingWeeklyReview
+                                                            ? "Confirmando revisión..."
+                                                            : "Marcar semana como revisada"}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
                                 </div>
                             )}
                     </div>

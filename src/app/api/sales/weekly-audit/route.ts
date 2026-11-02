@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { validatePayrollWeek } from "@/lib/payroll/review-validation";
 import { addTeffDays } from "@/lib/datetime";
+import { getWeeklySalesSnapshot } from "@/lib/sales/weekly-review-snapshot";
 
 export async function GET(request: Request) {
     const session = await auth();
@@ -38,7 +39,9 @@ export async function GET(request: Request) {
     const end = new Date(`${nextMonday}T00:00:00.000Z`);
 
     try {
-        const sales = await prisma.sale.findMany({
+        const { sales, snapshot } = await prisma.$transaction(
+            async (tx) => {
+                const sales = await tx.sale.findMany({
             where: {
                 saleAppointments: {
                     some: {
@@ -71,6 +74,18 @@ export async function GET(request: Request) {
                         paymentMethod: true,
                         amount: true,
                         processingFee: true,
+                    },
+                },
+                tips: {
+                    select: {
+                        employeeId: true,
+                        amount: true,
+                        paymentMethod: true,
+                        employee: {
+                            select: {
+                                name: true,
+                            },
+                        },
                     },
                 },
                 commissions: {
@@ -107,10 +122,22 @@ export async function GET(request: Request) {
                     },
                 },
             },
-            orderBy: {
-                id: "asc",
+                    orderBy: {
+                        id: "asc",
+                    },
+                });
+
+                const snapshot = await getWeeklySalesSnapshot(
+                    tx,
+                    week
+                );
+
+                return { sales, snapshot };
             },
-        });
+            {
+                isolationLevel: "Serializable",
+            }
+        );
 
         const results = sales.map((sale) => {
             const dates = sale.saleAppointments.map(
@@ -221,6 +248,12 @@ export async function GET(request: Request) {
                 attributionMode,
                 technicians,
                 payments: sale.payments,
+                tips: sale.tips.map((tip) => ({
+                    employeeId: tip.employeeId,
+                    employeeName: tip.employee.name,
+                    amount: tip.amount,
+                    paymentMethod: tip.paymentMethod,
+                })),
                 issues,
             };
         });
@@ -229,6 +262,9 @@ export async function GET(request: Request) {
             week,
             readOnly: true,
             sales: results,
+            snapshotHash: snapshot.snapshotHash,
+            canReview: snapshot.canReview,
+            reviewIssues: snapshot.issues,
         });
     } catch (error) {
         console.error(
