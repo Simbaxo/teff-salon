@@ -9,8 +9,9 @@ export default async function SalesPage() {
 
     if (
         !session?.user ||
-        !["OWNER", "RECEPTIONIST"].includes(
-            session.user.role
+        (
+            session.user.role !== "OWNER" &&
+            session.user.role !== "RECEPTIONIST"
         )
     ) {
         redirect("/login");
@@ -26,7 +27,7 @@ export default async function SalesPage() {
 
                     <p className="mt-2 text-neutral-600">
                         Consulta las ventas completadas, pagos,
-                        propinas y comisiones de TEFF.
+                        propinas y producción por técnica de TEFF.
                     </p>
 
                     <div className="mt-4">
@@ -41,7 +42,7 @@ export default async function SalesPage() {
                         Cargando historial de ventas...
                     </p>
                 }>
-                    <SalesPageClient />
+                    <SalesPageClient userRole={session.user.role} />
                 </Suspense>
             </div>
         </main>

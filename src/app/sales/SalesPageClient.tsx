@@ -75,6 +75,40 @@ type Sale = {
     saleAppointments: SaleAppointment[];
 };
 
+type WeeklyAuditSale = {
+    saleId: number;
+    saleDate: string;
+    serviceDates: string[];
+    customers: string[];
+    subtotal: number;
+    discountTotal: number;
+    finalTotal: number;
+    attributionMode: string;
+    technicians: {
+        employeeId: number;
+        name: string;
+        production: number;
+        services: {
+            id: number;
+            name: string;
+            type: string;
+            price: number;
+        }[];
+    }[];
+    payments: {
+        paymentMethod: string;
+        amount: number;
+        processingFee: number;
+    }[];
+    issues: string[];
+};
+
+type WeeklyAuditResponse = {
+    week: string;
+    readOnly: boolean;
+    sales: WeeklyAuditSale[];
+};
+
 type DateRangeOption =
     | "TODAY"
     | "WEEK"
@@ -170,7 +204,33 @@ function addDays(
         .slice(0, 10);
 }
 
-export default function SalesPageClient() {
+function getPayrollMonday(value: string): string {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return "";
+    }
+
+    const date = new Date(`${value}T00:00:00.000Z`);
+
+    if (
+        Number.isNaN(date.getTime()) ||
+        date.toISOString().slice(0, 10) !== value
+    ) {
+        return "";
+    }
+
+    const weekday = date.getUTCDay();
+
+    return addDays(
+        value,
+        -(weekday === 0 ? 6 : weekday - 1)
+    );
+}
+
+export default function SalesPageClient({
+    userRole,
+}: {
+    userRole: "OWNER" | "RECEPTIONIST";
+}) {
     const today =
         getBogotaDateString();
 
@@ -194,6 +254,8 @@ export default function SalesPageClient() {
     const [isLoading, setIsLoading] =
         useState(true);
 
+    const [refreshKey, setRefreshKey] = useState(0);
+
     const [loadError, setLoadError] =
         useState("");
 
@@ -209,101 +271,96 @@ export default function SalesPageClient() {
     const [selectedSale, setSelectedSale] =
         useState<Sale | null>(null);
 
-    function getSelectedRange() {
-        const [year, month, day] =
-            today.split("-").map(Number);
+    const [showWeeklyAudit, setShowWeeklyAudit] =
+        useState(false);
 
-        const todayDate = new Date(
-            Date.UTC(year, month - 1, day)
+    const [auditWeek, setAuditWeek] = useState(() => {
+        const today = getBogotaDateString();
+        const date = new Date(`${today}T00:00:00.000Z`);
+        const weekday = date.getUTCDay();
+
+        return addDays(
+            today,
+            -(weekday === 0 ? 6 : weekday - 1)
         );
+    });
 
-        if (dateRange === "TODAY") {
-            return {
-                from: today,
-                to: addDays(today, 1),
-            };
-        }
+    const [weeklyAudit, setWeeklyAudit] =
+        useState<WeeklyAuditResponse | null>(null);
 
-        if (dateRange === "WEEK") {
-            const dayOfWeek =
-                todayDate.getUTCDay();
+    const [weeklyAuditLoading, setWeeklyAuditLoading] =
+        useState(false);
 
-            // Monday = beginning of TEFF week.
-            const daysSinceMonday =
-                dayOfWeek === 0
-                    ? 6
-                    : dayOfWeek - 1;
+    const [weeklyAuditError, setWeeklyAuditError] =
+        useState("");
 
-            const monday =
-                addDays(
-                    today,
-                    -daysSinceMonday
-                );
-
-            return {
-                from: monday,
-                to: addDays(today, 1),
-            };
-        }
-
-        if (dateRange === "MONTH") {
-            const firstDay =
-                `${year}-${String(
-                    month
-                ).padStart(2, "0")}-01`;
-
-            return {
-                from: firstDay,
-                to: addDays(today, 1),
-            };
-        }
-
-        return {
-            from: customFrom,
-            to: addDays(customTo, 1),
-        };
-    }
-
-    async function loadSales() {
-        try {
-            setIsLoading(true);
-            setLoadError("");
-
-            const { from, to } =
-                getSelectedRange();
-
-            const response = await fetch(
-                `/api/sales?from=${from}&to=${to}`
-            );
-
-            if (!response.ok) {
-                throw new Error(
-                    "No se pudo cargar el historial de ventas."
-                );
-            }
-
-            const data: Sale[] =
-                await response.json();
-
-            setSales(data);
-        } catch (error) {
-            console.error(error);
-
-            setLoadError(
-                "No se pudo cargar el historial de ventas."
-            );
-        } finally {
-            setIsLoading(false);
-        }
-    }
+    const [expandedAuditEmployeeId, setExpandedAuditEmployeeId] =
+        useState<number | null>(null);
 
     useEffect(() => {
-        loadSales();
-    }, [
-        dateRange,
-        customFrom,
-        customTo,
-    ]);
+        const controller = new AbortController();
+
+        // Calculate the selected date range inside the effect.
+        const [year, month, day] = today.split("-").map(Number);
+        const todayDate = new Date(Date.UTC(year, month - 1, day));
+
+        let from: string;
+        let to: string;
+
+        if (dateRange === "TODAY") {
+            from = today;
+            to = addDays(today, 1);
+        } else if (dateRange === "WEEK") {
+            const weekday = todayDate.getUTCDay();
+            const daysSinceMonday = weekday === 0 ? 6 : weekday - 1;
+
+            from = addDays(today, -daysSinceMonday);
+            to = addDays(today, 1);
+        } else if (dateRange === "MONTH") {
+            from = `${year}-${String(month).padStart(2, "0")}-01`;
+            to = addDays(today, 1);
+        } else {
+            from = customFrom;
+            to = addDays(customTo, 1);
+        }
+
+        async function loadSales() {
+            try {
+                const response = await fetch(
+                    `/api/sales?from=${from}&to=${to}`,
+                    { signal: controller.signal }
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        "No se pudo cargar el historial de ventas."
+                    );
+                }
+
+                const data: Sale[] = await response.json();
+
+                if (!controller.signal.aborted) {
+                    setSales(data);
+                    setLoadError("");
+                    setIsLoading(false);
+                }
+            } catch (error) {
+                if (controller.signal.aborted) return;
+
+                console.error(error);
+                setLoadError(
+                    "No se pudo cargar el historial de ventas."
+                );
+                setIsLoading(false);
+            }
+        }
+
+        void loadSales();
+
+        return () => {
+            controller.abort();
+        };
+    }, [dateRange, customFrom, customTo, today, refreshKey]);
 
     useEffect(() => {
         if (!requestedSaleId) {
@@ -489,8 +546,333 @@ export default function SalesPageClient() {
         }
     }
 
+    useEffect(() => {
+        if (!showWeeklyAudit) return;
+
+        const controller = new AbortController();
+
+        async function loadWeeklyAudit() {
+            try {
+                const response = await fetch(
+                    `/api/sales/weekly-audit?week=${encodeURIComponent(auditWeek)}`,
+                    {
+                        signal: controller.signal,
+                        cache: "no-store",
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        "No se pudo cargar la revisión semanal."
+                    );
+                }
+
+                const data: WeeklyAuditResponse =
+                    await response.json();
+
+                if (controller.signal.aborted) return;
+
+                if (data.week !== auditWeek) {
+                    throw new Error("La semana recibida no coincide.");
+                }
+
+                setWeeklyAudit(data);
+                setWeeklyAuditError("");
+                setWeeklyAuditLoading(false);
+            } catch (error) {
+                if (controller.signal.aborted) return;
+
+                console.error(error);
+                setWeeklyAuditError(
+                    "No se pudo cargar la revisión semanal."
+                );
+                setWeeklyAuditLoading(false);
+            }
+        }
+
+        void loadWeeklyAudit();
+
+        return () => controller.abort();
+    }, [showWeeklyAudit, auditWeek]);
+
     return (
         <div className="mt-8">
+            {/* Weekly sales audit — OWNER and RECEPTIONIST */}
+            <section className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
+                <button
+                    type="button"
+                    onClick={() => {
+                        if (showWeeklyAudit) {
+                            setShowWeeklyAudit(false);
+                            setWeeklyAuditLoading(false);
+                        } else {
+                            setWeeklyAuditLoading(true);
+                            setWeeklyAuditError("");
+                            setWeeklyAudit(null);
+                            setShowWeeklyAudit(true);
+                        }
+                    }}
+                    aria-expanded={showWeeklyAudit}
+                    className="flex w-full items-center justify-between gap-3 text-left"
+                >
+                    <div>
+                        <h2 className="text-lg font-bold text-black">
+                            Revisión Semanal
+                        </h2>
+                        <p className="mt-1 text-sm text-neutral-500">
+                            Verifica las ventas y la producción por técnica.
+                        </p>
+                    </div>
+                    <span className="text-xl font-semibold text-[#B76E79]">
+                        {showWeeklyAudit ? "−" : "+"}
+                    </span>
+                </button>
+
+                {showWeeklyAudit && (
+                    <div className="mt-5 border-t border-neutral-200 pt-5">
+                        <div className="flex flex-wrap items-end gap-3">
+                            <div>
+                                <label
+                                    htmlFor="audit-week"
+                                    className="block text-sm font-semibold text-black"
+                                >
+                                    Semana (lunes)
+                                </label>
+                                <input
+                                    id="audit-week"
+                                    type="date"
+                                    value={auditWeek}
+                                    onChange={(event) => {
+                                        const monday = getPayrollMonday(
+                                            event.target.value
+                                        );
+
+                                        if (!monday) return;
+
+                                        setAuditWeek(monday);
+                                        setWeeklyAuditLoading(true);
+                                        setWeeklyAuditError("");
+                                        setWeeklyAudit(null);
+                                        setExpandedAuditEmployeeId(null);
+                                    }}
+                                    className="mt-2 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
+                                />
+                            </div>
+                            <span className="pb-3 text-sm text-neutral-500">
+                                Hasta {addDays(auditWeek, 6)}
+                            </span>
+                        </div>
+
+                        {weeklyAuditLoading && (
+                            <p className="mt-4 text-sm text-neutral-500">
+                                Cargando revisión semanal...
+                            </p>
+                        )}
+
+                        {weeklyAuditError && (
+                            <p role="alert" className="mt-4 text-sm text-red-600">
+                                {weeklyAuditError}
+                            </p>
+                        )}
+
+                        {!weeklyAuditLoading &&
+                            !weeklyAuditError &&
+                            weeklyAudit?.week === auditWeek && (
+                                <div className="mt-5 space-y-4">
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="rounded-xl bg-neutral-100 p-4">
+                                            <p className="text-sm text-neutral-500">
+                                                Ventas registradas
+                                            </p>
+                                            <p className="mt-1 text-2xl font-bold text-black">
+                                                {weeklyAudit.sales.length}
+                                            </p>
+                                        </div>
+                                        <div className="rounded-xl bg-neutral-100 p-4">
+                                            <p className="text-sm text-neutral-500">
+                                                Total ventas
+                                            </p>
+                                            <p className="mt-1 text-2xl font-bold text-black">
+                                                {formatCOP(
+                                                    weeklyAudit.sales.reduce(
+                                                        (sum, sale) =>
+                                                            sum + sale.finalTotal,
+                                                        0
+                                                    )
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {Array.from(
+                                        new Map(
+                                            weeklyAudit.sales.flatMap((sale) =>
+                                                sale.technicians.map((technician) => [
+                                                    technician.employeeId,
+                                                    technician.name,
+                                                ] as const)
+                                            )
+                                        )
+                                    ).map(([employeeId, employeeName]) => {
+                                        const employeeSales =
+                                            weeklyAudit.sales.filter((sale) =>
+                                                sale.technicians.some(
+                                                    (technician) =>
+                                                        technician.employeeId === employeeId
+                                                )
+                                            );
+
+                                        const production = employeeSales.reduce(
+                                            (sum, sale) =>
+                                                sum +
+                                                (sale.technicians.find(
+                                                    (technician) =>
+                                                        technician.employeeId === employeeId
+                                                )?.production ?? 0),
+                                            0
+                                        );
+
+                                        return (
+                                            <div
+                                                key={employeeId}
+                                                className="rounded-xl border border-neutral-200"
+                                            >
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setExpandedAuditEmployeeId(
+                                                            expandedAuditEmployeeId === employeeId
+                                                                ? null
+                                                                : employeeId
+                                                        )
+                                                    }
+                                                    className="flex w-full items-center justify-between gap-3 p-4 text-left"
+                                                >
+                                                    <div>
+                                                        <p className="font-semibold text-black">
+                                                            {employeeName}
+                                                        </p>
+                                                        <p className="mt-1 text-sm text-neutral-500">
+                                                            {employeeSales.length} ventas
+                                                        </p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="font-bold text-black">
+                                                            {formatCOP(production)}
+                                                        </p>
+                                                        <span className="text-sm text-[#B76E79]">
+                                                            {expandedAuditEmployeeId === employeeId
+                                                                ? "Ocultar"
+                                                                : "Ver ventas"}
+                                                        </span>
+                                                    </div>
+                                                </button>
+
+                                                {expandedAuditEmployeeId === employeeId && (
+                                                    <div className="space-y-3 border-t border-neutral-200 p-4">
+                                                        {employeeSales.map((sale) => {
+                                                            const technician =
+                                                                sale.technicians.find(
+                                                                    (item) =>
+                                                                        item.employeeId === employeeId
+                                                                );
+
+                                                            return (
+                                                                <div
+                                                                    key={sale.saleId}
+                                                                    className="rounded-lg bg-neutral-50 p-3"
+                                                                >
+                                                                    <a
+                                                                        href={`/sales?saleId=${sale.saleId}`}
+                                                                        className="font-semibold text-[#B76E79] hover:underline"
+                                                                    >
+                                                                        Venta #{sale.saleId}
+                                                                    </a>
+                                                                    <p className="mt-1 text-xs text-neutral-500">
+                                                                        {sale.customers.join(", ")}
+                                                                    </p>
+                                                                    <p className="mt-2 text-sm font-semibold text-black">
+                                                                        Producción:{" "}
+                                                                        {formatCOP(
+                                                                            technician?.production ?? 0
+                                                                        )}
+                                                                    </p>
+                                                                    {technician?.services.map((service) => (
+                                                                        <div
+                                                                            key={service.id}
+                                                                            className="mt-1 flex justify-between gap-2 text-xs text-neutral-600"
+                                                                        >
+                                                                            <span>{service.name}</span>
+                                                                            <span>
+                                                                                {formatCOP(service.price)}
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
+                                                                    {sale.issues.length > 0 && (
+                                                                        <p className="mt-2 text-xs font-semibold text-amber-700">
+                                                                            Revisar venta:{" "}
+                                                                            {sale.issues.join(", ")}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+
+                                    {/* Sales requiring receptionist review */}
+                                    {weeklyAudit.sales.some(
+                                        (sale) => sale.issues.length > 0
+                                    ) && (
+                                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                            <h3 className="font-bold text-amber-900">
+                                                Ventas por revisar
+                                            </h3>
+
+                                            <p className="mt-1 text-sm text-amber-800">
+                                                Verifica las ventas con diferencias o asignaciones
+                                                incompletas antes de preparar la nómina.
+                                            </p>
+
+                                            <div className="mt-4 space-y-3">
+                                                {weeklyAudit.sales
+                                                    .filter((sale) => sale.issues.length > 0)
+                                                    .map((sale) => (
+                                                        <div
+                                                            key={sale.saleId}
+                                                            className="rounded-lg border border-amber-200 bg-white p-3"
+                                                        >
+                                                            <a
+                                                                href={`/sales?saleId=${sale.saleId}`}
+                                                                className="font-semibold text-[#B76E79] hover:underline"
+                                                            >
+                                                                Venta #{sale.saleId}
+                                                            </a>
+
+                                                            <p className="mt-1 text-sm text-neutral-600">
+                                                                {sale.customers.join(", ")}
+                                                            </p>
+
+                                                            <p className="mt-1 text-sm font-semibold text-black">
+                                                                Total: {formatCOP(sale.finalTotal)}
+                                                            </p>
+
+                                                            <p className="mt-2 text-xs text-amber-800">
+                                                                {sale.issues.join(", ")}
+                                                            </p>
+                                                        </div>
+                                                    ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                    </div>
+                )}
+            </section>
             <div className="grid gap-4 md:grid-cols-3">
                 <div className="rounded-xl bg-white p-5 shadow-sm">
                     <p className="text-sm text-neutral-500">
@@ -695,9 +1077,7 @@ export default function SalesPageClient() {
 
                         <button
                             type="button"
-                            onClick={
-                                loadSales
-                            }
+                            onClick={() => setRefreshKey((current) => current + 1)}
                             className="mt-4 rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
                         >
                             Reintentar
@@ -984,7 +1364,7 @@ export default function SalesPageClient() {
                             <div className="mt-4 flex justify-between gap-4 text-lg font-bold">
                                 <span className="text-black">Total</span>
 
-                                <span>
+                                <span className="text-black tabular-nums">
                                     {formatCOP(
                                         selectedSale.finalTotal
                                     )}
@@ -1041,12 +1421,11 @@ export default function SalesPageClient() {
                             <div className="mt-4 flex justify-between gap-4 text-sm font-bold">
                                 <span className="text-black">Total Pagado</span>
 
-                                <span>
+                                <span className="text-black tabular-nums">
                                     {formatCOP(
                                         selectedSale.payments.reduce(
                                             (sum, payment) =>
-                                                sum +
-                                                payment.amount,
+                                                sum + payment.amount,
                                             0
                                         )
                                     )}
@@ -1109,72 +1488,74 @@ export default function SalesPageClient() {
                             )}
                         </div>
 
-                        {/* Commissions */}
-                        <div className="mt-6 border-t border-neutral-200 pt-5">
-                            <h3 className="font-bold text-black">
-                                Comisiones
-                            </h3>
+                        {/* Commission details are OWNER-only */}
+                        {userRole === "OWNER" && (
+                            <div className="mt-6 border-t border-neutral-200 pt-5">
+                                <h3 className="font-bold text-black">
+                                    Comisiones
+                                </h3>
 
-                            {selectedSale.commissions.length ===
-                            0 ? (
-                                <p className="mt-3 text-sm text-neutral-500">
-                                    Sin comisiones registradas.
-                                </p>
-                            ) : (
-                                <div className="mt-3 space-y-3">
-                                    {selectedSale.commissions.map(
-                                        (commission) => (
-                                            <div
-                                                key={
-                                                    commission.id
-                                                }
-                                                className="rounded-xl bg-neutral-50 p-3"
-                                            >
-                                                <div className="flex items-start justify-between gap-4">
-                                                    <div>
-                                                        <p className="font-semibold text-black">
-                                                            {
-                                                                commission
-                                                                    .employee
-                                                                    .name
-                                                            }
-                                                        </p>
+                                {selectedSale.commissions.length ===
+                                0 ? (
+                                    <p className="mt-3 text-sm text-neutral-500">
+                                        Sin comisiones registradas.
+                                    </p>
+                                ) : (
+                                    <div className="mt-3 space-y-3">
+                                        {selectedSale.commissions.map(
+                                            (commission) => (
+                                                <div
+                                                    key={
+                                                        commission.id
+                                                    }
+                                                    className="rounded-xl bg-neutral-50 p-3"
+                                                >
+                                                    <div className="flex items-start justify-between gap-4">
+                                                        <div>
+                                                            <p className="font-semibold text-black">
+                                                                {
+                                                                    commission
+                                                                        .employee
+                                                                        .name
+                                                                }
+                                                            </p>
 
-                                                        <p className="mt-1 text-xs text-neutral-500">
-                                                            Base:{" "}
+                                                            <p className="mt-1 text-xs text-neutral-500">
+                                                                Base:{" "}
+                                                                {formatCOP(
+                                                                    commission.commissionBase
+                                                                )}
+                                                            </p>
+
+                                                            <p className="mt-1 text-xs text-neutral-500">
+                                                                Tasa:{" "}
+                                                                {
+                                                                    commission.commissionRate
+                                                                }
+                                                                %
+                                                            </p>
+
+                                                            <p className="mt-1 text-xs text-neutral-500">
+                                                                Estado:{" "}
+                                                                {getStatusLabel(
+                                                                    commission.status
+                                                                )}
+                                                            </p>
+                                                        </div>
+
+                                                        <span className="font-bold text-black">
                                                             {formatCOP(
-                                                                commission.commissionBase
+                                                                commission.commissionAmount
                                                             )}
-                                                        </p>
-
-                                                        <p className="mt-1 text-xs text-neutral-500">
-                                                            Tasa:{" "}
-                                                            {
-                                                                commission.commissionRate
-                                                            }
-                                                            %
-                                                        </p>
-
-                                                        <p className="mt-1 text-xs text-neutral-500">
-                                                            Estado:{" "}
-                                                            {getStatusLabel(
-                                                                commission.status
-                                                            )}
-                                                        </p>
+                                                        </span>
                                                     </div>
-
-                                                    <span className="font-bold text-black">
-                                                        {formatCOP(
-                                                            commission.commissionAmount
-                                                        )}
-                                                    </span>
                                                 </div>
-                                            </div>
-                                        )
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                                            )
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

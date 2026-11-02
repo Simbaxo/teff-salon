@@ -49,6 +49,36 @@ type PayrollSummary = {
     adjustments: PayrollAdjustment[];
 };
 
+type WeeklyPayrollSale = {
+    commissionId: number;
+    saleId: number;
+    employeeId: number;
+    saleDate: string;
+    serviceDates: string[];
+    customerNames: string[];
+    production: number;
+    commissionRate: number;
+    commissionAmount: number;
+    commissionStatus: string;
+    payrollEntryId: number | null;
+    saleTotal: number;
+    services: {
+        id: number;
+        name: string;
+        type: string;
+        price: number;
+    }[];
+    legacyAttribution: boolean;
+    validAttribution: boolean;
+    crossWeek: boolean;
+};
+
+type WeeklyPayrollSalesResponse = {
+    week: string;
+    readOnly: boolean;
+    sales: WeeklyPayrollSale[];
+};
+
 type PayrollPreview = {
     period: {
         id: number | null;
@@ -248,6 +278,18 @@ export default function PayrollPageClient() {
         useState(false);
 
     const [adjustmentError, setAdjustmentError] =
+        useState("");
+
+    const [expandedSalesEmployeeId, setExpandedSalesEmployeeId] =
+        useState<number | null>(null);
+
+    const [weeklySales, setWeeklySales] =
+        useState<WeeklyPayrollSalesResponse | null>(null);
+
+    const [weeklySalesLoading, setWeeklySalesLoading] =
+        useState(false);
+
+    const [weeklySalesError, setWeeklySalesError] =
         useState("");
 
     // Fetch only a draft preview; never change payment records.
@@ -971,6 +1013,76 @@ export default function PayrollPageClient() {
         setWeek((current) => addDays(current, days));
     }
 
+    function toggleEmployeeSales(employeeId: number) {
+        const opening = expandedSalesEmployeeId !== employeeId;
+
+        setExpandedSalesEmployeeId(
+            opening ? employeeId : null
+        );
+
+        setWeeklySales(null);
+        setWeeklySalesError("");
+        setWeeklySalesLoading(opening);
+    }
+
+    useEffect(() => {
+        if (expandedSalesEmployeeId === null) {
+            return;
+        }
+
+        const controller = new AbortController();
+        const requestedWeek = week;
+
+        async function loadWeeklySales() {
+            try {
+                const response = await fetch(
+                    `/api/admin/payroll/weekly-sales?week=${encodeURIComponent(requestedWeek)}`,
+                    {
+                        signal: controller.signal,
+                        cache: "no-store",
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        "No se pudieron cargar las ventas."
+                    );
+                }
+
+                const data: WeeklyPayrollSalesResponse =
+                    await response.json();
+
+                if (controller.signal.aborted) return;
+
+                if (data.week !== requestedWeek) {
+                    throw new Error(
+                        "La semana consultada no coincide."
+                    );
+                }
+
+                setWeeklySales(data);
+                setWeeklySalesError("");
+            } catch (error) {
+                if (controller.signal.aborted) return;
+
+                console.error(error);
+                setWeeklySalesError(
+                    "No se pudieron cargar las ventas de esta semana."
+                );
+            } finally {
+                if (!controller.signal.aborted) {
+                    setWeeklySalesLoading(false);
+                }
+            }
+        }
+
+        void loadWeeklySales();
+
+        return () => {
+            controller.abort();
+        };
+    }, [week, expandedSalesEmployeeId]);
+
     return (
         <section className="mt-8">
             <div>
@@ -1145,6 +1257,133 @@ export default function PayrollPageClient() {
                                         label="Producción Total"
                                         amount={employee.productionTotal}
                                     />
+                                </div>
+
+                                {/* Weekly sales breakdown — OWNER only */}
+                                <div className="mt-3 border-b border-neutral-200 pb-4">
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            void toggleEmployeeSales(employee.employeeId)
+                                        }
+                                        aria-expanded={
+                                            expandedSalesEmployeeId === employee.employeeId
+                                        }
+                                        className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-3 text-left text-sm font-semibold text-[#B76E79] hover:bg-rose-50"
+                                    >
+                                        <span>Ver ventas de la semana</span>
+                                        <span aria-hidden="true">
+                                            {expandedSalesEmployeeId === employee.employeeId
+                                                ? "−"
+                                                : "+"}
+                                        </span>
+                                    </button>
+
+                                    {expandedSalesEmployeeId === employee.employeeId && (
+                                        <div className="mt-3 space-y-3">
+                                            {(weeklySalesLoading ||
+                                                (!weeklySalesError && weeklySales?.week !== week)) && (
+                                                    <p className="text-sm text-neutral-500">
+                                                        Cargando ventas...
+                                                    </p>
+                                            )}
+
+                                            {weeklySalesError && (
+                                                <p role="alert" className="text-sm text-red-600">
+                                                    {weeklySalesError}
+                                                </p>
+                                            )}
+
+                                            {!weeklySalesLoading &&
+                                                !weeklySalesError &&
+                                                weeklySales?.week === week && (
+                                                    <>
+                                                        {weeklySales.sales
+                                                            .filter(
+                                                                (sale) =>
+                                                                    sale.employeeId ===
+                                                                    employee.employeeId
+                                                            )
+                                                            .map((sale) => (
+                                                                <div
+                                                                    key={sale.commissionId}
+                                                                    className="rounded-xl border border-neutral-200 bg-neutral-50 p-3"
+                                                                >
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <a
+                                                                            href={`/sales?saleId=${sale.saleId}`}
+                                                                            className="font-semibold text-[#B76E79] underline-offset-2 hover:underline"
+                                                                        >
+                                                                            Venta #{sale.saleId}
+                                                                        </a>
+
+                                                                        <span className="text-xs text-neutral-500">
+                                                                            {sale.serviceDates.join(", ")}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <p className="mt-1 text-xs text-neutral-500">
+                                                                        {sale.customerNames.join(", ")}
+                                                                    </p>
+
+                                                                    <div className="mt-3 space-y-1 text-sm text-neutral-800">
+                                                                        <div className="flex justify-between gap-2">
+                                                                            <span>Producción</span>
+                                                                            <span className="font-semibold tabular-nums text-black">
+                                                                                {formatCOP(sale.production)}
+                                                                            </span>
+                                                                        </div>
+
+                                                                        <div className="flex justify-between gap-2">
+                                                                            <span>Comisión</span>
+                                                                            <span className="font-semibold tabular-nums text-black">
+                                                                                {formatCOP(sale.commissionAmount)}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {sale.services.length > 0 && (
+                                                                        <div className="mt-3 border-t border-neutral-200 pt-2">
+                                                                            {sale.services.map((service) => (
+                                                                                <div
+                                                                                    key={service.id}
+                                                                                    className="flex justify-between gap-2 py-1 text-xs text-neutral-600"
+                                                                                >
+                                                                                    <span>{service.name}</span>
+                                                                                    <span>
+                                                                                        {formatCOP(service.price)}
+                                                                                    </span>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+
+                                                                    {sale.legacyAttribution && (
+                                                                        <p className="mt-2 text-xs text-amber-700">
+                                                                            Venta anterior: desglose por técnica no disponible.
+                                                                        </p>
+                                                                    )}
+
+                                                                    {(!sale.validAttribution || sale.crossWeek) && (
+                                                                        <p className="mt-2 text-xs font-semibold text-red-600">
+                                                                            Revisar atribución o semana de esta venta.
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+
+                                                        {weeklySales.sales.filter(
+                                                            (sale) =>
+                                                                sale.employeeId === employee.employeeId
+                                                        ).length === 0 && (
+                                                            <p className="text-sm text-neutral-500">
+                                                                No hay ventas con comisión registradas para esta técnica.
+                                                            </p>
+                                                        )}
+                                                    </>
+                                                )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="mt-3">

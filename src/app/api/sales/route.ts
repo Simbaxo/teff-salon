@@ -163,6 +163,17 @@ export async function GET(
             },
         });
 
+        // Commission details are OWNER-only.
+        // Receptionists retain access to operational sales data.
+        if (session.user.role !== "OWNER") {
+            return Response.json(
+                sales.map((sale) => ({
+                    ...sale,
+                    commissions: [],
+                }))
+            );
+        }
+
         return Response.json(sales);
     } catch (error) {
         console.error(

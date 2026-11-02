@@ -100,6 +100,14 @@ export async function GET(
             );
         }
 
+        // Never expose commission information to receptionists.
+        if (session.user.role !== "OWNER") {
+            return Response.json({
+                ...sale,
+                commissions: [],
+            });
+        }
+
         return Response.json(sale);
     } catch (error) {
         console.error(
