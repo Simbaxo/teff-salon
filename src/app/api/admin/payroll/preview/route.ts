@@ -7,6 +7,9 @@ import {
     calculateWeeklyPayrollSummary,
 } from "@/lib/payroll/weekly-summary";
 import {
+    hasValidCommissionPayrollAttribution,
+} from "@/lib/payroll/review-validation";
+import {
     addTeffDays,
     getTeffDayOfWeek,
     getTeffToday,
@@ -194,6 +197,12 @@ export async function GET(request: Request) {
                 payrollEntryId: true,
                 sale: {
                     select: {
+                        lineItems: {
+                            select: {
+                                employeeId: true,
+                                unitPrice: true,
+                            },
+                        },
                         saleAppointments: {
                             select: {
                                 appointment: {
@@ -302,9 +311,10 @@ export async function GET(request: Request) {
                 commissions.filter(
                     (commission) =>
                         commission.employeeId === employee.id &&
-                        workedThisWeek(
-                            employee.id,
-                            commission.sale.saleAppointments
+                        hasValidCommissionPayrollAttribution(
+                            commission,
+                            serviceStart,
+                            serviceEnd
                         )
                 );
 

@@ -7,9 +7,9 @@ import { validatePayrollWeek } from "@/lib/payroll/review-validation";
 import { addTeffDays, getTeffToday } from "@/lib/datetime";
 import { calculatePayrollDraftSummary } from "@/lib/payroll/draft-summary";
 import { getFixedWeeklySalary } from "@/lib/payroll/fixed-weekly-salary";
-
 import {
     hasValidPayrollAttribution,
+    hasValidCommissionPayrollAttribution,
     saleSpansPayrollWeeks,
 } from "@/lib/payroll/review-validation";
 
@@ -223,6 +223,12 @@ export async function POST(request: Request) {
                         payrollEntryId: true,
                         sale: {
                             select: {
+                                lineItems: {
+                                    select: {
+                                        employeeId: true,
+                                        unitPrice: true,
+                                    },
+                                },
                                 saleAppointments: {
                                     select: {
                                         appointment: {
@@ -306,7 +312,7 @@ export async function POST(request: Request) {
                 // Never silently omit incorrectly attributed records.
                 const invalidCommissions = commissions.filter(
                     (item) =>
-                        !hasValidPayrollAttribution(
+                        !hasValidCommissionPayrollAttribution(
                             item,
                             serviceStart,
                             serviceEnd
@@ -339,7 +345,7 @@ export async function POST(request: Request) {
                     const employeeCommissions = commissions.filter(
                         (item) =>
                             item.employeeId === employee.id &&
-                            hasValidPayrollAttribution(
+                            hasValidCommissionPayrollAttribution(
                                 item,
                                 serviceStart,
                                 serviceEnd

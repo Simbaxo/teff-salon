@@ -7,8 +7,8 @@ import { validateHistoricalPayment } from "@/lib/payroll/historical-payment-vali
 import { calculatePayrollReconciliation } from "@/lib/payroll/reconciliation";
 import { addTeffDays } from "@/lib/datetime";
 import {
-    hasValidPayrollAttribution,
     saleSpansPayrollWeeks,
+    hasValidCommissionPayrollAttribution,
 } from "@/lib/payroll/review-validation";
 
 // Read-only validation. No historical payment is created.
@@ -184,8 +184,6 @@ export async function POST(request: Request) {
                                 saleAppointments: {
                                     some: {
                                         appointment: {
-                                            employeeId:
-                                                currentEntry.employeeId,
                                             date: {
                                                 gte: serviceStart,
                                                 lt: serviceEnd,
@@ -198,11 +196,18 @@ export async function POST(request: Request) {
                         select: {
                             id: true,
                             employeeId: true,
+                            commissionBase: true,
                             commissionAmount: true,
                             status: true,
                             payrollEntryId: true,
                             sale: {
                                 select: {
+                                    lineItems: {
+                                        select: {
+                                            employeeId: true,
+                                            unitPrice: true,
+                                        },
+                                    },
                                     saleAppointments: {
                                         select: {
                                             appointment: {
@@ -223,7 +228,7 @@ export async function POST(request: Request) {
                 const invalidWeeklyCommissions =
                     weeklyCommissions.filter(
                         (commission) =>
-                            !hasValidPayrollAttribution(
+                            !hasValidCommissionPayrollAttribution(
                                 commission,
                                 serviceStart,
                                 serviceEnd

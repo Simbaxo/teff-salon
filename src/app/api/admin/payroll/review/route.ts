@@ -11,7 +11,9 @@ import {
 import {
     workedInPayrollPeriod,
     hasValidPayrollAttribution,
+    hasValidCommissionPayrollAttribution,
 } from "@/lib/payroll/review-validation";
+
 
 // Read-only preflight. Does not review or pay payroll.
 export async function POST(request: Request) {
@@ -145,6 +147,12 @@ export async function POST(request: Request) {
                 payrollEntryId: true,
                 sale: {
                     select: {
+                        lineItems: {
+                            select: {
+                                employeeId: true,
+                                unitPrice: true,
+                            },
+                        },
                         saleAppointments: {
                             select: {
                                 appointment: {
@@ -200,7 +208,7 @@ export async function POST(request: Request) {
 
         const unmatchedCommissions = commissions.filter(
             (commission) =>
-                !hasValidPayrollAttribution(
+                !hasValidCommissionPayrollAttribution(
                     commission,
                     serviceStart,
                     serviceEnd
@@ -319,9 +327,8 @@ export async function POST(request: Request) {
                 const employeeCommissions = commissions.filter(
                     (item) =>
                         item.employeeId === employeeId &&
-                        workedInPayrollPeriod(
-                            employeeId,
-                            item.sale.saleAppointments,
+                        hasValidCommissionPayrollAttribution(
+                            item,
                             serviceStart,
                             serviceEnd
                         )

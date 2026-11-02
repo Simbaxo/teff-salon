@@ -10,6 +10,7 @@ import {
     hasValidPayrollAttribution,
     workedInPayrollPeriod,
     saleSpansPayrollWeeks,
+    hasValidCommissionPayrollAttribution,
 } from "@/lib/payroll/review-validation";
 import {
     calculateWeeklyPayrollSummary,
@@ -170,6 +171,12 @@ export async function POST(request: Request) {
                         payrollEntryId: true,
                         sale: {
                             select: {
+                                lineItems: {
+                                    select: {
+                                        employeeId: true,
+                                        unitPrice: true,
+                                    },
+                                },
                                 saleAppointments: {
                                     select: {
                                         appointment: {
@@ -189,7 +196,7 @@ export async function POST(request: Request) {
                 // who performed a service during this payroll week.
                 const unmatchedCommissions = commissions.filter(
                     (commission) =>
-                        !hasValidPayrollAttribution(
+                        !hasValidCommissionPayrollAttribution(
                             commission,
                             serviceStart,
                             serviceEnd
@@ -366,9 +373,8 @@ export async function POST(request: Request) {
                         const employeeCommissions = commissions.filter(
                             (item) =>
                                 item.employeeId === employeeId &&
-                                workedInPayrollPeriod(
-                                    employeeId,
-                                    item.sale.saleAppointments,
+                                hasValidCommissionPayrollAttribution(
+                                    item,
                                     serviceStart,
                                     serviceEnd
                                 )

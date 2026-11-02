@@ -42,6 +42,79 @@ export function hasValidPayrollAttribution(
     );
 }
 
+
+type CommissionAttributionRecord = {
+    employeeId: number;
+    commissionBase: number;
+    sale: {
+        saleAppointments: AppointmentReference[];
+        lineItems: {
+            employeeId: number | null;
+            unitPrice: number;
+        }[];
+    };
+};
+
+export function hasValidCommissionPayrollAttribution(
+    record: CommissionAttributionRecord,
+    serviceStart: Date,
+    serviceEnd: Date
+): boolean {
+    const appointments = record.sale.saleAppointments;
+
+    // A commission must belong to a sale with an appointment
+    // during the selected payroll week.
+    const hasServiceThisWeek = appointments.some(
+        ({ appointment }) =>
+            appointment.date >= serviceStart &&
+            appointment.date < serviceEnd
+    );
+
+    if (!hasServiceThisWeek) {
+        return false;
+    }
+
+    const attributedItems = record.sale.lineItems.filter(
+        (item) => item.employeeId !== null
+    );
+
+    // Legacy sales have no technician-attributed line items.
+    // Preserve the original appointment-based validation.
+    if (attributedItems.length === 0) {
+        return hasValidPayrollAttribution(
+            record,
+            serviceStart,
+            serviceEnd
+        );
+    }
+
+    // A partially attributed sale requires investigation.
+    // Never silently accept missing technician assignments.
+    if (
+        attributedItems.length !== record.sale.lineItems.length
+    ) {
+        return false;
+    }
+
+    // Modern sales use finalized checkout attribution.
+    const attributedRevenue = attributedItems
+        .filter(
+            (item) => item.employeeId === record.employeeId
+        )
+        .reduce(
+            (total, item) => total + item.unitPrice,
+            0
+        );
+
+    return (
+        Number.isSafeInteger(record.commissionBase) &&
+        record.commissionBase >= 0 &&
+        Number.isSafeInteger(attributedRevenue) &&
+        attributedRevenue > 0 &&
+        record.commissionBase <= attributedRevenue
+    );
+}
+
 import { getTeffDayOfWeek } from "@/lib/datetime";
 
 export function validatePayrollWeek(
