@@ -10,12 +10,27 @@ import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 import { getFixedWeeklySalary } from "@/lib/payroll/fixed-weekly-salary";
 import { calculateWeeklyPayrollSummary } from "@/lib/payroll/weekly-summary";
 import { calculateManualPaymentBalance } from "@/lib/payroll/manual-payments";
+import { isCashboxWriteEnabled } from "@/lib/cashbox/is-write-enabled";
 import {
   hasValidCommissionPayrollAttribution,
   hasValidPayrollAttribution,
 } from "@/lib/payroll/review-validation";
 
 export async function POST(request: Request) {
+  if (!isCashboxWriteEnabled()) {
+    return Response.json(
+      {
+        error: "Los registros de caja estarán disponibles próximamente.",
+        code: "CASHBOX_WRITES_DISABLED",
+      },
+      {
+        status: 503,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  }
   const session = await auth();
 
   if (!session?.user) {

@@ -3,6 +3,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canManageStaff } from "@/lib/auth-roles";
 import { calculateCashboxBalance } from "@/lib/cashbox/balance";
+import { isCashboxWriteEnabled } from "@/lib/cashbox/is-write-enabled";
 
 export async function GET() {
   const session = await auth();
@@ -63,6 +64,20 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!isCashboxWriteEnabled()) {
+    return Response.json(
+      {
+        error: "Los registros de caja estarán disponibles próximamente.",
+        code: "CASHBOX_WRITES_DISABLED",
+      },
+      {
+        status: 503,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  }
   const session = await auth();
 
   if (!session?.user) {
