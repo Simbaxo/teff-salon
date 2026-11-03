@@ -59,6 +59,8 @@ model Employee {
 
   // Optional login account for employees who need system access
   user User?
+
+  cashLoans CashMovement[] @relation("CashLoansToEmployee")
 }
 
 model EmployeeScheduleBlock {
@@ -106,7 +108,11 @@ model User {
 
   bookingReadReceipts BookingReadReceipt[]
   // Weekly sales reviews completed by this user.
-  weeklySalesReviews WeeklySalesReview[]
+  weeklySalesReviews  WeeklySalesReview[]
+
+  cashboxesOpened       Cashbox[]      @relation("CashboxOpenedBy")
+  cashMovementsRecorded CashMovement[] @relation("CashMovementsRecorded")
+  cashCountsRecorded    CashCount[]    @relation("CashCountsRecorded")
 }
 
 model PushSubscription {
@@ -496,7 +502,7 @@ model PayrollEntry {
   // Finalized financial snapshot in Colombian pesos.
   // Fixed salary earned during this payroll week.
   // Stored permanently in the weekly financial snapshot.
-  salaryTotal Int @default(0)
+  salaryTotal     Int @default(0)
   productionTotal Int @default(0)
   commissionTotal Int @default(0)
   tipsTotal       Int @default(0)
@@ -548,6 +554,8 @@ model PayrollAdjustment {
   createdAt DateTime @default(now())
 
   entry PayrollEntry @relation(fields: [payrollEntryId], references: [id], onDelete: Restrict)
+
+  cashMovement CashMovement?
 
   @@index([payrollEntryId])
 }
@@ -678,4 +686,97 @@ enum EmployeeCompensationType {
 enum BookingSource {
   WEB
   INTERNAL
+}
+
+enum CashMovementType {
+  OWNER_WITHDRAWAL
+  BANK_DEPOSIT
+  CASH_EXPENSE
+  TECHNICIAN_LOAN
+  CASH_ADJUSTMENT_IN
+  CASH_ADJUSTMENT_OUT
+  REVERSAL
+}
+
+// One continuous physical cashbox for TEFF.
+model Cashbox {
+  id Int @id
+
+  openingBalance Int
+  openedAt       DateTime @default(now())
+
+  openedById Int
+  openedBy   User @relation("CashboxOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
+
+  movements CashMovement[]
+  counts    CashCount[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Permanent history of manual cash movements.
+model CashMovement {
+  id Int @id @default(autoincrement())
+
+  cashboxId Int
+  type      CashMovementType
+
+  // Positive for cash entering, negative for cash leaving.
+  amount Int
+
+  description String?
+
+  recordedById Int
+  employeeId   Int?
+
+  // One cashbox loan corresponds to one payroll adjustment.
+  payrollAdjustmentId Int? @unique
+
+  // Prevent duplicate entries from repeated requests.
+  idempotencyKey String @unique
+
+  // Corrections reference the original movement.
+  reversalOfId Int? @unique
+
+  createdAt DateTime @default(now())
+
+  cashbox Cashbox @relation(fields: [cashboxId], references: [id], onDelete: Restrict)
+
+  recordedBy User @relation("CashMovementsRecorded", fields: [recordedById], references: [id], onDelete: Restrict)
+
+  employee Employee? @relation("CashLoansToEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+
+  payrollAdjustment PayrollAdjustment? @relation(fields: [payrollAdjustmentId], references: [id], onDelete: Restrict)
+
+  reversalOf CashMovement? @relation("CashMovementReversals", fields: [reversalOfId], references: [id], onDelete: Restrict)
+
+  reversedBy CashMovement? @relation("CashMovementReversals")
+
+  @@index([cashboxId, createdAt])
+  @@index([employeeId])
+}
+
+// Physical cash verification by reception.
+model CashCount {
+  id Int @id @default(autoincrement())
+
+  cashboxId   Int
+  countedById Int
+
+  countedAmount  Int
+  expectedAmount Int
+  difference     Int
+
+  // Prevent duplicate physical counts from repeated requests.
+  idempotencyKey String @unique
+
+  notes     String?
+  createdAt DateTime @default(now())
+
+  cashbox Cashbox @relation(fields: [cashboxId], references: [id], onDelete: Restrict)
+
+  countedBy User @relation("CashCountsRecorded", fields: [countedById], references: [id], onDelete: Restrict)
+
+  @@index([cashboxId, createdAt])
 }
