@@ -1427,14 +1427,12 @@ export default function ReceptionistPageClient({
                         disabled={
                           isClearingNotifications || reviewingBookingId !== null
                         }
-                        disabled:cursor-not-allowed
-                        disabled:opacity-50
                         onClick={() =>
                           void dismissBookingNotifications(
                             notification.bookingId,
                           )
                         }
-                        className="ml-2 rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+                        className="ml-2 rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Descartar
                       </button>
