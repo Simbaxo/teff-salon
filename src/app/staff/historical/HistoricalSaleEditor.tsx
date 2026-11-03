@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import { getTeffToday } from "@/lib/datetime";
 import MoneyInput from "@/components/MoneyInput";
+import {
+  calculateGelComboPrices,
+  GEL_MANICURE_ID,
+  GEL_PEDICURE_ID,
+} from "@/lib/promotions/gel-mani-pedi";
 
 type Service = {
   id: number;
@@ -77,6 +82,11 @@ export default function HistoricalSaleEditor() {
   const [selectedServices, setSelectedServices] = useState<
     HistoricalServiceSelection[]
   >([]);
+
+  const [gelComboOriginalPrices, setGelComboOriginalPrices] = useState<{
+    manicure: number;
+    pedicure: number;
+  } | null>(null);
 
   const [addons, setAddons] = useState<Addon[]>([]);
   const [serviceAddonRelations, setServiceAddonRelations] = useState<
@@ -290,6 +300,58 @@ export default function HistoricalSaleEditor() {
     }));
   }
 
+  const gelManicure = selectedServices.find(
+    (item) => item.serviceId === GEL_MANICURE_ID,
+  );
+
+  const gelPedicure = selectedServices.find(
+    (item) => item.serviceId === GEL_PEDICURE_ID,
+  );
+
+  const canApplyGelCombo =
+    Boolean(gelManicure && gelPedicure) && gelComboOriginalPrices === null;
+
+  function applyGelCombo() {
+    if (!gelManicure || !gelPedicure || gelComboOriginalPrices !== null) {
+      return;
+    }
+
+    const updated = calculateGelComboPrices(selectedServices);
+
+    if (!updated) {
+      setSubmitError("No se pudo aplicar la promoción.");
+      return;
+    }
+
+    setGelComboOriginalPrices({
+      manicure: gelManicure.price,
+      pedicure: gelPedicure.price,
+    });
+
+    setSelectedServices(updated);
+    setSubmitError("");
+  }
+
+  function removeGelCombo() {
+    if (!gelComboOriginalPrices) return;
+
+    setSelectedServices((current) =>
+      current.map((item) => {
+        if (item.serviceId === GEL_MANICURE_ID) {
+          return { ...item, price: gelComboOriginalPrices.manicure };
+        }
+
+        if (item.serviceId === GEL_PEDICURE_ID) {
+          return { ...item, price: gelComboOriginalPrices.pedicure };
+        }
+
+        return item;
+      }),
+    );
+
+    setGelComboOriginalPrices(null);
+  }
+
   function addService() {
     const selectedServiceIds = new Set(
       selectedServices.map((item) => item.serviceId),
@@ -325,11 +387,38 @@ export default function HistoricalSaleEditor() {
     index: number,
     updates: Partial<HistoricalServiceSelection>,
   ) {
+    const editedService = selectedServices[index];
+
+    const affectsCombo =
+      gelComboOriginalPrices !== null &&
+      editedService !== undefined &&
+      (editedService.serviceId === GEL_MANICURE_ID ||
+        editedService.serviceId === GEL_PEDICURE_ID) &&
+      (updates.price !== undefined || updates.serviceId !== undefined);
+
     setSelectedServices((current) =>
-      current.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, ...updates } : item,
-      ),
+      current.map((item, itemIndex) => {
+        if (itemIndex === index) {
+          return { ...item, ...updates };
+        }
+
+        if (affectsCombo && gelComboOriginalPrices) {
+          if (item.serviceId === GEL_MANICURE_ID) {
+            return { ...item, price: gelComboOriginalPrices.manicure };
+          }
+
+          if (item.serviceId === GEL_PEDICURE_ID) {
+            return { ...item, price: gelComboOriginalPrices.pedicure };
+          }
+        }
+
+        return item;
+      }),
     );
+
+    if (affectsCombo) {
+      setGelComboOriginalPrices(null);
+    }
   }
 
   function changeService(index: number, serviceId: number) {
@@ -357,9 +446,32 @@ export default function HistoricalSaleEditor() {
   function removeSelectedService(index: number) {
     const serviceId = selectedServices[index]?.serviceId;
 
+    const removingComboService =
+      serviceId === GEL_MANICURE_ID || serviceId === GEL_PEDICURE_ID;
+
     setSelectedServices((current) =>
-      current.filter((_, itemIndex) => itemIndex !== index),
+      current
+        .filter((_, itemIndex) => itemIndex !== index)
+        .map((item) => {
+          if (!removingComboService || !gelComboOriginalPrices) {
+            return item;
+          }
+
+          if (item.serviceId === GEL_MANICURE_ID) {
+            return { ...item, price: gelComboOriginalPrices.manicure };
+          }
+
+          if (item.serviceId === GEL_PEDICURE_ID) {
+            return { ...item, price: gelComboOriginalPrices.pedicure };
+          }
+
+          return item;
+        }),
     );
+
+    if (removingComboService) {
+      setGelComboOriginalPrices(null);
+    }
 
     if (serviceId !== undefined) {
       setSelectedAddons((current) =>
@@ -1057,6 +1169,36 @@ export default function HistoricalSaleEditor() {
             <span className="font-bold text-black">
               ${subtotal.toLocaleString("es-CO")}
             </span>
+          </div>
+
+          <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4">
+            <p className="font-semibold text-black">
+              💅 Promo Manos y Pies Semi — $100.000
+            </p>
+
+            <p className="mt-1 text-sm text-neutral-600">
+              Manicura Gel + Pedicura Gel. Solo se aplica cuando presionas el
+              botón.
+            </p>
+
+            {gelComboOriginalPrices === null ? (
+              <button
+                type="button"
+                disabled={!canApplyGelCombo}
+                onClick={applyGelCombo}
+                className="mt-3 rounded-lg bg-[#B76E79] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Aplicar promoción
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={removeGelCombo}
+                className="mt-3 rounded-lg border border-[#B76E79] bg-white px-4 py-2 text-sm font-semibold text-[#B76E79]"
+              >
+                Quitar promoción
+              </button>
+            )}
           </div>
 
           <div>

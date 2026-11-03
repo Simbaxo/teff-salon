@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import MoneyInput from "@/components/MoneyInput";
 import Link from "next/link";
+import {
+  calculateGelComboPrices,
+  GEL_MANICURE_ID,
+  GEL_PEDICURE_ID,
+} from "@/lib/promotions/gel-mani-pedi";
 
 // Service data received from the original appointment.
 type BookedCheckoutService = {
@@ -104,6 +109,10 @@ export default function CheckoutEditor({
   qualifiedTechnicians,
 }: CheckoutEditorProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [gelComboOriginalPrices, setGelComboOriginalPrices] = useState<{
+    manicure: number;
+    pedicure: number;
+  } | null>(null);
   const [recentlyAddedServiceId, setRecentlyAddedServiceId] = useState<
     number | null
   >(null);
@@ -308,6 +317,73 @@ export default function CheckoutEditor({
     );
   }
 
+  const gelManicure = selectedServices.find(
+    (item) => item.service.id === GEL_MANICURE_ID,
+  );
+
+  const gelPedicure = selectedServices.find(
+    (item) => item.service.id === GEL_PEDICURE_ID,
+  );
+
+  const canApplyGelCombo =
+    Boolean(gelManicure && gelPedicure) && gelComboOriginalPrices === null;
+
+  function applyGelCombo() {
+    if (!gelManicure || !gelPedicure || gelComboOriginalPrices !== null) {
+      return;
+    }
+
+    const updated = calculateGelComboPrices(
+      selectedServices.map((item) => ({
+        serviceId: item.service.id,
+        price: item.bookedPrice,
+      })),
+    );
+
+    if (!updated) {
+      setCheckoutError("No se pudo aplicar la promoción.");
+      return;
+    }
+
+    setGelComboOriginalPrices({
+      manicure: gelManicure.bookedPrice,
+      pedicure: gelPedicure.bookedPrice,
+    });
+
+    const promoPrices = new Map(
+      updated.map((item) => [item.serviceId, item.price]),
+    );
+
+    setSelectedServices((current) =>
+      current.map((item) => ({
+        ...item,
+        bookedPrice: promoPrices.get(item.service.id) ?? item.bookedPrice,
+      })),
+    );
+
+    setCheckoutError("");
+  }
+
+  function removeGelCombo() {
+    if (!gelComboOriginalPrices) return;
+
+    setSelectedServices((current) =>
+      current.map((item) => {
+        if (item.service.id === GEL_MANICURE_ID) {
+          return { ...item, bookedPrice: gelComboOriginalPrices.manicure };
+        }
+
+        if (item.service.id === GEL_PEDICURE_ID) {
+          return { ...item, bookedPrice: gelComboOriginalPrices.pedicure };
+        }
+
+        return item;
+      }),
+    );
+
+    setGelComboOriginalPrices(null);
+  }
+
   // Add a service to the final checkout selection
   function addService(service: AvailableService) {
     const defaultEmployeeId = visitAppointments.find(
@@ -355,9 +431,36 @@ export default function CheckoutEditor({
 
   // Remove a service and clean up add-ons that are no longer valid
   function removeService(serviceId: number) {
-    const remainingServices = selectedServices.filter(
-      (item) => item.service.id !== serviceId,
-    );
+    const removingComboService =
+      serviceId === GEL_MANICURE_ID || serviceId === GEL_PEDICURE_ID;
+
+    const remainingServices = selectedServices
+      .filter((item) => item.service.id !== serviceId)
+      .map((item) => {
+        if (!removingComboService || !gelComboOriginalPrices) {
+          return item;
+        }
+
+        if (item.service.id === GEL_MANICURE_ID) {
+          return {
+            ...item,
+            bookedPrice: gelComboOriginalPrices.manicure,
+          };
+        }
+
+        if (item.service.id === GEL_PEDICURE_ID) {
+          return {
+            ...item,
+            bookedPrice: gelComboOriginalPrices.pedicure,
+          };
+        }
+
+        return item;
+      });
+
+    if (removingComboService) {
+      setGelComboOriginalPrices(null);
+    }
 
     const remainingServiceIds = new Set(
       remainingServices.map((item) => item.service.id),
@@ -427,20 +530,46 @@ export default function CheckoutEditor({
   // Adjust a service price for this checkout only.
   // This does not change the permanent salon catalog price.
   function updateServicePrice(serviceId: number, price: number) {
+    if (serviceId === GEL_MANICURE_ID || serviceId === GEL_PEDICURE_ID) {
+      setGelComboOriginalPrices(null);
+    }
+
     if (!Number.isInteger(price) || price < 0) {
       return;
     }
 
+    const editingComboService =
+      serviceId === GEL_MANICURE_ID || serviceId === GEL_PEDICURE_ID;
+
     setSelectedServices((current) =>
-      current.map((item) =>
-        item.service.id === serviceId
-          ? {
+      current.map((item) => {
+        if (item.service.id === serviceId) {
+          return { ...item, bookedPrice: price };
+        }
+
+        if (editingComboService && gelComboOriginalPrices) {
+          if (item.service.id === GEL_MANICURE_ID) {
+            return {
               ...item,
-              bookedPrice: price,
-            }
-          : item,
-      ),
+              bookedPrice: gelComboOriginalPrices.manicure,
+            };
+          }
+
+          if (item.service.id === GEL_PEDICURE_ID) {
+            return {
+              ...item,
+              bookedPrice: gelComboOriginalPrices.pedicure,
+            };
+          }
+        }
+
+        return item;
+      }),
     );
+
+    if (editingComboService) {
+      setGelComboOriginalPrices(null);
+    }
   }
 
   // Adjust an add-on price for this checkout only.
@@ -872,6 +1001,36 @@ export default function CheckoutEditor({
               <p className="mt-2 text-sm text-neutral-500">
                 No hay adicionales en esta cita.
               </p>
+            )}
+          </div>
+
+          <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4">
+            <p className="font-semibold text-black">
+              💅 Promo Manos y Pies Semi — $100.000
+            </p>
+
+            <p className="mt-1 text-sm text-neutral-600">
+              Manicura Gel + Pedicura Gel. Se aplica únicamente al presionar el
+              botón.
+            </p>
+
+            {gelComboOriginalPrices === null ? (
+              <button
+                type="button"
+                disabled={!canApplyGelCombo}
+                onClick={applyGelCombo}
+                className="mt-3 rounded-lg bg-[#B76E79] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Aplicar promoción
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={removeGelCombo}
+                className="mt-3 rounded-lg border border-[#B76E79] bg-white px-4 py-2 text-sm font-semibold text-[#B76E79]"
+              >
+                Quitar promoción
+              </button>
             )}
           </div>
 
