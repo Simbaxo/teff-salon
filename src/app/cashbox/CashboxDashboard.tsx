@@ -6,6 +6,7 @@ import CashMovementHistory from "./CashMovementHistory";
 import TechnicianLoanForm from "./TechnicianLoanForm";
 import CashCountForm from "./CashCountForm";
 import CashCountHistory from "./CashCountHistory";
+import CashboxActivationForm from "./CashboxActivationForm";
 
 type CashboxData =
   | {
@@ -40,7 +41,7 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
-export default function CashboxDashboard() {
+export default function CashboxDashboard({ userRole }: { userRole: string }) {
   const [cashbox, setCashbox] = useState<CashboxData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -232,9 +233,13 @@ export default function CashboxDashboard() {
           registrar el conteo físico inicial antes de comenzar.
         </p>
 
-        <p className="mt-3 text-sm text-amber-800">
-          No hay un saldo disponible confirmado.
-        </p>
+        {userRole === "OWNER" ? (
+          <CashboxActivationForm onActivated={loadCashbox} />
+        ) : (
+          <p className="mt-3 text-sm text-amber-800">
+            Solo el propietario puede activar la caja.
+          </p>
+        )}
       </section>
     );
   }

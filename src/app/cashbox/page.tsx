@@ -31,7 +31,7 @@ export default async function CashboxPage() {
           </div>
         </header>
 
-        <CashboxDashboard />
+        <CashboxDashboard userRole={session.user.role} />
       </div>
     </main>
   );
