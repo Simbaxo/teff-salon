@@ -113,6 +113,11 @@ model User {
   cashboxesOpened       Cashbox[]      @relation("CashboxOpenedBy")
   cashMovementsRecorded CashMovement[] @relation("CashMovementsRecorded")
   cashCountsRecorded    CashCount[]    @relation("CashCountsRecorded")
+
+  expensesCreated  Expense[] @relation("ExpensesCreated")
+  expensesReviewed Expense[] @relation("ExpensesReviewed")
+
+  expenseReceiptsUploaded ExpenseReceipt[] @relation("ExpenseReceiptsUploaded")
 }
 
 model PushSubscription {
@@ -779,4 +784,140 @@ model CashCount {
   countedBy User @relation("CashCountsRecorded", fields: [countedById], references: [id], onDelete: Restrict)
 
   @@index([cashboxId, createdAt])
+}
+
+enum ExpenseReviewStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum ExpensePaymentStatus {
+  UNPAID
+  PAID
+}
+
+enum ExpensePaymentMethod {
+  CASH
+  BOLD
+  TRANSFER
+  OTHER
+}
+
+model ExpenseCategory {
+  id        Int     @id @default(autoincrement())
+  name      String  @unique
+  active    Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  expenses          Expense[]
+  recurringExpenses RecurringExpense[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RecurringExpense {
+  id Int @id @default(autoincrement())
+
+  categoryId Int
+  name       String
+  amount     Int
+  dayOfMonth Int
+
+  active Boolean @default(true)
+
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  expenses Expense[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // First eligible month, stored at UTC midnight.
+  startMonth DateTime
+
+  @@index([startMonth])
+}
+
+model Expense {
+  id Int @id @default(autoincrement())
+
+  categoryId         Int
+  recurringExpenseId Int?
+
+  // First day of the recurring month, stored at UTC midnight.
+  // Null for manually entered expenses.
+  recurringMonth DateTime?
+
+  description String
+  supplier    String?
+  amount      Int
+
+  expenseDate DateTime
+  paidAt      DateTime?
+
+  reviewStatus  ExpenseReviewStatus   @default(PENDING_REVIEW)
+  paymentStatus ExpensePaymentStatus  @default(UNPAID)
+  paymentMethod ExpensePaymentMethod?
+
+  createdById  Int
+  reviewedById Int?
+  reviewedAt   DateTime?
+
+  // Prevent duplicate purchases when a request is retried.
+  // Nullable to preserve existing and recurring expense records.
+  idempotencyKey String? @unique
+
+  // Reserved for a future Cashbox integration.
+  // No cash movements are created by this model.
+  cashMovementId Int? @unique
+
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  recurringExpense RecurringExpense? @relation(fields: [recurringExpenseId], references: [id], onDelete: Restrict)
+
+  createdBy User @relation("ExpensesCreated", fields: [createdById], references: [id], onDelete: Restrict)
+
+  reviewedBy User? @relation("ExpensesReviewed", fields: [reviewedById], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  receipts ExpenseReceipt[]
+
+  // Prevent generating the same monthly expense twice.
+  @@unique([recurringExpenseId, recurringMonth])
+  @@index([expenseDate, reviewStatus])
+  @@index([categoryId, expenseDate])
+}
+
+model ExpenseReceipt {
+  id Int @id @default(autoincrement())
+
+  expenseId    Int
+  uploadedById Int
+
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+
+  // Prevent duplicate receipt records when an upload is retried.
+  idempotencyKey String? @unique
+
+  // SHA-256 of the original uploaded file contents.
+  // Nullable for receipts created before checksum support.
+  contentSha256 String?
+
+  // Private Vercel Blob pathname.
+
+  blobPathname String @unique
+
+  createdAt DateTime @default(now())
+
+  expense    Expense @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  uploadedBy User    @relation("ExpenseReceiptsUploaded", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([expenseId, createdAt])
+  @@index([uploadedById])
 }

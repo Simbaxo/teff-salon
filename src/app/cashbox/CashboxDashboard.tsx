@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import CashMovementForm from "./CashMovementForm";
+import PurchaseForm from "./PurchaseForm";
 import CashMovementHistory from "./CashMovementHistory";
 import TechnicianLoanForm from "./TechnicianLoanForm";
 import CashCountForm from "./CashCountForm";
@@ -325,6 +326,8 @@ export default function CashboxDashboard({ userRole }: { userRole: string }) {
           </div>
         </dl>
       </section>
+
+      <PurchaseForm onPurchaseRecorded={handleMovementRecorded} />
 
       <CashMovementForm onMovementRecorded={handleMovementRecorded} />
 
