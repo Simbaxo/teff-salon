@@ -141,8 +141,11 @@ export async function POST(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!canManageStaff(session.user.role)) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+  if (session.user.role !== "OWNER") {
+    return Response.json(
+      { error: "Solo el propietario puede registrar movimientos manuales." },
+      { status: 403 },
+    );
   }
 
   const userId = Number(session.user.id);
@@ -204,10 +207,10 @@ export async function POST(request: Request) {
           },
         });
 
-        if (!user?.active || !canManageStaff(user.role)) {
+        if (!user?.active || user.role !== "OWNER") {
           return {
             ok: false as const,
-            error: "Usuario no autorizado.",
+            error: "Solo el propietario puede registrar movimientos manuales.",
             httpStatus: 403,
           };
         }

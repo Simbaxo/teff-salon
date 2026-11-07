@@ -329,7 +329,9 @@ export default function CashboxDashboard({ userRole }: { userRole: string }) {
 
       <PurchaseForm onPurchaseRecorded={handleMovementRecorded} />
 
-      <CashMovementForm onMovementRecorded={handleMovementRecorded} />
+      {userRole === "OWNER" && (
+        <CashMovementForm onMovementRecorded={handleMovementRecorded} />
+      )}
 
       <TechnicianLoanForm onLoanRecorded={handleMovementRecorded} />
 
