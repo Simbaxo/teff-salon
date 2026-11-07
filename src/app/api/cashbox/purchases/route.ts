@@ -194,6 +194,16 @@ export async function POST(request: Request) {
           };
         }
 
+        // Preserve retries of previously submitted purchases,
+        // but do not allow new purchases to link old Caja withdrawals.
+        if (purchaseMode === "EXISTING_CASH") {
+          return {
+            ok: false as const,
+            status: 400,
+            error: "Las compras nuevas deben registrarse directamente en Caja.",
+          };
+        }
+
         const category = await tx.expenseCategory.findUnique({
           where: { id: purchaseCategoryId },
           select: { active: true },
@@ -208,50 +218,6 @@ export async function POST(request: Request) {
         }
 
         let cashMovementId: number | null = null;
-
-        if (purchaseMode === "EXISTING_CASH") {
-          const movement = await tx.cashMovement.findUnique({
-            where: { id: existingCashMovementId as number },
-            select: {
-              id: true,
-              cashboxId: true,
-              type: true,
-              amount: true,
-              recordedById: true,
-              reversalOfId: true,
-              reversedBy: {
-                select: { id: true },
-              },
-            },
-          });
-
-          const linkedExpense = movement
-            ? await tx.expense.findUnique({
-                where: { cashMovementId: movement.id },
-                select: { id: true },
-              })
-            : null;
-
-          if (
-            !movement ||
-            movement.cashboxId !== 1 ||
-            movement.type !== "CASH_EXPENSE" ||
-            movement.amount !== -purchaseAmount ||
-            movement.reversalOfId !== null ||
-            movement.reversedBy !== null ||
-            linkedExpense !== null ||
-            (staff.role === "RECEPTIONIST" &&
-              movement.recordedById !== staff.userId)
-          ) {
-            return {
-              ok: false as const,
-              status: 409,
-              error: "El movimiento no está disponible para vincular.",
-            };
-          }
-
-          cashMovementId = movement.id;
-        }
 
         if (purchaseMode === "NEW_CASH") {
           const cashbox = await tx.cashbox.findUnique({

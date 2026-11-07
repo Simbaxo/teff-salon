@@ -218,8 +218,6 @@ export default function PurchaseForm({
   const [amount, setAmount] = useState("");
   const [expenseDate, setExpenseDate] = useState(bogotaToday);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
-  const [purchaseMode, setPurchaseMode] = useState<PurchaseMode>("NEW_CASH");
-  const [existingCashMovementId, setExistingCashMovementId] = useState("");
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -279,13 +277,6 @@ export default function PurchaseForm({
         setAmount(String(request.amount));
         setExpenseDate(request.expenseDate);
         setPaymentMethod(request.paymentMethod);
-        setPurchaseMode(request.mode);
-        setExistingCashMovementId(
-          request.existingCashMovementId === undefined
-            ? ""
-            : String(request.existingCashMovementId),
-        );
-
         setPendingPurchase(recovered);
 
         setRecoveryError(
@@ -360,8 +351,6 @@ export default function PurchaseForm({
 
   function changePaymentMethod(value: PaymentMethod) {
     setPaymentMethod(value);
-    setPurchaseMode(value === "CASH" ? "NEW_CASH" : "NON_CASH");
-    setExistingCashMovementId("");
   }
 
   function validatePurchase() {
@@ -369,7 +358,6 @@ export default function PurchaseForm({
 
     const selectedCategory = Number(categoryId);
     const trimmedDescription = description.trim();
-    const existingId = Number(existingCashMovementId);
 
     if (
       !Number.isSafeInteger(selectedCategory) ||
@@ -392,16 +380,6 @@ export default function PurchaseForm({
 
     if (!expenseDate || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate)) {
       setFormError("Selecciona una fecha válida.");
-      return;
-    }
-
-    if (
-      purchaseMode === "EXISTING_CASH" &&
-      (!existingCashMovementId.trim() ||
-        !Number.isSafeInteger(existingId) ||
-        existingId <= 0)
-    ) {
-      setFormError("Ingresa un número válido de movimiento de Caja.");
       return;
     }
 
@@ -471,7 +449,6 @@ export default function PurchaseForm({
     const selectedCategory = Number(categoryId);
     const trimmedDescription = description.trim();
     const trimmedSupplier = supplier.trim();
-    const parsedExistingId = Number(existingCashMovementId);
 
     const parsedDate = new Date(`${expenseDate}T00:00:00.000Z`);
 
@@ -488,19 +465,13 @@ export default function PurchaseForm({
       trimmedDescription.length < 2 ||
       trimmedDescription.length > 300 ||
       trimmedSupplier.length > 150 ||
-      !validDate ||
-      (purchaseMode === "EXISTING_CASH" &&
-        (!existingCashMovementId.trim() ||
-          !Number.isSafeInteger(parsedExistingId) ||
-          parsedExistingId <= 0)) ||
-      (purchaseMode === "NON_CASH" && paymentMethod === "CASH") ||
-      (purchaseMode !== "NON_CASH" && paymentMethod !== "CASH")
+      !validDate
     ) {
       return null;
     }
 
     const request: PurchaseRequest = {
-      mode: purchaseMode,
+      mode: paymentMethod === "CASH" ? "NEW_CASH" : "NON_CASH",
       categoryId: selectedCategory,
       amount: parsedAmount,
       description: trimmedDescription,
@@ -509,10 +480,6 @@ export default function PurchaseForm({
       paymentMethod,
       idempotencyKey: crypto.randomUUID(),
     };
-
-    if (purchaseMode === "EXISTING_CASH") {
-      request.existingCashMovementId = parsedExistingId;
-    }
 
     return request;
   }
@@ -844,8 +811,6 @@ export default function PurchaseForm({
     setAmount("");
     setExpenseDate(bogotaToday());
     setPaymentMethod("CASH");
-    setPurchaseMode("NEW_CASH");
-    setExistingCashMovementId("");
     setShowConfirmation(false);
   }
 
@@ -1052,11 +1017,9 @@ export default function PurchaseForm({
             </dl>
 
             <div className="mt-4 rounded-lg bg-white p-3 text-sm text-neutral-800">
-              {purchaseMode === "NEW_CASH"
+              {paymentMethod === "CASH"
                 ? "Se descontará el valor de Caja y se registrará el gasto en Finanzas."
-                : purchaseMode === "EXISTING_CASH"
-                  ? `Se vinculará el movimiento #${existingCashMovementId} sin descontar dinero nuevamente.`
-                  : "Se registrará el gasto en Finanzas sin modificar el saldo de Caja."}
+                : "Se registrará el gasto en Finanzas sin modificar el saldo de Caja."}
             </div>
 
             <p className="mt-3 text-xs text-emerald-900">
@@ -1242,56 +1205,9 @@ export default function PurchaseForm({
 
           {paymentMethod === "CASH" && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-sm font-semibold text-emerald-950">
-                ¿Ya registraste esta salida en Caja?
+              <p className="text-sm text-emerald-950">
+                Esta compra se descontará automáticamente del saldo de Caja.
               </p>
-
-              <div className="mt-3 space-y-3">
-                <label className="flex items-center gap-3 text-sm text-neutral-800">
-                  <input
-                    type="radio"
-                    checked={purchaseMode === "NEW_CASH"}
-                    onChange={() => {
-                      setPurchaseMode("NEW_CASH");
-                      setExistingCashMovementId("");
-                    }}
-                  />
-                  No, registrar una nueva salida
-                </label>
-
-                <label className="flex items-center gap-3 text-sm text-neutral-800">
-                  <input
-                    type="radio"
-                    checked={purchaseMode === "EXISTING_CASH"}
-                    onChange={() => setPurchaseMode("EXISTING_CASH")}
-                  />
-                  Sí, vincular una salida existente
-                </label>
-              </div>
-
-              {purchaseMode === "EXISTING_CASH" && (
-                <div className="mt-4">
-                  <label
-                    htmlFor="purchase-existing-movement"
-                    className="mb-2 block text-sm font-medium text-black"
-                  >
-                    Número del movimiento de Caja
-                  </label>
-
-                  <input
-                    id="purchase-existing-movement"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={existingCashMovementId}
-                    onChange={(event) =>
-                      setExistingCashMovementId(event.target.value)
-                    }
-                    placeholder="Ej. 25"
-                    className="w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-black"
-                  />
-                </div>
-              )}
             </div>
           )}
 
