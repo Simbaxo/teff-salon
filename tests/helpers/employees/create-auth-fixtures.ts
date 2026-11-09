@@ -24,29 +24,35 @@ async function main() {
   const manifestPath = `.teff-test-fixtures/employee-auth-${marker}.json`;
 
   try {
-    const users = await prisma.$transaction(async (tx) => {
-      const owner = await tx.user.create({
-        data: {
-          name: `${marker}-owner`,
-          email: ownerEmail,
-          passwordHash,
-          role: "OWNER",
-          active: true,
-        },
-      });
+    const users = await prisma.$transaction(
+      async (tx) => {
+        const owner = await tx.user.create({
+          data: {
+            name: `${marker}-owner`,
+            email: ownerEmail,
+            passwordHash,
+            role: "OWNER",
+            active: true,
+          },
+        });
 
-      const receptionist = await tx.user.create({
-        data: {
-          name: `${marker}-receptionist`,
-          email: receptionistEmail,
-          passwordHash,
-          role: "RECEPTIONIST",
-          active: true,
-        },
-      });
+        const receptionist = await tx.user.create({
+          data: {
+            name: `${marker}-receptionist`,
+            email: receptionistEmail,
+            passwordHash,
+            role: "RECEPTIONIST",
+            active: true,
+          },
+        });
 
-      return { owner, receptionist };
-    });
+        return { owner, receptionist };
+      },
+      {
+        maxWait: 15000,
+        timeout: 20000,
+      },
+    );
 
     await mkdir(".teff-test-fixtures", { recursive: true });
 
