@@ -13,6 +13,11 @@ type Service = {
     active: boolean;
 };
 
+type BookableEmployee = {
+    id: number;
+    name: string;
+};
+
 type StatusFilter =
     | "ALL"
     | "ACTIVE"
@@ -51,6 +56,18 @@ function getCategoryLabel(category: string) {
 export default function ServicesCatalogClient() {
     const [services, setServices] =
         useState<Service[]>([]);
+
+    const [bookableEmployees, setBookableEmployees] =
+        useState<BookableEmployee[]>([]);
+
+    const [selectedEmployeeIds, setSelectedEmployeeIds] =
+        useState<number[]>([]);
+
+    const [employeesLoading, setEmployeesLoading] =
+        useState(false);
+
+    const [employeesError, setEmployeesError] =
+        useState("");
 
     const [isLoading, setIsLoading] =
         useState(true);
@@ -133,6 +150,38 @@ export default function ServicesCatalogClient() {
         }
     }
 
+    async function loadBookableEmployees() {
+        setEmployeesLoading(true);
+        setEmployeesError("");
+
+        try {
+            const response = await fetch("/api/employees", {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error("No se pudieron cargar las técnicas.");
+            }
+
+            const data: BookableEmployee[] = await response.json();
+
+            setBookableEmployees(
+                data.map((employee) => ({
+                    id: employee.id,
+                    name: employee.name,
+                }))
+            );
+        } catch (error) {
+            console.error(error);
+            setBookableEmployees([]);
+            setEmployeesError(
+                "No se pudieron cargar las técnicas disponibles."
+            );
+        } finally {
+            setEmployeesLoading(false);
+        }
+    }
+
     function resetForm() {
         setFormNameEs("");
         setFormNameEn("");
@@ -142,11 +191,14 @@ export default function ServicesCatalogClient() {
         setFormRequiresApproval(false);
         setFormActive(true);
         setFormError("");
+        setSelectedEmployeeIds([]);
+        setEmployeesError("");
     }
 
     function openCreateModal() {
         resetForm();
         setEditingService(null);
+        void loadBookableEmployees();
         setShowCreateModal(true);
     }
 
@@ -184,10 +236,11 @@ export default function ServicesCatalogClient() {
             !Number.isInteger(
                 estimatedDuration
             ) ||
-            estimatedDuration <= 0
+            estimatedDuration <= 0 ||
+            selectedEmployeeIds.length === 0
         ) {
             setFormError(
-                "Completa correctamente todos los campos obligatorios."
+                "Completa los campos obligatorios y selecciona al menos una técnica."
             );
             return;
         }
@@ -214,6 +267,7 @@ export default function ServicesCatalogClient() {
                         estimatedDuration,
                         requiresApproval:
                             formRequiresApproval,
+                        employeeIds: selectedEmployeeIds,
                     }),
                 }
             );
@@ -779,6 +833,57 @@ export default function ServicesCatalogClient() {
                                 </p>
                             </div>
                         </div>
+
+                        {!editingService && (
+                            <div className="mt-6 rounded-xl border border-neutral-200 p-4">
+                                <h3 className="font-semibold text-black">
+                                    Técnicas asignadas
+                                </h3>
+
+                                <p className="mt-1 text-sm text-neutral-500">
+                                    Selecciona quiénes pueden realizar este servicio.
+                                </p>
+
+                                {employeesLoading ? (
+                                    <p className="mt-3 text-sm text-neutral-500">
+                                        Cargando técnicas...
+                                    </p>
+                                ) : employeesError ? (
+                                    <p role="alert" className="mt-3 text-sm text-red-700">
+                                        {employeesError}
+                                    </p>
+                                ) : bookableEmployees.length === 0 ? (
+                                    <p className="mt-3 text-sm text-amber-700">
+                                        No hay técnicas disponibles.
+                                    </p>
+                                ) : (
+                                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                        {bookableEmployees.map((employee) => (
+                                            <label
+                                                key={employee.id}
+                                                className="flex cursor-pointer items-center gap-3 rounded-lg border border-neutral-200 p-3"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedEmployeeIds.includes(employee.id)}
+                                                    onChange={(event) => {
+                                                        setSelectedEmployeeIds((current) =>
+                                                            event.target.checked
+                                                                ? [...current, employee.id]
+                                                                : current.filter((id) => id !== employee.id)
+                                                        );
+                                                    }}
+                                                    className="h-5 w-5"
+                                                />
+                                                <span className="text-sm font-medium text-black">
+                                                    {employee.name}
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         <div className="mt-6 space-y-3">
                             <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-neutral-200 p-4">
