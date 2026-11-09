@@ -15,8 +15,7 @@ import {
 const suppressBookingPush = shouldSuppressBookingPush({
   NODE_ENV: process.env.NODE_ENV,
   DATABASE_URL: process.env.DATABASE_URL,
-  TEFF_BOOKING_TEST_DISABLE_PUSH:
-    process.env.TEFF_BOOKING_TEST_DISABLE_PUSH,
+  TEFF_BOOKING_TEST_DISABLE_PUSH: process.env.TEFF_BOOKING_TEST_DISABLE_PUSH,
 });
 
 export async function POST(request: Request) {
@@ -57,7 +56,7 @@ export async function POST(request: Request) {
     if (hasInvalidPayloadTypes) {
       return Response.json(
         { error: "Invalid booking payload" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -75,7 +74,7 @@ export async function POST(request: Request) {
     if (hasInvalidCustomerFieldTypes) {
       return Response.json(
         { error: "Invalid customer information" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -89,14 +88,14 @@ export async function POST(request: Request) {
     if (hasInvalidCustomerFieldLength) {
       return Response.json(
         { error: "Customer information is too long" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // Normalize customer text fields before validation and saving
     const normalizedCustomerName =
       typeof customerName === "string" ? customerName.trim() : "";
-    
+
     const normalizedCustomerPhone =
       typeof customerPhone === "string" && customerPhone.trim() !== ""
         ? normalizePhoneNumber(customerPhone)
@@ -107,10 +106,10 @@ export async function POST(request: Request) {
     if (customerPhone.trim() !== "" && normalizedCustomerPhone === null) {
       return Response.json(
         { error: "Invalid customer phone number" },
-        { status: 400 }
+        { status: 400 },
       );
     }
-    
+
     const normalizedCustomerEmail =
       typeof customerEmail === "string" ? customerEmail.trim() : "";
 
@@ -125,7 +124,7 @@ export async function POST(request: Request) {
     if (!isValidEmail) {
       return Response.json(
         { error: "Invalid customer email" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -142,7 +141,7 @@ export async function POST(request: Request) {
     ) {
       return Response.json(
         { error: "Missing required booking information" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -155,7 +154,7 @@ export async function POST(request: Request) {
         assignment.serviceId <= 0 ||
         (assignment.employeeId !== "any" &&
           (!Number.isInteger(assignment.employeeId) ||
-            assignment.employeeId <= 0))
+            assignment.employeeId <= 0)),
     );
 
     // Validate each add-on-to-service assignment.
@@ -165,7 +164,7 @@ export async function POST(request: Request) {
         !Number.isInteger(assignment.addonId) ||
         assignment.addonId <= 0 ||
         !Number.isInteger(assignment.serviceId) ||
-        assignment.serviceId <= 0
+        assignment.serviceId <= 0,
     );
 
     // Validate that service and add-on IDs are positive integers
@@ -173,15 +172,12 @@ export async function POST(request: Request) {
       hasInvalidServiceAssignments ||
       hasInvalidAddonAssignments ||
       serviceIds.some(
-        (id: unknown) => !Number.isInteger(id) || (id as number) <= 0
+        (id: unknown) => !Number.isInteger(id) || (id as number) <= 0,
       );
 
-      if (hasInvalidIds) {
-        return Response.json(
-          { error: "Invalid booking IDs" },
-          { status: 400 }
-        );
-      }
+    if (hasInvalidIds) {
+      return Response.json({ error: "Invalid booking IDs" }, { status: 400 });
+    }
 
     // Validate YYYY-MM-DD and reject impossible calendar dates
     const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
@@ -195,20 +191,19 @@ export async function POST(request: Request) {
 
       const parsedDate = new Date(Date.UTC(year, month - 1, day));
 
-    isValidDate =
-      parsedDate.getUTCFullYear() === year &&
-      parsedDate.getUTCMonth() === month - 1 &&
-      parsedDate.getUTCDate() === day;
+      isValidDate =
+        parsedDate.getUTCFullYear() === year &&
+        parsedDate.getUTCMonth() === month - 1 &&
+        parsedDate.getUTCDate() === day;
     }
 
     // Validate the start time format: HH:MM using a 24-hour clock
-    const isValidStartTime =
-      /^([01]\d|2[0-3]):[0-5]\d$/.test(startTime);
-      
+    const isValidStartTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(startTime);
+
     if (!isValidDate || !isValidStartTime) {
       return Response.json(
         { error: "Invalid booking date or time" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -219,7 +214,7 @@ export async function POST(request: Request) {
     if (date < todayInMedellin) {
       return Response.json(
         { error: "Booking date cannot be in the past" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -228,14 +223,14 @@ export async function POST(request: Request) {
     const uniqueAddonIds = [
       ...new Set<number>(
         addonAssignments.map(
-          (assignment: AddonAssignmentInput) => assignment.addonId
-        )
+          (assignment: AddonAssignmentInput) => assignment.addonId,
+        ),
       ),
     ];
 
     // Every selected service must have exacty one technician assignment
     const assignedServiceIds = serviceAssignments.map(
-      (assignment: ServiceAssignmentInput) => assignment.serviceId
+      (assignment: ServiceAssignmentInput) => assignment.serviceId,
     );
 
     const uniqueAssignedServiceIds = [...new Set<number>(assignedServiceIds)];
@@ -243,16 +238,16 @@ export async function POST(request: Request) {
     const assignmentsMatchServices =
       uniqueAssignedServiceIds.length === uniqueServiceIds.length &&
       uniqueServiceIds.every((serviceId) =>
-      uniqueAssignedServiceIds.includes(serviceId)
-    ) &&
-    assignedServiceIds.length === uniqueServiceIds.length;
+        uniqueAssignedServiceIds.includes(serviceId),
+      ) &&
+      assignedServiceIds.length === uniqueServiceIds.length;
 
-  if (!assignmentsMatchServices) {
-    return Response.json(
-      { error: "Service assignments do not match selected services" },
-      { status: 400 }
-    );
-  }
+    if (!assignmentsMatchServices) {
+      return Response.json(
+        { error: "Service assignments do not match selected services" },
+        { status: 400 },
+      );
+    }
 
     // Match the public services API ordering.
     // Frontend and backend must schedule services
@@ -273,7 +268,7 @@ export async function POST(request: Request) {
     if (services.length !== uniqueServiceIds.length) {
       return Response.json(
         { error: "One or more services are invalid" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -299,17 +294,17 @@ export async function POST(request: Request) {
         const qualifiedEmployeeIds = activeEmployees
           .filter((employee) =>
             employee.employeeServices.some(
-              (relation) => relation.serviceId === assignment.serviceId
-            )
+              (relation) => relation.serviceId === assignment.serviceId,
+            ),
           )
-          .map((employee) => employee.id)
+          .map((employee) => employee.id);
 
         return {
           serviceId: assignment.serviceId,
           requestedEmployeeId: assignment.employeeId,
           qualifiedEmployeeIds,
         };
-      }
+      },
     );
 
     // Every service must have at least one active qualified technician
@@ -317,10 +312,10 @@ export async function POST(request: Request) {
     const hasInvalidTechnicianAssignment = serviceAssignmentOptions.some(
       (assignment) =>
         assignment.qualifiedEmployeeIds.length === 0 ||
-      (assignment.requestedEmployeeId !== "any" &&
-        !assignment.qualifiedEmployeeIds.includes(
-          assignment.requestedEmployeeId
-        ))
+        (assignment.requestedEmployeeId !== "any" &&
+          !assignment.qualifiedEmployeeIds.includes(
+            assignment.requestedEmployeeId,
+          )),
     );
 
     if (hasInvalidTechnicianAssignment) {
@@ -329,7 +324,7 @@ export async function POST(request: Request) {
           error:
             "One or more technician assignments are invalid for the selected services",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -347,7 +342,7 @@ export async function POST(request: Request) {
     if (addons.length !== uniqueAddonIds.length) {
       return Response.json(
         { error: "One or more add-ons are invalid" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -366,17 +361,16 @@ export async function POST(request: Request) {
         !serviceAddonRelations.some(
           (relation) =>
             relation.serviceId === assignment.serviceId &&
-            relation.addonId === assignment.addonId
-        )
+            relation.addonId === assignment.addonId,
+        ),
     );
 
     if (hasInvalidAddon) {
       return Response.json(
         {
-          error:
-            "One or more add-ons are not valid for the selected services",
+          error: "One or more add-ons are not valid for the selected services",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -386,26 +380,23 @@ export async function POST(request: Request) {
       const assignedAddonIds = addonAssignments
         .filter(
           (assignment: AddonAssignmentInput) =>
-            assignment.serviceId === service.id
+            assignment.serviceId === service.id,
         )
-        .map(
-          (assignment: AddonAssignmentInput) =>
-            assignment.addonId
-        );
+        .map((assignment: AddonAssignmentInput) => assignment.addonId);
 
       const assignedAddons = addons.filter((addon) =>
-        assignedAddonIds.includes(addon.id)
+        assignedAddonIds.includes(addon.id),
       );
 
       const duration =
         service.estimatedDuration +
         assignedAddons.reduce(
           (total, addon) => total + addon.estimatedDuration,
-          0
+          0,
         );
 
       const assignmentOption = serviceAssignmentOptions.find(
-        (assignment) => assignment.serviceId === service.id
+        (assignment) => assignment.serviceId === service.id,
       );
 
       if (!assignmentOption) {
@@ -428,14 +419,14 @@ export async function POST(request: Request) {
       dayOfWeek === 0
         ? 10 * 60 + 30 // Sunday: 10:30
         : 9 * 60 + 30; // Monday-Saturday 9:30
-    
+
     // Latest permitted appointment start time.
     // Services may finish after this time.
     const latestStartMinutes =
       dayOfWeek === 0
         ? 17 * 60 // Sunday: 5:00 PM
         : 18 * 60 + 30; // Monday-Saturday: 6:30 PM
-      
+
     const [startHour, startMinute] = startTime.split(":").map(Number);
     const bookingStartMinutes = startHour * 60 + startMinute;
 
@@ -446,7 +437,7 @@ export async function POST(request: Request) {
     ) {
       return Response.json(
         { error: "Booking time cannot be in the past" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -458,7 +449,7 @@ export async function POST(request: Request) {
     ) {
       return Response.json(
         { error: "Appointment is outside business hours" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -474,25 +465,25 @@ export async function POST(request: Request) {
             // Reuse an existing customer when the phone number already exists.
             const customer = normalizedCustomerPhone
               ? await tx.customer.upsert({
-                    where: {
-                        phone: normalizedCustomerPhone,
-                    },
-                    update: {
-                        name: normalizedCustomerName,
-                        email: normalizedCustomerEmail || null,
-                    },
-                    create: {
-                        name: normalizedCustomerName,
-                        phone: normalizedCustomerPhone,
-                        email: normalizedCustomerEmail || null,
-                    },
+                  where: {
+                    phone: normalizedCustomerPhone,
+                  },
+                  update: {
+                    name: normalizedCustomerName,
+                    email: normalizedCustomerEmail || null,
+                  },
+                  create: {
+                    name: normalizedCustomerName,
+                    phone: normalizedCustomerPhone,
+                    email: normalizedCustomerEmail || null,
+                  },
                 })
               : await tx.customer.create({
-                    data: {
-                        name: normalizedCustomerName,
-                        phone: null,
-                        email: normalizedCustomerEmail || null,
-                    },
+                  data: {
+                    name: normalizedCustomerName,
+                    phone: null,
+                    email: normalizedCustomerEmail || null,
+                  },
                 });
 
             // One Booking represents the customer's complete salon visit.
@@ -524,35 +515,25 @@ export async function POST(request: Request) {
 
             // Load availability for the entire booking inside
             // the existing Serializable transaction.
-            const bookingDate = new Date(
-              `${date}T00:00:00.000Z`
-            );
+            const bookingDate = new Date(`${date}T00:00:00.000Z`);
 
             const qualifiedEmployeeIds = [
               ...new Set(
-                serviceBlocks.flatMap(
-                  (block) => block.qualifiedEmployeeIds
-                )
+                serviceBlocks.flatMap((block) => block.qualifiedEmployeeIds),
               ),
             ];
 
-            const existingAppointments =
-              await tx.appointment.findMany({
-                where: {
-                  date: bookingDate,
-                  employeeId: {
-                    in: qualifiedEmployeeIds,
-                  },
-                  status: {
-                    in: [
-                      "BOOKED",
-                      "REQUESTED",
-                      "CHECKED_IN",
-                      "IN_PROGRESS",
-                    ],
-                  },
+            const existingAppointments = await tx.appointment.findMany({
+              where: {
+                date: bookingDate,
+                employeeId: {
+                  in: qualifiedEmployeeIds,
                 },
-              });
+                status: {
+                  in: ["BOOKED", "REQUESTED", "CHECKED_IN", "IN_PROGRESS"],
+                },
+              },
+            });
 
             const existingScheduleBlocks =
               await tx.employeeScheduleBlock.findMany({
@@ -565,8 +546,7 @@ export async function POST(request: Request) {
               });
 
             // Calculate existing workload for Any Technician.
-            const scheduledMinutesByEmployeeId:
-              Record<number, number> = {};
+            const scheduledMinutesByEmployeeId: Record<number, number> = {};
 
             for (const appointment of existingAppointments) {
               scheduledMinutesByEmployeeId[appointment.employeeId] =
@@ -578,9 +558,7 @@ export async function POST(request: Request) {
             // assigning a technician during their occupied time.
             const busyIntervals = [
               ...existingAppointments.map((appointment) => {
-                const start = timeToMinutes(
-                  appointment.startTime
-                );
+                const start = timeToMinutes(appointment.startTime);
 
                 return {
                   employeeId: appointment.employeeId,
@@ -616,14 +594,49 @@ export async function POST(request: Request) {
 
             const createdAppointments = [];
 
+            // Revalidate employee eligibility inside the booking transaction.
+            // A technician may have been deactivated after the initial
+            // availability check but before the booking was submitted.
+            const assignedEmployeeIds = [
+              ...new Set(
+                availability.assignments.map(
+                  (assignment) => assignment.employeeId,
+                ),
+              ),
+            ];
+
+            // Coordinate booking creation with employee status changes.
+            // Lock employee IDs in ascending order to avoid deadlocks.
+            for (const employeeId of [...assignedEmployeeIds].sort(
+              (a, b) => a - b,
+            )) {
+              await tx.$executeRaw`
+    SELECT pg_advisory_xact_lock(73421, ${employeeId})
+  `;
+            }
+
+            const eligibleEmployees = await tx.employee.findMany({
+              where: {
+                id: {
+                  in: assignedEmployeeIds,
+                },
+                active: true,
+                isBookable: true,
+              },
+              select: {
+                id: true,
+              },
+            });
+
+            if (eligibleEmployees.length !== assignedEmployeeIds.length) {
+              throw new Error("BOOKING_CONFLICT");
+            }
+
             // Create appointments using the verified assignments.
             for (const [index, block] of serviceBlocks.entries()) {
               const assignment = availability.assignments[index];
 
-              if (
-                !assignment ||
-                assignment.serviceId !== block.service.id
-              ) {
+              if (!assignment || assignment.serviceId !== block.service.id) {
                 throw new Error("BOOKING_CONFLICT");
               }
 
@@ -651,8 +664,7 @@ export async function POST(request: Request) {
                     create: {
                       serviceId: block.service.id,
                       bookedPrice: block.service.price,
-                      bookedDuration:
-                        block.service.estimatedDuration,
+                      bookedDuration: block.service.estimatedDuration,
                     },
                   },
 
@@ -684,17 +696,14 @@ export async function POST(request: Request) {
           {
             // PostgreSQL prevents concurrent transactions from silently conflicting.
             isolationLevel: "Serializable",
-          }
+          },
         );
 
         // Transaction succeeded, so no retry is needed.
         break;
       } catch (error) {
         // A normal occupied-slot conflict should not be retried.
-        if (
-          error instanceof Error &&
-          error.message === "BOOKING_CONFLICT"
-        ) {
+        if (error instanceof Error && error.message === "BOOKING_CONFLICT") {
           throw error;
         }
 
@@ -730,38 +739,30 @@ export async function POST(request: Request) {
       const pushSubscriptions = suppressBookingPush
         ? []
         : await prisma.pushSubscription.findMany({
-          where: {
-            user: {
-              active: true,
-              role: {
-                in: ["OWNER", "RECEPTIONIST"],
+            where: {
+              user: {
+                active: true,
+                role: {
+                  in: ["OWNER", "RECEPTIONIST"],
+                },
               },
             },
-          },
-        });
+          });
 
       if (pushSubscriptions.length > 0) {
-        const firstAppointment =
-          result.appointments[0];
+        const firstAppointment = result.appointments[0];
 
         const serviceNames = result.appointments
           .flatMap((appointment) =>
-            appointment.appointmentServices.map(
-              (appointmentService) => {
-                const service = serviceBlocks.find(
-                  (block) =>
-                    block.service.id ===
-                    appointmentService.serviceId
-                );
+            appointment.appointmentServices.map((appointmentService) => {
+              const service = serviceBlocks.find(
+                (block) => block.service.id === appointmentService.serviceId,
+              );
 
-                return service?.service.nameEs;
-              }
-            )
+              return service?.service.nameEs;
+            }),
           )
-          .filter(
-            (name): name is string =>
-              typeof name === "string"
-          );
+          .filter((name): name is string => typeof name === "string");
 
         const serviceSummary =
           serviceNames.length > 2
@@ -773,79 +774,62 @@ export async function POST(request: Request) {
         const notificationBody = [
           result.customer.name,
           serviceSummary,
-          firstAppointment
-            ? `${date} · ${firstAppointment.startTime}`
-            : date,
+          firstAppointment ? `${date} · ${firstAppointment.startTime}` : date,
         ]
           .filter(Boolean)
           .join(" · ");
 
         await Promise.allSettled(
-          pushSubscriptions.map(
-            async (subscription) => {
-              try {
-                await sendPushNotification(
-                  subscription,
-                  {
-                    title: "🔔 Nueva Reserva",
-                    body: notificationBody,
-                    url: "/receptionist",
-                  }
-                );
-              } catch (error) {
-                console.error(
-                  `Booking push failed for subscription ${subscription.id}:`,
-                  error
-                );
+          pushSubscriptions.map(async (subscription) => {
+            try {
+              await sendPushNotification(subscription, {
+                title: "🔔 Nueva Reserva",
+                body: notificationBody,
+                url: "/receptionist",
+              });
+            } catch (error) {
+              console.error(
+                `Booking push failed for subscription ${subscription.id}:`,
+                error,
+              );
 
-                // Remove subscriptions that the browser/push provider
-                // says no longer exist.
-                const statusCode =
-                  typeof error === "object" &&
-                  error !== null &&
-                  "statusCode" in error
-                    ? Number(error.statusCode)
-                    : null;
+              // Remove subscriptions that the browser/push provider
+              // says no longer exist.
+              const statusCode =
+                typeof error === "object" &&
+                error !== null &&
+                "statusCode" in error
+                  ? Number(error.statusCode)
+                  : null;
 
-                if (
-                  statusCode === 404 ||
-                  statusCode === 410
-                ) {
-                  await prisma.pushSubscription
-                    .delete({
-                      where: {
-                        id: subscription.id,
-                      },
-                    })
-                    .catch(() => {
-                      // A concurrent request may already have removed it
-                    });
-                }
+              if (statusCode === 404 || statusCode === 410) {
+                await prisma.pushSubscription
+                  .delete({
+                    where: {
+                      id: subscription.id,
+                    },
+                  })
+                  .catch(() => {
+                    // A concurrent request may already have removed it
+                  });
               }
             }
-          )
+          }),
         );
       }
     } catch (error) {
       // Booking already succeeded. Notification infrastructure must
       // never turn a successful reservation into an API failure
-      console.error(
-        "Unable to send new-booking push notifications:",
-        error
-      );
+      console.error("Unable to send new-booking push notifications:", error);
     }
 
-    return Response.json(result, { status: 201 });    
-
+    return Response.json(result, { status: 201 });
   } catch (error) {
     // Return the normal booking conflict response to the customer
-    if (
-      error instanceof Error &&
-      error.message === "BOOKING_CONFLICT"
-    ) {
+    if (error instanceof Error && error.message === "BOOKING_CONFLICT") {
       return Response.json(
         { error: "This appointment time is no longer available" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -853,7 +837,7 @@ export async function POST(request: Request) {
 
     return Response.json(
       { error: "Unable to create booking" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

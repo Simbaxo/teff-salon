@@ -46,6 +46,15 @@ export default function AdminNav({ userRole }: AdminNavProps) {
         pathname={pathname}
       />
 
+      {/* Employee management is strictly OWNER-only. */}
+      {userRole === "OWNER" && (
+        <AdminLink
+          href="/admin/employees"
+          label="Personal"
+          pathname={pathname}
+        />
+      )}
+
       {/* Payroll navigation is strictly OWNER-only. */}
       {userRole === "OWNER" && (
         <AdminLink href="/admin/payroll" label="Nómina" pathname={pathname} />
