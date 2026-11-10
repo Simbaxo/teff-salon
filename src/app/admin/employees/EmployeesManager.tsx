@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import EmployeeServicesEditor from "./EmployeeServicesEditor";
 
 type Employee = {
   id: number;
@@ -17,6 +18,9 @@ export default function EmployeesManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [editingServicesId, setEditingServicesId] = useState<number | null>(
+    null,
+  );
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -386,7 +390,29 @@ export default function EmployeesManager() {
                       : "Habilitar reservas"}
                   </button>
                 )}
+                {employee.compensationType === "COMMISSION" && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditingServicesId((current) =>
+                        current === employee.id ? null : employee.id,
+                      )
+                    }
+                    className="rounded-lg border border-green-300 px-3 py-2 text-sm font-medium text-green-800 hover:bg-green-50"
+                  >
+                    {editingServicesId === employee.id
+                      ? "Cerrar servicios"
+                      : "Editar servicios"}
+                  </button>
+                )}
               </div>
+
+              {editingServicesId === employee.id && (
+                <EmployeeServicesEditor
+                  employeeId={employee.id}
+                  onClose={() => setEditingServicesId(null)}
+                />
+              )}
             </article>
           ))}
         </div>
