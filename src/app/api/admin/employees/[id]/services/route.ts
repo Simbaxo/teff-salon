@@ -138,14 +138,46 @@ export async function POST(request: Request, { params }: RouteContext) {
     );
   }
 
-  const serviceId = data.serviceId as number;
+    const serviceId = data.serviceId as number;
 
   try {
-    const result = await removeEmployeeQualification(
-      prisma,
-      employeeId,
-      serviceId,
-    );
+    const result = await prisma.$transaction(async (tx) => {
+      const employee = await tx.employee.findUnique({
+        where: { id: employeeId },
+        select: { active: true, compensationType: true },
+      });
+
+      if (!employee) {
+        return { error: "Empleado no encontrado.", status: 404 };
+      }
+
+      if (!employee.active || employee.compensationType !== "COMMISSION") {
+        return {
+          error: "Este empleado no puede recibir asignaciones de servicios.",
+          status: 409,
+        };
+      }
+
+      const service = await tx.service.findUnique({
+        where: { id: serviceId },
+        select: { active: true },
+      });
+
+      if (!service) {
+        return { error: "Servicio no encontrado.", status: 404 };
+      }
+
+      if (!service.active) {
+        return { error: "El servicio está inactivo.", status: 409 };
+      }
+
+      await tx.employeeService.createMany({
+        data: [{ employeeId, serviceId }],
+        skipDuplicates: true,
+      });
+
+      return { success: true };
+    });
 
     if ("error" in result) {
       return Response.json({ error: result.error }, { status: result.status });
@@ -153,10 +185,10 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     return Response.json({ success: true });
   } catch (error) {
-    console.error("Failed to remove employee service:", error);
+    console.error("Failed to assign employee service:", error);
 
     return Response.json(
-      { error: "No se pudo quitar el servicio." },
+      { error: "No se pudo asignar el servicio." },
       { status: 500 },
     );
   }
