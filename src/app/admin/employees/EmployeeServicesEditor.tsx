@@ -90,53 +90,60 @@ export default function EmployeeServicesEditor({ employeeId, onClose }: Props) {
     };
   }, [employeeId]);
 
-  async function assignService(service: Service) {
+  async function toggleService(service: Service) {
     if (!data || savingId !== null) return;
-    if (service.assigned || !service.active) return;
-    if (!data.employee.active) return;
-    if (data.employee.compensationType !== "COMMISSION") return;
+
+    const removing = service.assigned;
+
+    if (
+      !removing &&
+      (!service.active ||
+        !data.employee.active ||
+        data.employee.compensationType !== "COMMISSION")
+    ) {
+      return;
+    }
 
     setSavingId(service.id);
     setError("");
     setSuccess("");
 
+    const url = `/api/admin/employees/${employeeId}/services`;
+
     try {
-      const response = await fetch(
-        `/api/admin/employees/${employeeId}/services`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            serviceId: service.id,
-          }),
-        },
-      );
+      const response = await fetch(url, {
+        method: removing ? "DELETE" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serviceId: service.id }),
+      });
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error ?? "No se pudo asignar el servicio.");
+        throw new Error(
+          result.error ??
+            (removing
+              ? "No se pudo quitar el servicio."
+              : "No se pudo asignar el servicio."),
+        );
       }
 
-      // Reload authoritative assignments from the server.
-      const refreshResponse = await fetch(
-        `/api/admin/employees/${employeeId}/services`,
-        { cache: "no-store" },
-      );
-
+      const refreshResponse = await fetch(url, { cache: "no-store" });
       const refreshed = await refreshResponse.json();
 
       if (!refreshResponse.ok) {
         throw new Error(
           refreshed.error ??
-            "Servicio asignado, pero no se pudo actualizar la lista.",
+            "El cambio se guardó, pero no se pudo actualizar la lista.",
         );
       }
 
       setData(refreshed);
-      setSuccess(`Servicio asignado: ${service.nameEs}`);
+      setSuccess(
+        removing
+          ? `Servicio quitado: ${service.nameEs}`
+          : `Servicio asignado: ${service.nameEs}`,
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -221,10 +228,8 @@ export default function EmployeeServicesEditor({ employeeId, onClose }: Props) {
                     const isSaving = savingId === service.id;
 
                     const disabled =
-                      !canAssign ||
-                      !service.active ||
-                      service.assigned ||
-                      savingId !== null;
+                      savingId !== null ||
+                      (!service.assigned && (!canAssign || !service.active));
 
                     return (
                       <label
@@ -236,7 +241,7 @@ export default function EmployeeServicesEditor({ employeeId, onClose }: Props) {
                           checked={service.assigned}
                           disabled={disabled}
                           onChange={() => {
-                            void assignService(service);
+                            void toggleService(service);
                           }}
                           className="h-4 w-4 accent-green-800 disabled:opacity-60"
                         />
