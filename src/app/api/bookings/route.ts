@@ -3,6 +3,7 @@ import { sendPushNotification } from "@/lib/push";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { checkSlotAvailability } from "@/lib/booking/check-slot-availability";
 import { shouldSuppressBookingPush } from "@/lib/booking/test-push-safety";
+import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
 import {
   getTeffCurrentMinutes,
   getTeffDayOfWeek,
@@ -685,6 +686,18 @@ export async function POST(request: Request) {
               });
 
               createdAppointments.push(appointment);
+            }
+
+            if (process.env.TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED === "true") {
+              for (const appointment of createdAppointments) {
+                if (appointment.status === "BOOKED") {
+                  await queueGoogleCalendarSync(
+                    tx,
+                    "APPOINTMENT",
+                    appointment.id,
+                  );
+                }
+              }
             }
 
             return {

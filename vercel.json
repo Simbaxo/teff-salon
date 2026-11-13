@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron/google-calendar",
+      "schedule": "* * * * *"
+    }
+  ],
   "redirects": [
     {
       "source": "/",

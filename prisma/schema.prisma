@@ -921,3 +921,32 @@ model ExpenseReceipt {
   @@index([expenseId, createdAt])
   @@index([uploadedById])
 }
+
+enum GoogleCalendarSyncTarget {
+  APPOINTMENT
+  SCHEDULE_BLOCK
+}
+
+model GoogleCalendarSyncJob {
+  id          Int                      @id @default(autoincrement())
+  target      GoogleCalendarSyncTarget
+  targetId    Int
+  revision    Int                      @default(1)
+  attempts    Int                      @default(0)
+  nextRunAt   DateTime                 @default(now())
+  lockedUntil DateTime?
+  lastError   String?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  @@unique([target, targetId])
+  @@index([nextRunAt])
+}
+
+model GoogleCalendarConnection {
+  id                    Int      @id @default(1)
+  calendarId            String   @unique
+  encryptedRefreshToken String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
