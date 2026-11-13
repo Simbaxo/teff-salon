@@ -2740,6 +2740,13 @@ export default function BookPage() {
         <p className="mt-5 text-xs text-neutral-400">
           © 2026 TEFF Beauty Salon · Medellín
         </p>
+
+        <a
+          href="/privacidad"
+          className="mt-2 inline-block text-sm font-medium text-neutral-700 underline underline-offset-4 hover:text-neutral-950"
+        >
+          Política de tratamiento de datos personales
+        </a>
       </footer>
     </main>
   );
