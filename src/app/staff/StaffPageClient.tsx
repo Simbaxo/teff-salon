@@ -715,7 +715,7 @@ export default function StaffPage({
                           {/* Compact summary for reservations with multiple services. */}
                           {group.bookingId !== null &&
                             group.appointments.length > 1 && (
-                              <div className="rounded-xl border-l-4 border-violet-400 bg-white p-5 shadow-sm">
+                              <div className="rounded-xl border-l-4 border-[#b76e79] bg-white p-5 shadow-sm">
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                   <div>
                                     <Link
@@ -801,7 +801,7 @@ export default function StaffPage({
                                     getBookingAppointmentCount(
                                       appointment.bookingId,
                                     ) > 1
-                                      ? "border-l-4 border-violet-400 bg-violet-50/40"
+                                      ? "border-l-4 border-[#b76e79] bg-white"
                                       : "bg-white"
                                   }`}
                                 >
@@ -834,7 +834,7 @@ export default function StaffPage({
                                           appointment.bookingId,
                                         ) > 1 && (
                                           <div className="mt-3 flex flex-wrap items-center gap-2">
-                                            <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-800">
+                                            <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-900">
                                               Servicio{" "}
                                               {getBookingAppointmentPosition(
                                                 appointment.id,
