@@ -14,7 +14,12 @@ type NavLinkProps = {
 };
 
 function NavLink({ href, label, pathname }: NavLinkProps) {
-  const isActive = pathname === href || pathname.startsWith(`${href}/`);
+  const isCustomersPage =
+    pathname === "/staff/customers" || pathname.startsWith("/staff/customers/");
+
+  const isActive =
+    (pathname === href || pathname.startsWith(`${href}/`)) &&
+    !(href === "/staff" && isCustomersPage);
 
   return (
     <Link
@@ -40,6 +45,12 @@ export default function InternalNav({ userRole }: InternalNavProps) {
       {(userRole === "OWNER" || userRole === "RECEPTIONIST") && (
         <>
           <NavLink href="/receptionist" label="Recepción" pathname={pathname} />
+
+          <NavLink
+            href="/staff/customers"
+            label="Clientes"
+            pathname={pathname}
+          />
 
           <NavLink href="/sales" label="Ventas" pathname={pathname} />
 
