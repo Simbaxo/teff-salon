@@ -25,6 +25,7 @@ export default function ServicePhotoPanel({
 }: ServicePhotoPanelProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState("");
   const [message, setMessage] = useState("");
 
   async function uploadPhoto(event: FormEvent<HTMLFormElement>) {
@@ -74,6 +75,7 @@ export default function ServicePhotoPanel({
       }
 
       form.reset();
+      setSelectedFileName("");
       setMessage("Foto guardada.");
       router.refresh();
     } catch {
@@ -159,16 +161,31 @@ export default function ServicePhotoPanel({
         {photos.length < MAX_PHOTOS && (
           <form onSubmit={uploadPhoto}>
             <fieldset disabled={busy} className="space-y-3 disabled:opacity-60">
-              <label className="block text-sm font-medium">
-                Seleccionar foto
-                <input
-                  type="file"
-                  name="image"
-                  accept="image/*"
-                  required
-                  className="mt-1 block w-full text-sm"
-                />
-              </label>
+              <div>
+                <label className="relative flex min-h-12 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-[#b76e79] bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-900 focus-within:ring-2 focus-within:ring-rose-800 focus-within:ring-offset-2">
+                  <input
+                    type="file"
+                    name="image"
+                    accept="image/*"
+                    required
+                    onChange={(event) =>
+                      setSelectedFileName(
+                        event.currentTarget.files?.[0]?.name ?? "",
+                      )
+                    }
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  />
+                  {selectedFileName ? "Cambiar foto" : "Seleccionar foto"}
+                </label>
+                <p
+                  aria-live="polite"
+                  className="mt-2 break-all text-sm text-neutral-700"
+                >
+                  {selectedFileName
+                    ? `Foto seleccionada: ${selectedFileName}`
+                    : "Toca para elegir una imagen o tomar una foto si tu dispositivo lo permite."}
+                </p>
+              </div>
               <label className="block text-sm font-medium">
                 Nota (opcional)
                 <input
@@ -179,9 +196,10 @@ export default function ServicePhotoPanel({
               </label>
               <button
                 type="submit"
-                className="min-h-11 rounded-xl bg-black px-4 text-sm font-semibold text-white"
+                disabled={!selectedFileName}
+                className="min-h-11 rounded-xl bg-black px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-600"
               >
-                Agregar foto
+                Guardar foto
               </button>
             </fieldset>
           </form>
