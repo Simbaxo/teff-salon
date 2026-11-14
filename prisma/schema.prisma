@@ -270,10 +270,25 @@ model AppointmentService {
   bookedPrice    Int
   bookedDuration Int
 
-  appointment Appointment @relation(fields: [appointmentId], references: [id])
-  service     Service     @relation(fields: [serviceId], references: [id])
+  appointment Appointment               @relation(fields: [appointmentId], references: [id])
+  service     Service                   @relation(fields: [serviceId], references: [id])
+  photos      AppointmentServicePhoto[]
 
   @@id([appointmentId, serviceId])
+}
+
+model AppointmentServicePhoto {
+  id            Int      @id @default(autoincrement())
+  appointmentId Int
+  serviceId     Int
+  slot          Int
+  blobPath      String   @unique
+  note          String?
+  createdAt     DateTime @default(now())
+
+  appointmentService AppointmentService @relation(fields: [appointmentId, serviceId], references: [appointmentId, serviceId], onDelete: Restrict)
+
+  @@unique([appointmentId, serviceId, slot])
 }
 
 model AppointmentAddon {

@@ -6,6 +6,7 @@ import { canManageStaff } from "@/lib/auth-roles";
 import { calculateLifetimeSpend } from "@/lib/customers/calculate-lifetime-spend";
 import { groupCustomerVisits } from "@/lib/customers/group-customer-visits";
 import { getTeffToday } from "@/lib/datetime";
+import ServicePhotoPanel from "../ServicePhotoPanel";
 
 function formatAppointmentTime(time: string): string {
   const [hours, minutes] = time.split(":");
@@ -76,6 +77,10 @@ export default async function CustomerProfilePage({
 
           appointmentServices: {
             include: {
+              photos: {
+                select: { id: true, note: true },
+                orderBy: { slot: "asc" },
+              },
               service: {
                 select: {
                   id: true,
@@ -506,12 +511,19 @@ export default async function CustomerProfilePage({
 
                             <div className="mt-3 space-y-1">
                               {appointment.appointmentServices.map((item) => (
-                                <p
-                                  key={item.serviceId}
-                                  className="text-sm font-semibold text-black"
-                                >
-                                  {item.service.nameEs}
-                                </p>
+                                <div key={item.serviceId}>
+                                  <p className="text-sm font-semibold text-black">
+                                    {item.service.nameEs}
+                                  </p>
+
+                                  {appointment.status === "COMPLETED" && (
+                                    <ServicePhotoPanel
+                                      appointmentId={appointment.id}
+                                      serviceId={item.serviceId}
+                                      photos={item.photos}
+                                    />
+                                  )}
+                                </div>
                               ))}
 
                               {appointment.appointmentAddons.map((item) => (
