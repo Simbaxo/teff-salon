@@ -4,6 +4,7 @@ import { canManageStaff } from "@/lib/auth-roles";
 import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 import { assertAppointmentNotSold } from "@/lib/appointments/reassignment-safety";
 import { getReassignmentErrorResponse } from "@/lib/appointments/reassignment-errors";
+import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
 
 export async function PATCH(
   request: Request,
@@ -435,6 +436,19 @@ export async function PATCH(
 
             if (updateResult.count !== 1) {
               throw new Error("APPOINTMENT_CHANGED");
+            }
+
+            if (
+              process.env.TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED === "true" &&
+              ["BOOKED", "CHECKED_IN", "IN_PROGRESS"].includes(
+                currentAppointment.status,
+              )
+            ) {
+              await queueGoogleCalendarSync(
+                tx,
+                "APPOINTMENT",
+                currentAppointment.id,
+              );
             }
 
             // Return the updated appointment with its technician.

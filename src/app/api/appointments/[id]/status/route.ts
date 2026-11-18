@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
 import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
 import { hasTeffAppointmentStarted } from "@/lib/datetime";
@@ -111,28 +112,31 @@ export async function PATCH(
       );
     }
 
-    const appointment = await prisma.appointment.update({
-      where: {
-        id: appointmentId,
-      },
-      data: {
-        status,
+    const appointment = await prisma.$transaction(async (tx) => {
+      const updated = await tx.appointment.update({
+        where: {
+          id: appointmentId,
+          status: existingAppointment.status,
+        },
+        data: {
+          status,
+          ...(status === "CHECKED_IN" ? { checkedInAt: new Date() } : {}),
+          ...(status === "IN_PROGRESS" ? { startedAt: new Date() } : {}),
+          ...(status === "COMPLETED" ? { completedAt: new Date() } : {}),
+        },
+      });
 
-        // Record the real moment the client checked in
-        ...(status === "CHECKED_IN"
-          ? { checkedInAt: new Date() }
-          : {}),
+      const approvedBooking =
+        existingAppointment.status === "REQUESTED" && status === "BOOKED";
 
-          // Record when the service actually started
-        ...(status === "IN_PROGRESS"
-          ? { startedAt: new Date() }
-          : {}),
+      if (
+        process.env.TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED === "true" &&
+        (approvedBooking || status === "CANCELLED")
+      ) {
+        await queueGoogleCalendarSync(tx, "APPOINTMENT", appointmentId);
+      }
 
-        // Keep completion timestamps consistent if this route completes an appointment
-        ...(status === "COMPLETED"
-          ? { completedAt: new Date() }
-          : {}),
-      },
+      return updated;
     });
 
     return Response.json(appointment);

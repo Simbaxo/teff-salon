@@ -270,10 +270,25 @@ model AppointmentService {
   bookedPrice    Int
   bookedDuration Int
 
-  appointment Appointment @relation(fields: [appointmentId], references: [id])
-  service     Service     @relation(fields: [serviceId], references: [id])
+  appointment Appointment               @relation(fields: [appointmentId], references: [id])
+  service     Service                   @relation(fields: [serviceId], references: [id])
+  photos      AppointmentServicePhoto[]
 
   @@id([appointmentId, serviceId])
+}
+
+model AppointmentServicePhoto {
+  id            Int      @id @default(autoincrement())
+  appointmentId Int
+  serviceId     Int
+  slot          Int
+  blobPath      String   @unique
+  note          String?
+  createdAt     DateTime @default(now())
+
+  appointmentService AppointmentService @relation(fields: [appointmentId, serviceId], references: [appointmentId, serviceId], onDelete: Restrict)
+
+  @@unique([appointmentId, serviceId, slot])
 }
 
 model AppointmentAddon {
@@ -920,4 +935,33 @@ model ExpenseReceipt {
 
   @@index([expenseId, createdAt])
   @@index([uploadedById])
+}
+
+enum GoogleCalendarSyncTarget {
+  APPOINTMENT
+  SCHEDULE_BLOCK
+}
+
+model GoogleCalendarSyncJob {
+  id          Int                      @id @default(autoincrement())
+  target      GoogleCalendarSyncTarget
+  targetId    Int
+  revision    Int                      @default(1)
+  attempts    Int                      @default(0)
+  nextRunAt   DateTime                 @default(now())
+  lockedUntil DateTime?
+  lastError   String?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  @@unique([target, targetId])
+  @@index([nextRunAt])
+}
+
+model GoogleCalendarConnection {
+  id                    Int      @id @default(1)
+  calendarId            String   @unique
+  encryptedRefreshToken String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }

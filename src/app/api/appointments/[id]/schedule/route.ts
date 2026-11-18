@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
 import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
 import { lockPayrollWeek } from "@/lib/payroll/period-lock";
@@ -409,6 +410,18 @@ export async function PATCH(
 
             if (updated.count !== 1) {
                 throw new Error("APPOINTMENT_CHANGED");
+            }
+
+            const scheduleChanged =
+              lockedAppointment.date.toISOString().slice(0, 10) !== date ||
+              lockedAppointment.startTime !== startTime;
+
+            if (
+              scheduleChanged &&
+              lockedAppointment.status === "BOOKED" &&
+              process.env.TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED === "true"
+            ) {
+              await queueGoogleCalendarSync(tx, "APPOINTMENT", appointmentId);
             }
 
             return tx.appointment.findUniqueOrThrow({
