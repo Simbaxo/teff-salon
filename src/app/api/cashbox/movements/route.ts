@@ -10,6 +10,7 @@ const allowedTypes = [
   "OWNER_WITHDRAWAL",
   "BANK_DEPOSIT",
   "CASH_EXPENSE",
+  "CASH_ADJUSTMENT_IN",
 ] as const;
 
 type MovementType = (typeof allowedTypes)[number];
@@ -193,6 +194,8 @@ export async function POST(request: Request) {
   }
 
   const movementType = type as MovementType;
+  const signedAmount =
+    movementType === "CASH_ADJUSTMENT_IN" ? amount : -amount;
 
   try {
     const result = await prisma.$transaction(
@@ -215,8 +218,8 @@ export async function POST(request: Request) {
           };
         }
 
-        // An identical retry must not create a
-        // second withdrawal.
+        // An identical retry must not create
+        // a second cash movement.
         const existing = await tx.cashMovement.findUnique({
           where: { idempotencyKey },
         });
@@ -225,7 +228,7 @@ export async function POST(request: Request) {
           if (
             existing.recordedById !== userId ||
             existing.type !== movementType ||
-            existing.amount !== -amount ||
+            existing.amount !== signedAmount ||
             existing.description !== description
           ) {
             return {
@@ -261,7 +264,10 @@ export async function POST(request: Request) {
 
         const current = await calculateCashboxBalance(tx, cashbox);
 
-        if (current.balance < amount) {
+        if (
+          signedAmount < 0 &&
+          current.balance < amount
+        ) {
           return {
             ok: false as const,
             error: "El saldo disponible es insuficiente.",
@@ -269,11 +275,17 @@ export async function POST(request: Request) {
           };
         }
 
+        const newBalance = current.balance + signedAmount;
+
+        if (!Number.isSafeInteger(newBalance)) {
+          throw new Error("INVALID_CASHBOX_BALANCE");
+        }
+
         const movement = await tx.cashMovement.create({
           data: {
             cashboxId: cashbox.id,
             type: movementType,
-            amount: -amount,
+            amount: signedAmount,
             description,
             recordedById: userId,
             idempotencyKey,
@@ -292,7 +304,7 @@ export async function POST(request: Request) {
           duplicate: false,
           movement,
           previousBalance: current.balance,
-          newBalance: current.balance - amount,
+          newBalance,
         };
       },
       {

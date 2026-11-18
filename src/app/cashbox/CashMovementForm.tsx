@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type MovementType = "OWNER_WITHDRAWAL" | "BANK_DEPOSIT" | "CASH_EXPENSE";
+type MovementType =
+  | "OWNER_WITHDRAWAL"
+  | "BANK_DEPOSIT"
+  | "CASH_EXPENSE"
+  | "CASH_ADJUSTMENT_IN";
 
 type PendingMovement = {
   type: MovementType;
@@ -23,7 +27,8 @@ function isPendingMovement(value: unknown): value is PendingMovement {
   return (
     (data.type === "OWNER_WITHDRAWAL" ||
       data.type === "BANK_DEPOSIT" ||
-      data.type === "CASH_EXPENSE") &&
+      data.type === "CASH_EXPENSE" ||
+      data.type === "CASH_ADJUSTMENT_IN") &&
     typeof data.amount === "number" &&
     Number.isSafeInteger(data.amount) &&
     data.amount > 0 &&
@@ -74,6 +79,10 @@ const movementOptions: {
   value: MovementType;
   label: string;
 }[] = [
+  {
+    value: "CASH_ADJUSTMENT_IN",
+    label: "Agregar dinero a caja",
+  },
   {
     value: "OWNER_WITHDRAWAL",
     label: "Retiro del propietario",
@@ -376,7 +385,7 @@ export default function CashMovementForm({
         </h2>
 
         <p className="mt-2 text-sm text-neutral-600">
-          Registra las salidas de efectivo y conserva un historial de cada
+          Registra las entradas y salidas de efectivo y conserva un historial de cada
           operación.
         </p>
       </div>
