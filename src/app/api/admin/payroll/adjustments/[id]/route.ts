@@ -93,6 +93,23 @@ export async function DELETE(
                 ) {
                     throw new Error("PAYROLL_LOCKED");
                 }
+
+                // Cashbox loans represent physical money already
+                // delivered to a technician.
+                // They cannot be deleted through ordinary payroll.
+                const linkedCashMovement =
+                    await tx.cashMovement.findUnique({
+                        where: {
+                            payrollAdjustmentId: adjustmentId,
+                        },
+                        select: {
+                            id: true,
+                        },
+                    });
+
+                if (linkedCashMovement) {
+                    throw new Error("CASHBOX_LOAN_LINKED");
+                }
                 
                 await tx.payrollAdjustment.delete({
                     where: { id: adjustmentId },
@@ -203,6 +220,19 @@ export async function DELETE(
             "Failed to delete payroll adjustment:",
             error
         );
+
+        if (
+            error instanceof Error &&
+            error.message === "CASHBOX_LOAN_LINKED"
+        ) {
+            return Response.json(
+                {
+                    error:
+                        "Este préstamo fue entregado desde la caja de efectivo. Debe corregirse desde Caja, no desde Nómina.",
+                },
+                { status: 409 }
+            );
+        }
 
         // Prevent a concurrent transaction conflict from appearing as a server error.
         if (

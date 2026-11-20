@@ -119,18 +119,6 @@ export async function DELETE(
       );
     }
 
-    const photo = await prisma.appointmentServicePhoto.findFirst({
-      where: { appointmentId },
-      select: { id: true },
-    });
-
-    if (photo) {
-      return Response.json(
-        { error: "Elimina primero las fotos de los servicios de esta cita." },
-        { status: 409 },
-      );
-    }
-
     await prisma.$transaction(async (tx) => {
       await tx.appointmentAddon.deleteMany({
         where: {

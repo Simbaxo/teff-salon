@@ -168,18 +168,36 @@ test("rejects stale checkout after a competing technician reassignment", async (
 
         await firstTransaction;
 
-        // PostgreSQL may report a serialization conflict instead.
+        // A stale checkout must fail safely.
+        // PostgreSQL can report serialization conflicts as 40001,
+        // while Prisma may normalize them to P2034.
         await assert.rejects(
             secondTransaction,
-            (error: unknown) =>
-                error instanceof Error &&
-                (
+            (error: unknown) => {
+                if (!(error instanceof Error)) {
+                    return false;
+                }
+
+                const code =
+                    "code" in error ? error.code : undefined;
+
+                const meta =
+                    "meta" in error ? error.meta : undefined;
+
+                const databaseCode =
+                    meta &&
+                    typeof meta === "object" &&
+                    "code" in meta
+                        ? meta.code
+                        : undefined;
+
+                return (
                     error.message.includes("CHECKOUT_VISIT_CHANGED") ||
-                    (
-                        "code" in error &&
-                        error.code === "P2034"
-                    )
-                )
+                    code === "P2034" ||
+                    code === "40001" ||
+                    databaseCode === "40001"
+                );
+            }
         );
 
         const savedAppointment =

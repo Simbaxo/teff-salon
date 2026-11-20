@@ -1,8 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
 import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
 import { lockPayrollWeek } from "@/lib/payroll/period-lock";
+import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
+import { queueWhatsAppNotification } from "@/lib/whatsapp/queue";
+import {
+  getWhatsAppReminderTime,
+  shouldQueueWhatsAppReminder,
+} from "@/lib/whatsapp/reminders";
 import {
   getTeffCurrentMinutes,
   getTeffDayOfWeek,
@@ -10,40 +15,31 @@ import {
 } from "@/lib/datetime";
 
 function getPayrollMonday(date: Date): Date {
-    // Payroll weeks run Monday through Sunday.
-    const monday = new Date(date);
-    const weekday = monday.getUTCDay();
+  // Payroll weeks run Monday through Sunday.
+  const monday = new Date(date);
+  const weekday = monday.getUTCDay();
 
-    const daysSinceMonday =
-        weekday === 0 ? 6 : weekday - 1;
+  const daysSinceMonday = weekday === 0 ? 6 : weekday - 1;
 
-    monday.setUTCDate(
-        monday.getUTCDate() - daysSinceMonday
-    );
+  monday.setUTCDate(monday.getUTCDate() - daysSinceMonday);
 
-    return monday;
+  return monday;
 }
 
 export async function PATCH(
   request: Request,
-  context: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> },
 ) {
   const session = await auth();
 
   // Only authenticated TEFF staff can change appointment schedules.
   if (!session?.user) {
-    return Response.json(
-      { error: "Unauthorized" },
-      { status: 401 }
-    );
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   // Owner and Receptionist can manage appointment schedules.
   if (!canManageStaff(session.user.role)) {
-    return Response.json(
-      { error: "Forbidden" },
-      { status: 403 }
-    );
+    return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {
@@ -63,7 +59,7 @@ export async function PATCH(
     ) {
       return Response.json(
         { error: "Invalid appointment schedule" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -77,9 +73,7 @@ export async function PATCH(
       const month = Number(dateMatch[2]);
       const day = Number(dateMatch[3]);
 
-      const parsedDate = new Date(
-        Date.UTC(year, month - 1, day)
-      );
+      const parsedDate = new Date(Date.UTC(year, month - 1, day));
 
       isValidDate =
         parsedDate.getUTCFullYear() === year &&
@@ -87,20 +81,19 @@ export async function PATCH(
         parsedDate.getUTCDate() === day;
     }
 
-    const isValidStartTime =
-      /^([01]\d|2[0-3]):[0-5]\d$/.test(startTime);
+    const isValidStartTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(startTime);
 
     if (!isValidDate || !isValidStartTime) {
       return Response.json(
         { error: "Invalid appointment date or time" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (date < getTeffToday()) {
       return Response.json(
         { error: "Appointment date cannot be in the past" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -119,18 +112,11 @@ export async function PATCH(
     });
 
     if (!appointment) {
-      return Response.json(
-        { error: "Appointment not found" },
-        { status: 404 }
-      );
+      return Response.json({ error: "Appointment not found" }, { status: 404 });
     }
 
     // Receptionist may only reschedule appointments before service begins.
-    const receptionistAllowedStatuses = [
-      "REQUESTED",
-      "BOOKED",
-      "CHECKED_IN",
-    ];
+    const receptionistAllowedStatuses = ["REQUESTED", "BOOKED", "CHECKED_IN"];
 
     if (
       session.user.role === "RECEPTIONIST" &&
@@ -140,7 +126,7 @@ export async function PATCH(
         {
           error: `Receptionist cannot reschedule an appointment with status ${appointment.status}`,
         },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -152,37 +138,24 @@ export async function PATCH(
 
     const dayOfWeek = getTeffDayOfWeek(date);
 
-    const openingMinutes =
-      dayOfWeek === 0
-        ? 10 * 60 + 30
-        : 9 * 60 + 30;
+    const openingMinutes = dayOfWeek === 0 ? 10 * 60 + 30 : 9 * 60 + 30;
 
-    const closingMinutes =
-      dayOfWeek === 0
-        ? 17 * 60 + 30
-        : 18 * 60 + 30;
+    const closingMinutes = dayOfWeek === 0 ? 17 * 60 + 30 : 18 * 60 + 30;
 
     const requestedStart = timeToMinutes(startTime);
-    const requestedEnd =
-      requestedStart + appointment.duration;
+    const requestedEnd = requestedStart + appointment.duration;
 
-    if (
-      requestedStart < openingMinutes ||
-      requestedEnd > closingMinutes
-    ) {
+    if (requestedStart < openingMinutes || requestedEnd > closingMinutes) {
       return Response.json(
         { error: "Appointment is outside business hours" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    if (
-      date === getTeffToday() &&
-      requestedStart <= getTeffCurrentMinutes()
-    ) {
+    if (date === getTeffToday() && requestedStart <= getTeffCurrentMinutes()) {
       return Response.json(
         { error: "Appointment time cannot be in the past" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -193,120 +166,102 @@ export async function PATCH(
       try {
         result = await prisma.$transaction(
           async (tx) => {
-
             // Reload the appointment inside the transaction.
-            const currentAppointment =
-                await tx.appointment.findUnique({
-                    where: { id: appointmentId },
-                    select: {
-                        id: true,
-                        date: true,
-                        employeeId: true,
-                        status: true,
-                        saleAppointments: {
-                            select: { saleId: true },
-                        },
-                    },
-                });
+            const currentAppointment = await tx.appointment.findUnique({
+              where: { id: appointmentId },
+              select: {
+                id: true,
+                date: true,
+                employeeId: true,
+                status: true,
+                saleAppointments: {
+                  select: { saleId: true },
+                },
+              },
+            });
 
             if (!currentAppointment) {
-                throw new Error("APPOINTMENT_NOT_FOUND");
+              throw new Error("APPOINTMENT_NOT_FOUND");
             }
 
-            const originalMonday =
-                getPayrollMonday(currentAppointment.date);
+            const originalMonday = getPayrollMonday(currentAppointment.date);
 
-            const requestedMonday =
-                getPayrollMonday(
-                    new Date(`${date}T00:00:00.000Z`)
-                );
-
-            // Acquire both week locks in a consistent order.
-            const weeks = [
-                originalMonday,
-                requestedMonday,
-            ];
-
-            const uniqueWeeks = Array.from(
-                new Map(
-                    weeks.map((week) => [
-                        week.toISOString().slice(0, 10),
-                        week,
-                    ])
-                ).values()
-            ).sort(
-                (a, b) => a.getTime() - b.getTime()
+            const requestedMonday = getPayrollMonday(
+              new Date(`${date}T00:00:00.000Z`),
             );
 
+            // Acquire both week locks in a consistent order.
+            const weeks = [originalMonday, requestedMonday];
+
+            const uniqueWeeks = Array.from(
+              new Map(
+                weeks.map((week) => [week.toISOString().slice(0, 10), week]),
+              ).values(),
+            ).sort((a, b) => a.getTime() - b.getTime());
+
             for (const week of uniqueWeeks) {
-                await lockPayrollWeek(tx, week);
+              await lockPayrollWeek(tx, week);
             }
 
             // Recheck after acquiring the payroll locks.
-            const lockedAppointment =
-                await tx.appointment.findUnique({
-                    where: { id: appointmentId },
-                    select: {
-                        id: true,
-                        date: true,
-                        startTime: true,
-                        employeeId: true,
-                        status: true,
-                        saleAppointments: {
-                            select: { saleId: true },
-                        },
-                    },
-                });
+            const lockedAppointment = await tx.appointment.findUnique({
+              where: { id: appointmentId },
+              select: {
+                id: true,
+                date: true,
+                startTime: true,
+                employeeId: true,
+                status: true,
+                saleAppointments: {
+                  select: { saleId: true },
+                },
+              },
+            });
 
             if (!lockedAppointment) {
-                throw new Error("APPOINTMENT_NOT_FOUND");
+              throw new Error("APPOINTMENT_NOT_FOUND");
             }
 
             // Do not proceed using a stale appointment snapshot.
             if (
-                lockedAppointment.date.getTime() !==
-                    currentAppointment.date.getTime() ||
-                lockedAppointment.employeeId !==
-                    currentAppointment.employeeId ||
-                lockedAppointment.status !==
-                    currentAppointment.status ||
-                lockedAppointment.saleAppointments.length !==
-                    currentAppointment.saleAppointments.length
+              lockedAppointment.date.getTime() !==
+                currentAppointment.date.getTime() ||
+              lockedAppointment.employeeId !== currentAppointment.employeeId ||
+              lockedAppointment.status !== currentAppointment.status ||
+              lockedAppointment.saleAppointments.length !==
+                currentAppointment.saleAppointments.length
             ) {
-                throw new Error("APPOINTMENT_CHANGED");
+              throw new Error("APPOINTMENT_CHANGED");
             }
 
             // Verify the acquired locks still cover the appointment's week.
-            const lockedMonday =
-                getPayrollMonday(lockedAppointment.date);
+            const lockedMonday = getPayrollMonday(lockedAppointment.date);
 
             if (
-                !uniqueWeeks.some(
-                    (week) =>
-                        week.getTime() === lockedMonday.getTime()
-                )
+              !uniqueWeeks.some(
+                (week) => week.getTime() === lockedMonday.getTime(),
+              )
             ) {
-                throw new Error("APPOINTMENT_CHANGED");
+              throw new Error("APPOINTMENT_CHANGED");
             }
 
             // A sold appointment must not be moved into or out
             // of an approved payroll period.
             if (lockedAppointment.saleAppointments.length > 0) {
-                const lockedPeriods =
-                    await tx.payrollPeriod.count({
-                        where: {
-                            startDate: {
-                                in: uniqueWeeks,
-                            },
-                            status: {
-                                in: ["REVIEWED", "PAID"],
-                            },
-                        },
-                    });
+              const lockedPeriods = await tx.payrollPeriod.count({
+                where: {
+                  startDate: {
+                    in: uniqueWeeks,
+                  },
+                  status: {
+                    in: ["REVIEWED", "PAID"],
+                  },
+                },
+              });
 
-                if (lockedPeriods > 0) {
-                    throw new Error("PAYROLL_LOCKED");
-                }
+              if (lockedPeriods > 0) {
+                throw new Error("PAYROLL_LOCKED");
+              }
             }
 
             const scheduleBlockingStatuses = [
@@ -316,102 +271,87 @@ export async function PATCH(
               "IN_PROGRESS",
             ];
 
-            if (
-              scheduleBlockingStatuses.includes(
-                appointment.status
-              )
-            ) {
-              const existingAppointments =
-                await tx.appointment.findMany({
+            if (scheduleBlockingStatuses.includes(appointment.status)) {
+              const existingAppointments = await tx.appointment.findMany({
+                where: {
+                  employeeId: appointment.employeeId,
+                  date: new Date(`${date}T00:00:00.000Z`),
+                  id: {
+                    not: appointment.id,
+                  },
+                  status: {
+                    in: scheduleBlockingStatuses,
+                  },
+                },
+              });
+
+              const existingScheduleBlocks =
+                await tx.employeeScheduleBlock.findMany({
                   where: {
                     employeeId: appointment.employeeId,
-                    date: new Date(
-                      `${date}T00:00:00.000Z`
-                    ),
-                    id: {
-                      not: appointment.id,
-                    },
-                    status: {
-                      in: scheduleBlockingStatuses,
-                    },
+                    date: new Date(`${date}T00:00:00.000Z`),
                   },
                 });
-
-                const existingScheduleBlocks =
-                  await tx.employeeScheduleBlock.findMany({
-                      where: {
-                          employeeId: appointment.employeeId,
-                          date: new Date(
-                              `${date}T00:00:00.000Z`
-                          ),
-                      },
-                  });
 
               const hasConflict = existingAppointments.some(
                 (existingAppointment) => {
                   const existingStart = timeToMinutes(
-                    existingAppointment.startTime
+                    existingAppointment.startTime,
                   );
 
                   const existingEnd =
-                    existingStart +
-                    existingAppointment.duration;
+                    existingStart + existingAppointment.duration;
 
                   return (
-                    requestedStart < existingEnd &&
-                    requestedEnd > existingStart
+                    requestedStart < existingEnd && requestedEnd > existingStart
                   );
-                }
+                },
               );
 
-              const hasScheduleBlockConflict =
-                existingScheduleBlocks.some(
-                    (scheduleBlock) => {
-                        const blockedStart = timeToMinutes(
-                            scheduleBlock.startTime
-                        );
+              const hasScheduleBlockConflict = existingScheduleBlocks.some(
+                (scheduleBlock) => {
+                  const blockedStart = timeToMinutes(scheduleBlock.startTime);
 
-                        const blockedEnd = timeToMinutes(
-                            scheduleBlock.endTime
-                        );
+                  const blockedEnd = timeToMinutes(scheduleBlock.endTime);
 
-                        return (
-                            requestedStart < blockedEnd &&
-                            requestedEnd > blockedStart
-                        );
-                    }
-                );
+                  return (
+                    requestedStart < blockedEnd && requestedEnd > blockedStart
+                  );
+                },
+              );
 
               // Schedule blocks such as vacation or late arrival cannot be overridden.
               if (hasScheduleBlockConflict) {
-                  throw new Error("SCHEDULE_BLOCK_CONFLICT");
+                throw new Error("SCHEDULE_BLOCK_CONFLICT");
               }
 
               // Owner/Receptionist may intentionally override another appointment overlap.
               if (hasConflict && !overrideOverlap) {
-                  throw new Error("APPOINTMENT_CONFLICT");
+                throw new Error("APPOINTMENT_CONFLICT");
               }
             }
             // Update only if the appointment still matches
             // the state verified inside this transaction.
             const updated = await tx.appointment.updateMany({
-                where: {
-                    id: lockedAppointment.id,
-                    date: lockedAppointment.date,
-                    employeeId: lockedAppointment.employeeId,
-                    status: lockedAppointment.status,
-                    startTime: lockedAppointment.startTime,
-                },
-                data: {
-                    date: new Date(`${date}T00:00:00.000Z`),
-                    startTime,
-                },
+              where: {
+                id: lockedAppointment.id,
+                date: lockedAppointment.date,
+                employeeId: lockedAppointment.employeeId,
+                status: lockedAppointment.status,
+                startTime: lockedAppointment.startTime,
+              },
+              data: {
+                date: new Date(`${date}T00:00:00.000Z`),
+                startTime,
+              },
             });
 
             if (updated.count !== 1) {
-                throw new Error("APPOINTMENT_CHANGED");
+              throw new Error("APPOINTMENT_CHANGED");
             }
 
+            // Only invalidate notifications when the schedule
+            // actually changes. Keep this inside the same transaction.
             const scheduleChanged =
               lockedAppointment.date.toISOString().slice(0, 10) !== date ||
               lockedAppointment.startTime !== startTime;
@@ -424,29 +364,87 @@ export async function PATCH(
               await queueGoogleCalendarSync(tx, "APPOINTMENT", appointmentId);
             }
 
+            if (
+              scheduleChanged &&
+              process.env.TEFF_WHATSAPP_QUEUE_ENABLED === "true"
+            ) {
+              // Invalidate notifications for the previous schedule.
+              await tx.whatsAppNotification.updateMany({
+                where: {
+                  appointmentId,
+                  status: "PENDING",
+                },
+                data: {
+                  status: "CANCELLED",
+                },
+              });
+
+              // Only confirmed appointments receive reminders.
+              // Apply the 24-hour cutoff to the new schedule.
+              if (lockedAppointment.status === "BOOKED") {
+                const updatedAppointment =
+                  await tx.appointment.findUniqueOrThrow({
+                    where: { id: appointmentId },
+                    select: {
+                      id: true,
+                      bookingId: true,
+                      date: true,
+                      startTime: true,
+                      customer: {
+                        select: { phone: true },
+                      },
+                    },
+                  });
+
+                if (
+                  updatedAppointment.customer.phone &&
+                  shouldQueueWhatsAppReminder(
+                    updatedAppointment.date,
+                    updatedAppointment.startTime,
+                  )
+                ) {
+                  await queueWhatsAppNotification(tx, {
+                    appointmentId: updatedAppointment.id,
+                    bookingId: updatedAppointment.bookingId,
+                    type: "APPOINTMENT_REMINDER",
+                    recipientPhone: updatedAppointment.customer.phone,
+                    appointmentDate: updatedAppointment.date,
+                    appointmentTime: updatedAppointment.startTime,
+                    scheduledFor: getWhatsAppReminderTime(
+                      updatedAppointment.date,
+                      updatedAppointment.startTime,
+                    ),
+                    // A new schedule revision receives a new reminder key,
+                    // even when the appointment returns to an earlier time.
+                    idempotencyKey: `appointment-reminder:${updatedAppointment.id}:${crypto.randomUUID()}`,
+                  });
+                }
+              }
+            }
+
             return tx.appointment.findUniqueOrThrow({
-                where: { id: appointmentId },
+              where: { id: appointmentId },
             });
           },
           {
             isolationLevel: "Serializable",
-          }
+          },
         );
 
         break;
       } catch (error) {
         // Business conflicts must not be retried.
         if (
-            error instanceof Error &&
-            [
-                "APPOINTMENT_CONFLICT",
-                "SCHEDULE_BLOCK_CONFLICT",
-                "PAYROLL_LOCKED",
-                "APPOINTMENT_CHANGED",
-                "APPOINTMENT_NOT_FOUND",
-            ].includes(error.message)
+          error instanceof Error &&
+          [
+            "APPOINTMENT_CONFLICT",
+            "SCHEDULE_BLOCK_CONFLICT",
+            "PAYROLL_LOCKED",
+            "APPOINTMENT_CHANGED",
+            "APPOINTMENT_NOT_FOUND",
+          ].includes(error.message)
         ) {
-            throw error;
+          throw error;
         }
 
         const isSerializableConflict =
@@ -460,104 +458,77 @@ export async function PATCH(
         }
 
         if (attempt === maxAttempts) {
-            throw new Error("SCHEDULE_CONFLICT");
+          throw new Error("SCHEDULE_CONFLICT");
         }
       }
     }
 
     if (!result) {
-      throw new Error(
-        "Unable to complete appointment reschedule"
-      );
+      throw new Error("Unable to complete appointment reschedule");
     }
 
     return Response.json(result);
   } catch (error) {
-    if (
-        error instanceof Error &&
-        error.message === "PAYROLL_LOCKED"
-    ) {
-        return Response.json(
-            {
-                error:
-                    "No se puede modificar esta cita porque pertenece a una nómina revisada o pagada.",
-                conflictType: "PAYROLL_LOCKED",
-            },
-            { status: 409 }
-        );
-    }
-
-    if (
-        error instanceof Error &&
-        error.message === "APPOINTMENT_CHANGED"
-    ) {
-        return Response.json(
-            {
-                error:
-                    "La cita fue modificada simultáneamente. Actualiza e inténtalo nuevamente.",
-                conflictType: "APPOINTMENT_CHANGED",
-            },
-            { status: 409 }
-        );
-    }
-
-    if (
-        error instanceof Error &&
-        error.message === "APPOINTMENT_NOT_FOUND"
-    ) {
-        return Response.json(
-            { error: "Cita no encontrada." },
-            { status: 404 }
-        );
-    }
-
-    if (
-        error instanceof Error &&
-        error.message === "APPOINTMENT_CONFLICT"
-    ) {
-        return Response.json(
-            {
-                error: "Appointment overlaps another appointment",
-                conflictType: "APPOINTMENT",
-            },
-            { status: 409 }
-        );
-    }
-
-    if (
-        error instanceof Error &&
-        error.message === "SCHEDULE_BLOCK_CONFLICT"
-    ) {
-        return Response.json(
-            {
-                error: "Employee has a schedule block during this time",
-                conflictType: "SCHEDULE_BLOCK",
-            },
-            { status: 409 }
-        );
-    }
-
-    if (
-        error instanceof Error &&
-        error.message === "SCHEDULE_CONFLICT"
-    ) {
+    if (error instanceof Error && error.message === "PAYROLL_LOCKED") {
       return Response.json(
         {
           error:
-            "Employee is not available for the full appointment time",
+            "No se puede modificar esta cita porque pertenece a una nómina revisada o pagada.",
+          conflictType: "PAYROLL_LOCKED",
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
-    console.error(
-      "Failed to reschedule appointment:",
-      error
-    );
+    if (error instanceof Error && error.message === "APPOINTMENT_CHANGED") {
+      return Response.json(
+        {
+          error:
+            "La cita fue modificada simultáneamente. Actualiza e inténtalo nuevamente.",
+          conflictType: "APPOINTMENT_CHANGED",
+        },
+        { status: 409 },
+      );
+    }
+
+    if (error instanceof Error && error.message === "APPOINTMENT_NOT_FOUND") {
+      return Response.json({ error: "Cita no encontrada." }, { status: 404 });
+    }
+
+    if (error instanceof Error && error.message === "APPOINTMENT_CONFLICT") {
+      return Response.json(
+        {
+          error: "Appointment overlaps another appointment",
+          conflictType: "APPOINTMENT",
+        },
+        { status: 409 },
+      );
+    }
+
+    if (error instanceof Error && error.message === "SCHEDULE_BLOCK_CONFLICT") {
+      return Response.json(
+        {
+          error: "Employee has a schedule block during this time",
+          conflictType: "SCHEDULE_BLOCK",
+        },
+        { status: 409 },
+      );
+    }
+
+    if (error instanceof Error && error.message === "SCHEDULE_CONFLICT") {
+      return Response.json(
+        {
+          error: "Employee is not available for the full appointment time",
+        },
+        { status: 409 },
+      );
+    }
+
+    console.error("Failed to reschedule appointment:", error);
 
     return Response.json(
       { error: "Unable to reschedule appointment" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

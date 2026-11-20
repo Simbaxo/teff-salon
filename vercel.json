@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/google-calendar",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/google-reviews",
+      "schedule": "0 * * * *"
     }
   ],
   "redirects": [

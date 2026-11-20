@@ -1248,6 +1248,7 @@ export default function HistoricalSaleEditor() {
               max={discountMode === "PERCENT" ? 100 : subtotal}
               step={discountMode === "PERCENT" ? 0.01 : 1}
               aria-label="Descuento"
+              showCopHint={discountMode !== "PERCENT"}
               className="mt-3 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-black"
             />
 

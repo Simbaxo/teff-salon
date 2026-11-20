@@ -38,7 +38,9 @@
     ".next-payroll-test/dev/types/**/*.ts",
     "**/*.mts",
     ".next-booking-test/types/**/*.ts",
-    ".next-booking-test/dev/types/**/*.ts"
+    ".next-booking-test/dev/types/**/*.ts",
+    ".next-cashbox-test/types/**/*.ts",
+    ".next-cashbox-test/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

@@ -2,8 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { sendPushNotification } from "@/lib/push";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { checkSlotAvailability } from "@/lib/booking/check-slot-availability";
-import { shouldSuppressBookingPush } from "@/lib/booking/test-push-safety";
 import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
+import { queueWhatsAppNotification } from "@/lib/whatsapp/queue";
+import {
+  getWhatsAppReminderTime,
+  shouldQueueWhatsAppReminder,
+} from "@/lib/whatsapp/reminders";
+import { shouldSuppressBookingPush } from "@/lib/booking/test-push-safety";
 import {
   getTeffCurrentMinutes,
   getTeffDayOfWeek,
@@ -696,6 +701,53 @@ export async function POST(request: Request) {
                     "APPOINTMENT",
                     appointment.id,
                   );
+                }
+              }
+            }
+
+            // Queue WhatsApp confirmations within the booking transaction.
+            // Sending remains disabled until WAIA is configured.
+            if (
+              process.env.TEFF_WHATSAPP_QUEUE_ENABLED === "true" &&
+              customer.phone
+            ) {
+              for (const appointment of createdAppointments) {
+                if (appointment.status !== "BOOKED") {
+                  continue;
+                }
+
+                await queueWhatsAppNotification(tx, {
+                  appointmentId: appointment.id,
+                  bookingId: booking.id,
+                  type: "BOOKING_CONFIRMATION",
+                  recipientPhone: customer.phone,
+                  appointmentDate: appointment.date,
+                  appointmentTime: appointment.startTime,
+                  scheduledFor: new Date(),
+                  idempotencyKey: `booking-confirmation:${appointment.id}`,
+                });
+
+                // Schedule a reminder only when the appointment
+                // is at least 24 hours away.
+                if (
+                  shouldQueueWhatsAppReminder(
+                    appointment.date,
+                    appointment.startTime,
+                  )
+                ) {
+                  await queueWhatsAppNotification(tx, {
+                    appointmentId: appointment.id,
+                    bookingId: booking.id,
+                    type: "APPOINTMENT_REMINDER",
+                    recipientPhone: customer.phone,
+                    appointmentDate: appointment.date,
+                    appointmentTime: appointment.startTime,
+                    scheduledFor: getWhatsAppReminderTime(
+                      appointment.date,
+                      appointment.startTime,
+                    ),
+                    idempotencyKey: `appointment-reminder:${appointment.id}:${appointment.date.toISOString().slice(0, 10)}:${appointment.startTime}`,
+                  });
                 }
               }
             }

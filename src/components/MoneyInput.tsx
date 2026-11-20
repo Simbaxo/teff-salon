@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import CopAmountHint from "@/components/CopAmountHint";
 
 type MoneyInputProps = {
   value: number;
@@ -11,6 +12,7 @@ type MoneyInputProps = {
   step?: number;
   placeholder?: string;
   "aria-label"?: string;
+  showCopHint?: boolean;
 };
 
 export default function MoneyInput({
@@ -21,6 +23,7 @@ export default function MoneyInput({
   max,
   step = 1,
   placeholder,
+  showCopHint = true,
   "aria-label": ariaLabel,
 }: MoneyInputProps) {
   const [draft, setDraft] = useState(String(value));
@@ -74,25 +77,28 @@ export default function MoneyInput({
   }
 
   return (
-    <input
-      type="number"
-      inputMode="decimal"
-      min={min}
-      max={max}
-      step={step}
-      value={draft}
-      placeholder={placeholder}
-      aria-label={ariaLabel}
-      className={className}
-      onFocus={(event) => {
-        isFocusedRef.current = true;
+    <>
+      <input
+        type="number"
+        inputMode="decimal"
+        min={min}
+        max={max}
+        step={step}
+        value={draft}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        className={className}
+        onFocus={(event) => {
+          isFocusedRef.current = true;
 
-        if (event.currentTarget.value === "0") {
-          event.currentTarget.select();
-        }
-      }}
-      onChange={(event) => handleChange(event.target.value)}
-      onBlur={handleBlur}
-    />
+          if (event.currentTarget.value === "0") {
+            event.currentTarget.select();
+          }
+        }}
+        onChange={(event) => handleChange(event.target.value)}
+        onBlur={handleBlur}
+      />
+      {showCopHint && <CopAmountHint value={draft} />}
+    </>
   );
 }
