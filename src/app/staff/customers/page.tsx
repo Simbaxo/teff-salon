@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import InternalNav from "@/components/InternalNav";
+import InternalHeader from "@/components/InternalHeader";
 import { canManageStaff } from "@/lib/auth-roles";
 import { prisma } from "@/lib/prisma";
 import CustomerSearchForm from "./CustomerSearchForm";
@@ -43,9 +43,22 @@ export default async function CustomersPage({
 
   return (
     <main className="min-h-screen bg-neutral-100 px-4 py-8 text-black sm:px-6">
-      <div className="mx-auto max-w-4xl space-y-6">
-        <h1 className="text-3xl font-bold">Clientes</h1>
-        <InternalNav userRole={role} />
+      <div className="mx-auto max-w-7xl space-y-6">
+        <InternalHeader userRole={role} userName={session.user.name} />
+
+        <section className="mt-7">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#B76E79]">
+            TEFF Staff
+          </p>
+
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">
+            Clientes
+          </h1>
+
+          <p className="mt-2 text-sm text-neutral-600">
+            Busca clientes por nombre o teléfono y consulta su historial.
+          </p>
+        </section>
 
         <CustomerSearchForm query={query} />
 

@@ -20,6 +20,7 @@ const primaryItems: NavigationItem[] = [
 ];
 
 const secondaryItems: NavigationItem[] = [
+  { href: "/staff/customers", label: "Clientes" },
   { href: "/inventory", label: "Inventario" },
   { href: "/cashbox", label: "Caja" },
   { href: "/reviews", label: "Reseñas" },
