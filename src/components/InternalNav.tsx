@@ -27,6 +27,12 @@ const secondaryItems: NavigationItem[] = [
 ];
 
 function isActivePath(pathname: string, href: string) {
+  // Staff subpages have their own navigation destinations.
+  // Do not highlight Agenda when viewing Clientes.
+  if (href === "/staff") {
+    return pathname === "/staff";
+  }
+
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
