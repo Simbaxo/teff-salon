@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import {
@@ -8,9 +8,18 @@ import {
   addTeffDays,
   hasTeffAppointmentStarted,
 } from "@/lib/datetime";
+import QuickBookingCustomerPicker, {
+  type QuickBookingCustomer,
+} from "./QuickBookingCustomerPicker";
+import QuickBookingServices, {
+  type QuickBookingServiceSelection,
+} from "./QuickBookingServices";
+import { CalendarOff, CalendarDays, History } from "lucide-react";
+import { getStaffTimeOptions } from "@/lib/appointments/staff-scheduling";
 import { getUniqueFinalizedSales } from "@/lib/appointments/get-unique-finalized-sales";
 import { classifyFinalizedSaleItems } from "@/lib/appointments/classify-finalized-sale-items";
-import InternalNav from "@/components/InternalNav";
+import InternalHeader from "@/components/InternalHeader";
+import ScheduleManager from "./ScheduleManager";
 
 type Appointment = {
   id: number;
@@ -153,24 +162,6 @@ function formatTime(time: string) {
   return `${displayHour}:${minutes.toString().padStart(2, "0")} ${period}`;
 }
 
-function getStaffTimeOptions() {
-  const options: string[] = [];
-
-  // Covers the full TEFF operating window.
-  for (let minutes = 9 * 60 + 30; minutes <= 18 * 60; minutes += 30) {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-
-    options.push(
-      `${hours.toString().padStart(2, "0")}:${mins
-        .toString()
-        .padStart(2, "0")}`,
-    );
-  }
-
-  return options;
-}
-
 const staffTimeOptions = getStaffTimeOptions();
 
 export default function StaffPage({
@@ -200,6 +191,195 @@ export default function StaffPage({
   const [selectedDate, setSelectedDate] = useState(getTeffToday());
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+
+  const [showQuickBooking, setShowQuickBooking] = useState(false);
+
+  const [showScheduleManager, setShowScheduleManager] = useState(false);
+
+  const [checkingInBookingId, setCheckingInBookingId] = useState<number | null>(
+    null,
+  );
+
+  const [quickBookingCustomer, setQuickBookingCustomer] =
+    useState<QuickBookingCustomer | null>(null);
+
+  const [quickBookingServices, setQuickBookingServices] = useState<
+    QuickBookingServiceSelection[]
+  >([]);
+
+  const [quickBookingDate, setQuickBookingDate] = useState(selectedDate);
+  const [quickBookingTime, setQuickBookingTime] = useState("10:00");
+  const [quickBookingCustomTime, setQuickBookingCustomTime] = useState(false);
+
+  const [quickBookingSaving, setQuickBookingSaving] = useState(false);
+  const [quickBookingError, setQuickBookingError] = useState("");
+
+  const quickBookingSavingRef = useRef(false);
+
+  const quickBookingSubmissionRef = useRef<{
+    signature: string;
+    requestKey: string;
+  } | null>(null);
+
+  async function confirmQuickBooking() {
+    if (quickBookingSavingRef.current) return;
+
+    setQuickBookingError("");
+
+    if (!quickBookingCustomer) {
+      setQuickBookingError("Selecciona o registra un cliente.");
+      return;
+    }
+
+    if (quickBookingServices.length === 0) {
+      setQuickBookingError("Selecciona al menos un servicio.");
+      return;
+    }
+
+    if (quickBookingServices.some((service) => service.employeeId == null)) {
+      setQuickBookingError("Selecciona una técnica para cada servicio.");
+      return;
+    }
+
+    if (!quickBookingDate || !quickBookingTime) {
+      setQuickBookingError("Selecciona la fecha y hora de la cita.");
+      return;
+    }
+
+    const customer =
+      quickBookingCustomer.kind === "existing"
+        ? {
+            kind: "existing" as const,
+            id: quickBookingCustomer.id,
+          }
+        : {
+            kind: "new" as const,
+            name: quickBookingCustomer.name,
+            phone: quickBookingCustomer.phone,
+            email: quickBookingCustomer.email,
+          };
+
+    const services = quickBookingServices.map((service) => ({
+      serviceId: service.serviceId,
+      employeeId: service.employeeId!,
+    }));
+
+    const details = {
+      customer,
+      services,
+      date: quickBookingDate,
+      startTime: quickBookingTime,
+    };
+
+    const signature = JSON.stringify(details);
+
+    if (
+      !quickBookingSubmissionRef.current ||
+      quickBookingSubmissionRef.current.signature !== signature
+    ) {
+      quickBookingSubmissionRef.current = {
+        signature,
+        requestKey: crypto.randomUUID(),
+      };
+    }
+
+    const requestKey = quickBookingSubmissionRef.current.requestKey;
+
+    quickBookingSavingRef.current = true;
+    setQuickBookingSaving(true);
+
+    let overrideOverlap = false;
+    let overrideOutsideHours = false;
+
+    try {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const response = await fetch("/api/staff/quick-booking/create", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            requestKey,
+            ...details,
+            overrideOverlap,
+            overrideOutsideHours,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          setShowQuickBooking(false);
+          setQuickBookingCustomer(null);
+          setQuickBookingServices([]);
+          setQuickBookingError("");
+          quickBookingSubmissionRef.current = null;
+
+          setSelectedDate(quickBookingDate);
+          await loadAppointments();
+
+          window.alert(
+            result.duplicate
+              ? "Esta reserva ya estaba guardada. Se recuperó correctamente."
+              : "Reserva creada correctamente.",
+          );
+
+          return;
+        }
+
+        if (
+          response.status === 409 &&
+          result.conflictType === "OUTSIDE_HOURS" &&
+          !overrideOutsideHours
+        ) {
+          const confirmed = window.confirm(
+            "Esta cita está fuera del horario habitual del salón. ¿Deseas crearla de todas formas?",
+          );
+
+          if (!confirmed) return;
+
+          overrideOutsideHours = true;
+          continue;
+        }
+
+        if (
+          response.status === 409 &&
+          result.conflictType === "APPOINTMENT" &&
+          !overrideOverlap
+        ) {
+          const confirmed = window.confirm(
+            "La técnica ya tiene otra cita en ese horario. ¿Deseas crear esta reserva aunque se superpongan?",
+          );
+
+          if (!confirmed) return;
+
+          overrideOverlap = true;
+          continue;
+        }
+
+        setQuickBookingError(
+          typeof result.error === "string"
+            ? result.error
+            : "No se pudo guardar la reserva.",
+        );
+
+        return;
+      }
+
+      setQuickBookingError(
+        "No se pudo completar la confirmación. Intenta nuevamente.",
+      );
+    } catch (error) {
+      console.error("Quick Booking failed:", error);
+
+      setQuickBookingError(
+        "Error de conexión. Puedes intentar guardar nuevamente sin duplicar la reserva.",
+      );
+    } finally {
+      quickBookingSavingRef.current = false;
+      setQuickBookingSaving(false);
+    }
+  }
 
   // Load The Appointments from the Staff API
   async function loadAppointments() {
@@ -376,6 +556,57 @@ export default function StaffPage({
     }[]
   >;
 
+  // Open a specific reservation from Reception notifications
+  // or recent-booking links.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const bookingId = Number(params.get("bookingId"));
+    const requestedDate = params.get("date");
+
+    if (
+      !Number.isSafeInteger(bookingId) ||
+      bookingId <= 0 ||
+      !requestedDate ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)
+    ) {
+      return;
+    }
+
+    if (selectedDate !== requestedDate) {
+      setSelectedDate(requestedDate);
+      return;
+    }
+
+    const matchingAppointment = appointments.find(
+      (appointment) =>
+        appointment.bookingId === bookingId &&
+        appointment.date.slice(0, 10) === requestedDate,
+    );
+
+    if (!matchingAppointment) return;
+
+    // A previously selected technician must not hide this booking.
+    if (selectedEmployeeId !== "") {
+      setSelectedEmployeeId("");
+      return;
+    }
+
+    const groupKey = `${matchingAppointment.employeeId}-booking-${bookingId}`;
+
+    setExpandedBookingGroups((current) =>
+      current.includes(groupKey) ? current : [...current, groupKey],
+    );
+
+    const targetId = `staff-booking-${bookingId}`;
+
+    requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, [appointments, selectedDate, selectedEmployeeId]);
+
   // Add the status update function
   async function updateAppointmentStatus(
     appointmentId: number,
@@ -406,6 +637,40 @@ export default function StaffPage({
       );
     } catch (error) {
       console.error(error);
+    }
+  }
+
+  async function checkInBooking(bookingId: number) {
+    if (checkingInBookingId !== null) return;
+
+    setCheckingInBookingId(bookingId);
+
+    try {
+      const response = await fetch(`/api/bookings/${bookingId}/check-in`, {
+        method: "PATCH",
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || "No se pudo registrar la llegada del cliente.",
+        );
+      }
+
+      // Refresh every service in this reservation, including
+      // services assigned to different technicians.
+      await loadAppointments();
+    } catch (error) {
+      console.error("Booking check-in failed:", error);
+
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "No se pudo registrar la llegada del cliente.",
+      );
+    } finally {
+      setCheckingInBookingId(null);
     }
   }
 
@@ -487,7 +752,10 @@ export default function StaffPage({
     try {
       setReschedulingAppointmentId(appointmentId);
 
-      async function sendRescheduleRequest(overrideOverlap = false) {
+      async function sendRescheduleRequest(
+        overrideOverlap = false,
+        overrideOutsideHours = false,
+      ) {
         const response = await fetch(
           `/api/appointments/${appointmentId}/schedule`,
           {
@@ -499,6 +767,7 @@ export default function StaffPage({
               date,
               startTime,
               overrideOverlap,
+              overrideOutsideHours,
             }),
           },
         );
@@ -511,21 +780,39 @@ export default function StaffPage({
         };
       }
 
-      // First attempt keeps normal overlap protection enabled.
+      // First attempt respects all normal scheduling restrictions.
+      let overrideOverlap = false;
+      let overrideOutsideHours = false;
+
       let { response, data } = await sendRescheduleRequest();
 
-      // Staff may intentionally override another appointment overlap.
-      if (response.status === 409 && data.conflictType === "APPOINTMENT") {
-        const confirmed = window.confirm(
-          "Este horario se superpone con otra cita.\n\n¿Deseas guardar la cita de todas formas?",
-        );
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (response.status !== 409) break;
 
-        if (!confirmed) {
-          return;
+        if (data.conflictType === "OUTSIDE_HOURS" && !overrideOutsideHours) {
+          const confirmed = window.confirm(
+            "La hora seleccionada está fuera del horario habitual del salón.\n\n¿Deseas guardar la cita de todas formas?",
+          );
+
+          if (!confirmed) return;
+
+          overrideOutsideHours = true;
+        } else if (data.conflictType === "APPOINTMENT" && !overrideOverlap) {
+          const confirmed = window.confirm(
+            "Este horario se superpone con otra cita.\n\n¿Deseas guardar la cita de todas formas?",
+          );
+
+          if (!confirmed) return;
+
+          overrideOverlap = true;
+        } else {
+          break;
         }
 
-        // Retry only after explicit confirmation.
-        ({ response, data } = await sendRescheduleRequest(true));
+        ({ response, data } = await sendRescheduleRequest(
+          overrideOverlap,
+          overrideOutsideHours,
+        ));
       }
 
       if (!response.ok) {
@@ -550,39 +837,272 @@ export default function StaffPage({
 
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-5xl">
-        {/* Staff page header */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-black">TEFF Staff</h1>
+      {showScheduleManager && (
+        <ScheduleManager
+          initialDate={selectedDate}
+          onClose={() => setShowScheduleManager(false)}
+          onChanged={loadAppointments}
+        />
+      )}
+      {showQuickBooking && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-3 sm:p-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quick-booking-title"
+            className="mx-auto w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl sm:p-7"
+          >
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="quick-booking-title"
+                  className="text-2xl font-bold text-black"
+                >
+                  Nueva cita
+                </h2>
 
-            <p className="mt-2 text-neutral-600">Gestión de Citas</p>
-            {/* Show the authenticated TEFF account */}
-            <p className="mt-1 text-sm text-neutral-500">
-              {userName} · {userRole}
-            </p>
+                <p className="mt-1 text-sm text-neutral-600">
+                  Reserva rápida desde recepción
+                </p>
+              </div>
 
-            <div className="mt-4">
-              <InternalNav userRole={userRole} />
+              <button
+                type="button"
+                disabled={quickBookingSaving}
+                aria-label="Cerrar reserva rápida"
+                onClick={() => {
+                  setShowQuickBooking(false);
+                  setQuickBookingCustomer(null);
+                  setQuickBookingServices([]);
+                }}
+                className="min-h-11 min-w-11 rounded-xl border border-neutral-300 text-xl text-black"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <h3 className="mb-3 text-lg font-semibold text-black">
+                  1. Cliente
+                </h3>
+
+                <QuickBookingCustomerPicker
+                  value={quickBookingCustomer}
+                  onChange={setQuickBookingCustomer}
+                />
+              </div>
+
+              <div className="border-t border-neutral-200 pt-5">
+                <h3 className="mb-3 text-lg font-semibold text-black">
+                  2. Servicios y técnicas
+                </h3>
+
+                <QuickBookingServices
+                  value={quickBookingServices}
+                  onChange={setQuickBookingServices}
+                />
+              </div>
+
+              <div className="border-t border-neutral-200 pt-5">
+                <h3 className="mb-4 text-lg font-semibold text-black">
+                  3. Fecha y hora
+                </h3>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="quick-booking-date"
+                      className="block text-sm font-medium text-black"
+                    >
+                      Fecha
+                    </label>
+
+                    <input
+                      id="quick-booking-date"
+                      type="date"
+                      value={quickBookingDate}
+                      onChange={(event) =>
+                        setQuickBookingDate(event.target.value)
+                      }
+                      className="mt-2 min-h-12 w-full rounded-xl border border-neutral-300 bg-white px-3 text-base text-black"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="quick-booking-time"
+                      className="block text-sm font-medium text-black"
+                    >
+                      Hora de inicio
+                    </label>
+
+                    {quickBookingCustomTime ? (
+                      <input
+                        id="quick-booking-time"
+                        type="time"
+                        step={60}
+                        value={quickBookingTime}
+                        onChange={(event) =>
+                          setQuickBookingTime(event.target.value)
+                        }
+                        className="mt-2 min-h-12 w-full rounded-xl border border-neutral-300 bg-white px-3 text-base text-black"
+                      />
+                    ) : (
+                      <select
+                        id="quick-booking-time"
+                        value={quickBookingTime}
+                        onChange={(event) =>
+                          setQuickBookingTime(event.target.value)
+                        }
+                        className="mt-2 min-h-12 w-full rounded-xl border border-neutral-300 bg-white px-3 text-base text-black"
+                      >
+                        {getStaffTimeOptions().map((time) => (
+                          <option key={time} value={time}>
+                            {formatTime(time)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+
+                <label className="mt-4 flex min-h-11 items-center gap-3 text-sm font-medium text-black">
+                  <input
+                    type="checkbox"
+                    checked={quickBookingCustomTime}
+                    onChange={(event) => {
+                      const custom = event.target.checked;
+                      setQuickBookingCustomTime(custom);
+
+                      if (
+                        !custom &&
+                        !getStaffTimeOptions().includes(quickBookingTime)
+                      ) {
+                        setQuickBookingTime("10:00");
+                      }
+                    }}
+                    className="h-5 w-5 accent-[#B76E79]"
+                  />
+                  Hora personalizada
+                </label>
+
+                <p className="mt-2 text-xs text-neutral-600">
+                  Los horarios fuera de la jornada habitual requieren
+                  confirmación. Las citas que se superpongan también mostrarán
+                  una advertencia.
+                </p>
+              </div>
+
+              <div className="border-t border-neutral-200 pt-5">
+                {quickBookingError && (
+                  <div
+                    role="alert"
+                    className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+                  >
+                    {quickBookingError}
+                  </div>
+                )}
+
+                <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    disabled={quickBookingSaving}
+                    onClick={() => {
+                      setShowQuickBooking(false);
+                      setQuickBookingCustomer(null);
+                      setQuickBookingServices([]);
+                      setQuickBookingError("");
+                      quickBookingSubmissionRef.current = null;
+                    }}
+                    className="min-h-12 rounded-xl border border-neutral-300 px-5 py-3 font-semibold text-black disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={
+                      quickBookingSaving ||
+                      !quickBookingCustomer ||
+                      quickBookingServices.length === 0 ||
+                      quickBookingServices.some(
+                        (service) => service.employeeId == null,
+                      ) ||
+                      !quickBookingDate ||
+                      !quickBookingTime
+                    }
+                    onClick={confirmQuickBooking}
+                    className="min-h-12 rounded-xl bg-[#B76E79] px-6 py-3 font-semibold text-white hover:bg-[#a55e69] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {quickBookingSaving
+                      ? "Guardando reserva..."
+                      : "Confirmar reserva"}
+                  </button>
+                </div>
+
+                <p className="mt-3 text-xs text-neutral-500">
+                  Si la cita se superpone con otra o está fuera del horario
+                  habitual, se solicitará una confirmación adicional.
+                </p>
+              </div>
             </div>
           </div>
-
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-100"
-          >
-            Cerrar sesión
-          </button>
         </div>
-        <div className="mt-6">
-          <label
-            htmlFor="staff-date"
-            className="block text-sm font-semibold text-black"
-          >
-            Fecha
-          </label>
+      )}
 
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="mx-auto max-w-7xl">
+        {/* Shared responsive navigation */}
+        <InternalHeader userRole={userRole} userName={userName} />
+
+        {/* Agenda page heading */}
+        <section className="mt-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#B76E79]">
+              TEFF Staff
+            </p>
+
+            <h1 className="mt-1 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">
+              Agenda
+            </h1>
+
+            <p className="mt-2 text-sm text-neutral-600">
+              Gestiona las citas del salón
+            </p>
+          </div>
+
+          {(userRole === "OWNER" || userRole === "RECEPTIONIST") && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuickBookingDate(selectedDate);
+                setQuickBookingTime("10:00");
+                setQuickBookingCustomTime(false);
+                setQuickBookingError("");
+                setShowQuickBooking(true);
+              }}
+              className="inline-flex min-h-12 items-center justify-center rounded-xl bg-[#B76E79] px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-[#a55e69] sm:self-center"
+            >
+              + Nueva cita
+            </button>
+          )}
+        </section>
+
+        <div className="mt-6 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <label
+              htmlFor="staff-date"
+              className="text-sm font-semibold text-neutral-800"
+            >
+              Fecha de la agenda
+            </label>
+
+            <span className="hidden text-xs text-neutral-500 sm:inline">
+              Selecciona el día y la técnica
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <button
               type="button"
               aria-label="Día anterior"
@@ -614,7 +1134,7 @@ export default function StaffPage({
             <button
               type="button"
               onClick={() => setSelectedDate(getTeffToday())}
-              className="min-h-11 rounded-xl border border-neutral-300 bg-white px-4 text-sm font-semibold text-black hover:bg-neutral-100"
+              className="min-h-11 rounded-xl bg-rose-50 px-4 text-sm font-semibold text-[#9F5360] hover:bg-rose-100"
             >
               Hoy
             </button>
@@ -642,19 +1162,32 @@ export default function StaffPage({
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-3">
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          {(userRole === "OWNER" || userRole === "RECEPTIONIST") && (
+            <button
+              type="button"
+              onClick={() => setShowScheduleManager(true)}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:border-[#B76E79] hover:bg-rose-50 hover:text-[#9F5360]"
+            >
+              <CalendarOff size={18} strokeWidth={1.8} aria-hidden="true" />
+              Gestionar horarios
+            </button>
+          )}
+
           <Link
             href="/staff/historical"
-            className="inline-flex rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white hover:bg-neutral-800"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:border-[#B76E79] hover:bg-rose-50"
           >
-            + Registrar servicio anterior
+            <History size={18} strokeWidth={1.8} aria-hidden="true" />
+            Registrar servicio anterior
           </Link>
 
           <Link
             href="/staff/upcoming"
-            className="inline-flex rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-neutral-100"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:border-[#B76E79] hover:bg-rose-50"
           >
-            📅 Ver próximas citas
+            <CalendarDays size={18} strokeWidth={1.8} aria-hidden="true" />
+            Ver próximas citas
           </Link>
         </div>
 
@@ -675,6 +1208,123 @@ export default function StaffPage({
               >
                 Reintentar
               </button>
+            </div>
+          )}
+
+          {!isLoading && !loadError && visibleAppointments.length === 0 && (
+            <div className="rounded-2xl border border-neutral-200 bg-white px-5 py-12 text-center shadow-sm sm:py-16">
+              {/* TEFF empty calendar illustration */}
+              <svg
+                viewBox="0 0 240 190"
+                role="img"
+                aria-label="Calendario sin citas"
+                className="mx-auto mb-6 h-40 w-52 sm:h-44 sm:w-60"
+              >
+                <ellipse cx="120" cy="104" rx="102" ry="73" fill="#F9EFF0" />
+                <ellipse
+                  cx="155"
+                  cy="126"
+                  rx="63"
+                  ry="49"
+                  fill="#F5E5E8"
+                  opacity="0.85"
+                />
+
+                <rect
+                  x="57"
+                  y="47"
+                  width="126"
+                  height="111"
+                  rx="17"
+                  fill="white"
+                  stroke="#D9B4BB"
+                  strokeWidth="3"
+                />
+                <path
+                  d="M57 64a17 17 0 0 1 17-17h92a17 17 0 0 1 17 17v21H57V64Z"
+                  fill="#B76E79"
+                />
+
+                <rect
+                  x="82"
+                  y="36"
+                  width="10"
+                  height="29"
+                  rx="5"
+                  fill="#E7BCC4"
+                />
+                <rect
+                  x="148"
+                  y="36"
+                  width="10"
+                  height="29"
+                  rx="5"
+                  fill="#E7BCC4"
+                />
+
+                {[
+                  [81, 100],
+                  [108, 100],
+                  [135, 100],
+                  [81, 124],
+                  [108, 124],
+                  [135, 124],
+                ].map(([x, y]) => (
+                  <rect
+                    key={`${x}-${y}`}
+                    x={x}
+                    y={y}
+                    width="17"
+                    height="16"
+                    rx="4"
+                    fill="#F0DFE2"
+                  />
+                ))}
+
+                <circle cx="174" cy="139" r="30" fill="#B76E79" />
+                <path
+                  d="m161 139 9 9 19-20"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+
+                <path
+                  d="m192 27 5-13 M208 41l11-9 M211 59l15-3"
+                  fill="none"
+                  stroke="#B76E79"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                />
+              </svg>
+
+              <h2 className="text-xl font-bold tracking-tight text-neutral-900 sm:text-2xl">
+                No hay citas para esta fecha
+              </h2>
+
+              <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-neutral-600 sm:text-base">
+                {selectedEmployeeId
+                  ? "Esta técnica no tiene citas registradas para el día seleccionado."
+                  : "Aún no tienes citas registradas para el día seleccionado."}
+              </p>
+
+              {(userRole === "OWNER" || userRole === "RECEPTIONIST") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickBookingDate(selectedDate);
+                    setQuickBookingTime("10:00");
+                    setQuickBookingCustomTime(false);
+                    setQuickBookingError("");
+                    setShowQuickBooking(true);
+                  }}
+                  className="mt-7 inline-flex min-h-12 items-center justify-center rounded-xl bg-[#B76E79] px-7 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#a55e69]"
+                >
+                  + Nueva cita
+                </button>
+              )}
             </div>
           )}
 
@@ -711,69 +1361,46 @@ export default function StaffPage({
 
                     <div className="space-y-4">
                       {reservationGroups.map((group) => (
-                        <div key={group.key} className="space-y-3">
+                        <div
+                          key={group.key}
+                          id={
+                            group.bookingId !== null
+                              ? `staff-booking-${group.bookingId}`
+                              : undefined
+                          }
+                          className="scroll-mt-24 space-y-3"
+                        >
                           {/* Compact summary for reservations with multiple services. */}
                           {group.bookingId !== null &&
                             group.appointments.length > 1 && (
-                              <div className="rounded-xl border-l-4 border-[#b76e79] bg-white p-5 shadow-sm">
-                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                  <div>
-                                    <Link
-                                      href={`/staff/customers/${group.customer.id}`}
-                                      className="text-lg font-bold text-black hover:underline"
-                                    >
-                                      {group.customer.name}
-                                    </Link>
-
-                                    <p className="mt-1 text-sm text-neutral-500">
-                                      Reserva #{group.bookingId} ·{" "}
-                                      {group.appointments.length} servicios
-                                    </p>
-                                  </div>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const key = `${group.appointments[0].employeeId}-${group.key}`;
-
-                                      setExpandedBookingGroups((current) =>
-                                        current.includes(key)
-                                          ? current.filter(
-                                              (item) => item !== key,
-                                            )
-                                          : [...current, key],
-                                      );
-                                    }}
-                                    aria-expanded={expandedBookingGroups.includes(
-                                      `${group.appointments[0].employeeId}-${group.key}`,
-                                    )}
-                                    className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-black"
+                              <div className="rounded-xl border-l-4 border-[#B76E79] bg-white p-5 shadow-sm">
+                                {/* Reservation identity */}
+                                <div>
+                                  <Link
+                                    href={`/staff/customers/${group.customer.id}`}
+                                    className="text-lg font-bold text-black hover:underline"
                                   >
-                                    {expandedBookingGroups.includes(
-                                      `${group.appointments[0].employeeId}-${group.key}`,
-                                    )
-                                      ? "Ocultar gestión −"
-                                      : "Gestionar servicios +"}
-                                  </button>
+                                    {group.customer.name}
+                                  </Link>
+
+                                  <p className="mt-1 text-sm text-neutral-500">
+                                    Reserva #{group.bookingId} ·{" "}
+                                    {group.appointments.length} servicios
+                                  </p>
                                 </div>
 
-                                {/* Each service keeps its own time and status. */}
+                                {/* Scheduled services */}
                                 <div className="mt-4 space-y-3 border-t border-neutral-200 pt-4">
                                   {group.appointments.map((item) => (
-                                    <div
-                                      key={item.id}
-                                      className="flex gap-3 text-sm"
-                                    >
-                                      <span className="shrink-0 font-semibold text-black">
+                                    <div key={item.id} className="flex gap-3 text-sm">
+                                      <span className="w-20 shrink-0 font-semibold text-black">
                                         {formatTime(item.startTime)}
                                       </span>
 
                                       <div className="min-w-0">
                                         <p className="text-black">
                                           {item.appointmentServices
-                                            .map(
-                                              (entry) => entry.service.nameEs,
-                                            )
+                                            .map((entry) => entry.service.nameEs)
                                             .join(", ")}
                                         </p>
 
@@ -784,6 +1411,59 @@ export default function StaffPage({
                                       </div>
                                     </div>
                                   ))}
+                                </div>
+
+                                {/* Reservation actions */}
+                                <div className="mt-4 flex flex-col gap-2 border-t border-neutral-200 pt-4 sm:flex-row sm:flex-wrap">
+                                  {appointmentsForDate.some(
+                                    (item) =>
+                                      item.bookingId === group.bookingId &&
+                                      item.status === "BOOKED",
+                                  ) &&
+                                    group.appointments.some(
+                                      (item) =>
+                                        item.id ===
+                                        visibleAppointments.find(
+                                          (visible) =>
+                                            visible.bookingId === group.bookingId,
+                                        )?.id,
+                                    ) && (
+                                      <button
+                                        type="button"
+                                        disabled={checkingInBookingId !== null}
+                                        onClick={() =>
+                                          void checkInBooking(group.bookingId!)
+                                        }
+                                        className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                                      >
+                                        {checkingInBookingId === group.bookingId
+                                          ? "Registrando llegada..."
+                                          : "Cliente Llegó"}
+                                      </button>
+                                    )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const key = `${group.appointments[0].employeeId}-${group.key}`;
+
+                                      setExpandedBookingGroups((current) =>
+                                        current.includes(key)
+                                          ? current.filter((item) => item !== key)
+                                          : [...current, key],
+                                      );
+                                    }}
+                                    aria-expanded={expandedBookingGroups.includes(
+                                      `${group.appointments[0].employeeId}-${group.key}`,
+                                    )}
+                                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-neutral-300 bg-white px-5 py-2.5 text-sm font-semibold text-black hover:bg-neutral-50"
+                                  >
+                                    {expandedBookingGroups.includes(
+                                      `${group.appointments[0].employeeId}-${group.key}`,
+                                    )
+                                      ? "Ocultar gestión −"
+                                      : "Gestionar servicios +"}
+                                  </button>
                                 </div>
                               </div>
                             )}
@@ -1029,6 +1709,82 @@ export default function StaffPage({
                                             ))}
                                         </select>
 
+                                        <details className="mt-3 max-w-sm rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+                                          <summary className="cursor-pointer text-sm font-semibold text-[#B76E79]">
+                                            Hora personalizada
+                                          </summary>
+
+                                          <div className="mt-3 space-y-3">
+                                            <p className="text-xs text-neutral-600">
+                                              Selecciona una hora exacta,
+                                              incluso fuera del horario
+                                              habitual.
+                                            </p>
+
+                                            <label
+                                              htmlFor={`custom-time-${appointment.id}`}
+                                              className="block text-sm font-medium text-black"
+                                            >
+                                              Hora exacta
+                                            </label>
+
+                                            <input
+                                              id={`custom-time-${appointment.id}`}
+                                              type="time"
+                                              step={60}
+                                              defaultValue={appointment.startTime.slice(
+                                                0,
+                                                5,
+                                              )}
+                                              disabled={
+                                                reschedulingAppointmentId ===
+                                                appointment.id
+                                              }
+                                              className="min-h-12 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-base text-black"
+                                            />
+
+                                            <button
+                                              type="button"
+                                              disabled={
+                                                reschedulingAppointmentId ===
+                                                appointment.id
+                                              }
+                                              onClick={() => {
+                                                const input =
+                                                  document.getElementById(
+                                                    `custom-time-${appointment.id}`,
+                                                  ) as HTMLInputElement | null;
+
+                                                if (!input?.value) {
+                                                  alert(
+                                                    "Selecciona una hora válida.",
+                                                  );
+                                                  return;
+                                                }
+
+                                                if (
+                                                  input.value ===
+                                                  appointment.startTime.slice(
+                                                    0,
+                                                    5,
+                                                  )
+                                                ) {
+                                                  return;
+                                                }
+
+                                                void rescheduleAppointment(
+                                                  appointment.id,
+                                                  appointment.date.slice(0, 10),
+                                                  input.value,
+                                                );
+                                              }}
+                                              className="min-h-12 w-full rounded-xl bg-[#B76E79] px-4 py-3 text-sm font-semibold text-white hover:bg-[#a55e69] disabled:opacity-50"
+                                            >
+                                              Guardar hora personalizada
+                                            </button>
+                                          </div>
+                                        </details>
+
                                         {reschedulingAppointmentId ===
                                           appointment.id && (
                                           <p className="mt-2 text-sm text-neutral-500">
@@ -1056,18 +1812,23 @@ export default function StaffPage({
                                   )}
 
                                   {appointment.status === "BOOKED" && (
-                                    <div className="mt-5 flex gap-3">
-                                      <button
-                                        onClick={() =>
-                                          updateAppointmentStatus(
-                                            appointment.id,
-                                            "CHECKED_IN",
-                                          )
-                                        }
-                                        className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
-                                      >
-                                        Cliente Llegó
-                                      </button>
+                                    <div className="mt-5 flex flex-wrap gap-3">
+                                      {(appointment.bookingId === null ||
+                                        getBookingAppointmentCount(
+                                          appointment.bookingId,
+                                        ) === 1) && (
+                                        <button
+                                          onClick={() =>
+                                            updateAppointmentStatus(
+                                              appointment.id,
+                                              "CHECKED_IN",
+                                            )
+                                          }
+                                          className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+                                        >
+                                          Cliente Llegó
+                                        </button>
+                                      )}
 
                                       {canMarkNoShow(
                                         appointment.date,

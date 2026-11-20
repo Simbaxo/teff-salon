@@ -7,7 +7,7 @@ import {
     getTeffDayStart,
     getTeffToday,
 } from "@/lib/datetime";
-import InternalNav from "@/components/InternalNav";
+import InternalHeader from "@/components/InternalHeader";
 import AdminNav from "@/components/AdminNav";
 
 export default async function AdminPage() {
@@ -631,18 +631,17 @@ export default async function AdminPage() {
 
     return (
         <main className="min-h-screen bg-neutral-100 p-6">
-            <div className="mx-auto max-w-5xl">
-                <h1 className="text-3xl font-bold text-black">
-                    Panel del Propietario
-                </h1>
-                <p className="mt-2 text-neutral-600">
-                    Resumen financiero básico de TEFF Beauty Salon.
-                </p>
+            <div className="mx-auto max-w-7xl">
+                <InternalHeader
+                  userRole={session.user.role}
+                  userName={session.user.name}
+                />
 
-                <div className="mt-4">
-                    <InternalNav userRole={session.user.role} />
-                </div>
-
+                <section className="mt-7 mb-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#B76E79]">TEFF Staff</p>
+                  <h1 className="mt-1 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">Panel del Propietario</h1>
+                  <p className="mt-2 text-sm text-neutral-600">Resumen financiero básico de TEFF Beauty Salon.</p>
+                </section>
                 <div className="mt-6">
                     <AdminNav userRole={session.user.role} />
                 </div>

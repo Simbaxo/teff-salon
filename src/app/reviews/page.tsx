@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
-import InternalNav from "@/components/InternalNav";
+import InternalHeader from "@/components/InternalHeader";
 import { getGoogleReviewsDashboardStats } from "@/lib/google-reviews/stats";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
@@ -56,18 +56,17 @@ export default async function GoogleReviewsPage() {
 
   return (
     <main className="min-h-screen bg-neutral-100 px-4 py-8 text-black sm:px-6">
-      <div className="mx-auto max-w-5xl space-y-6">
-        <header className="space-y-4">
-          <div>
-            <h1 className="text-3xl font-bold">Reseñas de Google</h1>
-            <p className="mt-2 text-sm text-neutral-600">
-              Reputación y seguimiento de reseñas de TEFF Beauty Salon
-            </p>
-          </div>
+      <div className="mx-auto max-w-7xl space-y-6">
+        <InternalHeader
+          userRole={role}
+          userName={session.user.name}
+        />
 
-          <InternalNav userRole={role} />
-        </header>
-
+        <section className="mt-7 mb-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#B76E79]">TEFF Staff</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">Reseñas de Google</h1>
+          <p className="mt-2 text-sm text-neutral-600">Reputación y seguimiento de reseñas de TEFF Beauty Salon.</p>
+        </section>
         <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold">Estado de conexión</h2>
 

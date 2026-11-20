@@ -1,38 +1,60 @@
 {
-    "js/ts.tsdk.path": "node_modules/typescript/lib",
-    "cSpell.language": "en,es-ES",
-    "cSpell.words": [
-        "Manicurista",
-        "Rocelys",
-        "semipermanente",
-        "Teff",
-        "TEFF",
-        "Yenifer"
-    ],
-    "files.associations": {
-        "*.tsx": "typescriptreact",
-        "*.ts": "typescript"
-    },
-    "emmet.includeLanguages": {
-        "typescriptreact": "javascriptreact"
-    },
+  "js/ts.tsdk.path": "node_modules/typescript/lib",
+  "cSpell.language": "en,es-ES",
+  "cSpell.words": [
+    "Manicurista",
+    "Rocelys",
+    "semipermanente",
+    "Teff",
+    "TEFF",
+    "Yenifer"
+  ],
+  "files.associations": {
+    "*.tsx": "typescriptreact",
+    "*.ts": "typescript"
+  },
+  "emmet.includeLanguages": {
+    "typescriptreact": "javascriptreact"
+  },
 
-    // --- KEEP EMMET WORKING ---
-    "emmet.showExpandedAbbreviation": "always",
-    "emmet.triggerExpansionOnTab": true,
+  // Keep Emmet working
+  "emmet.showExpandedAbbreviation": "always",
+  "emmet.triggerExpansionOnTab": true,
 
-    // --- STOP AUTOMATIC POPUPS (Only show when you ask via Ctrl+Space) ---
-    "editor.quickSuggestions": {
-        "other": false,
-        "comments": false,
-        "strings": false
-    },
-    "editor.suggestOnTriggerCharacters": false,
-    "editor.acceptSuggestionOnEnter": "off",
+  // Disable automatic suggestion popups
+  "editor.quickSuggestions": {
+    "other": false,
+    "comments": false,
+    "strings": false
+  },
+  "editor.suggestOnTriggerCharacters": false,
+  "editor.acceptSuggestionOnEnter": "off",
 
-    // --- KEEP NORMAL SNIPPETS / TYPESCRIPT HELPERS QUIET ---
-    "editor.snippetSuggestions": "none",
-    "editor.wordBasedSuggestions": "off",
-    "editor.tabCompletion": "onlySnippets"
+  // Keep snippets and TypeScript suggestions quiet
+  "editor.snippetSuggestions": "none",
+  "editor.wordBasedSuggestions": "off",
+  "editor.tabCompletion": "onlySnippets",
+
+  // Prettier: automatically format the whole file when saving
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "file",
+
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
 }
-

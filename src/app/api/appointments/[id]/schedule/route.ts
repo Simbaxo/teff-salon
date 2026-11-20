@@ -8,11 +8,8 @@ import {
   getWhatsAppReminderTime,
   shouldQueueWhatsAppReminder,
 } from "@/lib/whatsapp/reminders";
-import {
-  getTeffCurrentMinutes,
-  getTeffDayOfWeek,
-  getTeffToday,
-} from "@/lib/datetime";
+import { getTeffCurrentMinutes, getTeffToday } from "@/lib/datetime";
+import { isOutsideStaffScheduleHours } from "@/lib/appointments/staff-scheduling";
 
 function getPayrollMonday(date: Date): Date {
   // Payroll weeks run Monday through Sunday.
@@ -50,6 +47,7 @@ export async function PATCH(
     const date = body.date;
     const startTime = body.startTime;
     const overrideOverlap = body.overrideOverlap === true;
+    const overrideOutsideHours = body.overrideOutsideHours === true;
 
     if (
       !Number.isInteger(appointmentId) ||
@@ -136,21 +134,20 @@ export async function PATCH(
       return hours * 60 + minutes;
     }
 
-    const dayOfWeek = getTeffDayOfWeek(date);
-
-    const openingMinutes = dayOfWeek === 0 ? 10 * 60 + 30 : 9 * 60 + 30;
-
-    const closingMinutes = dayOfWeek === 0 ? 17 * 60 + 30 : 18 * 60 + 30;
-
     const requestedStart = timeToMinutes(startTime);
-    const requestedEnd = requestedStart + appointment.duration;
 
-    if (requestedStart < openingMinutes || requestedEnd > closingMinutes) {
+    if (isOutsideStaffScheduleHours(date, startTime) && !overrideOutsideHours) {
       return Response.json(
-        { error: "Appointment is outside business hours" },
-        { status: 400 },
+        {
+          error:
+            "La hora seleccionada está fuera del horario habitual del salón.",
+          conflictType: "OUTSIDE_HOURS",
+        },
+        { status: 409 },
       );
     }
+
+    const requestedEnd = requestedStart + appointment.duration;
 
     if (date === getTeffToday() && requestedStart <= getTeffCurrentMinutes()) {
       return Response.json(

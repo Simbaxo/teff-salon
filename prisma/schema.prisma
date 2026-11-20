@@ -76,12 +76,16 @@ model EmployeeScheduleBlock {
   // "Vacaciones", "Llega tarde", "Cita médica".
   reason String?
 
+  // Groups consecutive daily blocks belonging to one vacation.
+  groupId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
   @@index([employeeId, date])
+  @@index([groupId])
 }
 
 // Login accounts for people who can access the internal TEFF system
@@ -216,6 +220,14 @@ model Booking {
   // Null for bookings created before source tracking.
   source BookingSource?
 
+  // Prevent duplicate internal bookings caused by repeated submissions.
+  // Existing and public bookings do not require this field.
+  internalRequestKey String? @unique
+
+  // Identifies the exact information submitted for an internal booking.
+  // Allows safe retries without accepting changed appointment details.
+  internalRequestHash String?
+
   customer     Customer      @relation(fields: [customerId], references: [id])
   appointments Appointment[]
 
@@ -270,8 +282,8 @@ model AppointmentService {
   bookedPrice    Int
   bookedDuration Int
 
-  appointment Appointment @relation(fields: [appointmentId], references: [id])
-  service     Service     @relation(fields: [serviceId], references: [id])
+  appointment Appointment               @relation(fields: [appointmentId], references: [id])
+  service     Service                   @relation(fields: [serviceId], references: [id])
   photos      AppointmentServicePhoto[]
 
   @@id([appointmentId, serviceId])
