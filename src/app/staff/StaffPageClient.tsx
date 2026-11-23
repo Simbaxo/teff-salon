@@ -14,6 +14,9 @@ import QuickBookingCustomerPicker, {
 import QuickBookingServices, {
   type QuickBookingServiceSelection,
 } from "./QuickBookingServices";
+import StaffBookingConfirmation, {
+  type StaffBookingConfirmationDetails,
+} from "./StaffBookingConfirmation";
 import { CalendarOff, CalendarDays, History } from "lucide-react";
 import { getStaffTimeOptions } from "@/lib/appointments/staff-scheduling";
 import { getUniqueFinalizedSales } from "@/lib/appointments/get-unique-finalized-sales";
@@ -194,6 +197,10 @@ export default function StaffPage({
 
   const [showQuickBooking, setShowQuickBooking] = useState(false);
 
+  // Saved reservation to display in the customer-facing confirmation.
+  const [confirmedStaffBooking, setConfirmedStaffBooking] =
+    useState<StaffBookingConfirmationDetails | null>(null);
+
   const [showScheduleManager, setShowScheduleManager] = useState(false);
 
   const [checkingInBookingId, setCheckingInBookingId] = useState<number | null>(
@@ -309,6 +316,10 @@ export default function StaffPage({
         const result = await response.json();
 
         if (response.ok) {
+          const savedBookingId = Number(result.bookingId);
+
+          // The reservation has already been saved successfully.
+          // Close the booking form and refresh the agenda.
           setShowQuickBooking(false);
           setQuickBookingCustomer(null);
           setQuickBookingServices([]);
@@ -316,14 +327,24 @@ export default function StaffPage({
           quickBookingSubmissionRef.current = null;
 
           setSelectedDate(quickBookingDate);
+
+          // Confirmation errors must never be reported as booking failures.
+          try {
+            const confirmation =
+              await getStaffBookingConfirmation(savedBookingId);
+
+            setConfirmedStaffBooking(confirmation);
+          } catch (error) {
+            console.error("Booking confirmation details failed:", error);
+
+            window.alert(
+              `La reserva #${savedBookingId} se guardó correctamente, ` +
+                "pero no se pudo mostrar la tarjeta de confirmación. " +
+                "Puedes encontrarla en la agenda.",
+            );
+          }
+
           await loadAppointments();
-
-          window.alert(
-            result.duplicate
-              ? "Esta reserva ya estaba guardada. Se recuperó correctamente."
-              : "Reserva creada correctamente.",
-          );
-
           return;
         }
 
@@ -379,6 +400,50 @@ export default function StaffPage({
       quickBookingSavingRef.current = false;
       setQuickBookingSaving(false);
     }
+  }
+
+  async function getStaffBookingConfirmation(
+    bookingId: number,
+  ): Promise<StaffBookingConfirmationDetails> {
+    const response = await fetch("/api/appointments", {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error("No se pudieron consultar los detalles de la reserva.");
+    }
+
+    const appointments = (await response.json()) as Appointment[];
+
+    const bookingAppointments = appointments
+      .filter((appointment) => appointment.bookingId === bookingId)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.id - b.id);
+
+    if (bookingAppointments.length === 0) {
+      throw new Error("No se encontraron las citas de esta reserva.");
+    }
+
+    const first = bookingAppointments[0];
+
+    const services = bookingAppointments.flatMap((appointment) =>
+      appointment.appointmentServices.map((item) => ({
+        id: appointment.id * 100000 + item.service.id,
+        name: item.service.nameEs,
+        technician: appointment.employee.name,
+        startTime: appointment.startTime,
+      })),
+    );
+
+    if (services.length === 0) {
+      throw new Error("La reserva no contiene servicios.");
+    }
+
+    return {
+      bookingId,
+      customerName: first.customer.name,
+      date: first.date.slice(0, 10),
+      services,
+    };
   }
 
   // Load The Appointments from the Staff API
@@ -842,6 +907,28 @@ export default function StaffPage({
           initialDate={selectedDate}
           onClose={() => setShowScheduleManager(false)}
           onChanged={loadAppointments}
+        />
+      )}
+      {confirmedStaffBooking && (
+        <StaffBookingConfirmation
+          booking={confirmedStaffBooking}
+          onClose={() => {
+            setConfirmedStaffBooking(null);
+          }}
+          onNewBooking={() => {
+            setConfirmedStaffBooking(null);
+
+            setQuickBookingCustomer(null);
+            setQuickBookingServices([]);
+            setQuickBookingDate(selectedDate);
+            setQuickBookingTime("10:00");
+            setQuickBookingCustomTime(false);
+            setQuickBookingError("");
+
+            quickBookingSubmissionRef.current = null;
+
+            setShowQuickBooking(true);
+          }}
         />
       )}
       {showQuickBooking && (
@@ -1392,7 +1479,10 @@ export default function StaffPage({
                                 {/* Scheduled services */}
                                 <div className="mt-4 space-y-3 border-t border-neutral-200 pt-4">
                                   {group.appointments.map((item) => (
-                                    <div key={item.id} className="flex gap-3 text-sm">
+                                    <div
+                                      key={item.id}
+                                      className="flex gap-3 text-sm"
+                                    >
                                       <span className="w-20 shrink-0 font-semibold text-black">
                                         {formatTime(item.startTime)}
                                       </span>
@@ -1400,7 +1490,9 @@ export default function StaffPage({
                                       <div className="min-w-0">
                                         <p className="text-black">
                                           {item.appointmentServices
-                                            .map((entry) => entry.service.nameEs)
+                                            .map(
+                                              (entry) => entry.service.nameEs,
+                                            )
                                             .join(", ")}
                                         </p>
 
@@ -1425,7 +1517,8 @@ export default function StaffPage({
                                         item.id ===
                                         visibleAppointments.find(
                                           (visible) =>
-                                            visible.bookingId === group.bookingId,
+                                            visible.bookingId ===
+                                            group.bookingId,
                                         )?.id,
                                     ) && (
                                       <button
@@ -1449,7 +1542,9 @@ export default function StaffPage({
 
                                       setExpandedBookingGroups((current) =>
                                         current.includes(key)
-                                          ? current.filter((item) => item !== key)
+                                          ? current.filter(
+                                              (item) => item !== key,
+                                            )
                                           : [...current, key],
                                       );
                                     }}
