@@ -12,7 +12,6 @@ import StaffBookingConfirmation, {
 import {
   getStatusLabel,
   getStatusClasses,
-  canMarkNoShow,
   formatTime,
 } from "./staff-formatters";
 import { CalendarOff, CalendarDays, History } from "lucide-react";
@@ -24,6 +23,7 @@ import ScheduleManager from "./ScheduleManager";
 import QuickBookingModal from "./QuickBookingModal";
 import FinalizedSalesSection from "./FinalizedSalesSection";
 import AppointmentServicesSummary from "./AppointmentServicesSummary";
+import AppointmentStatusActions from "./AppointmentStatusActions";
 
 type Appointment = {
   id: number;
@@ -1420,10 +1420,16 @@ export default function StaffPage({
                                   {/* Appointment services and checkout summary */}
                                   <AppointmentServicesSummary
                                     status={appointment.status}
-                                    bookedServices={appointment.appointmentServices}
+                                    bookedServices={
+                                      appointment.appointmentServices
+                                    }
                                     bookedAddons={appointment.appointmentAddons}
-                                    hasLinkedSale={appointment.saleAppointments.length > 0}
-                                    finalizedItems={getCompletedAppointmentItems(appointment.id)}
+                                    hasLinkedSale={
+                                      appointment.saleAppointments.length > 0
+                                    }
+                                    finalizedItems={getCompletedAppointmentItems(
+                                      appointment.id,
+                                    )}
                                   />
 
                                   {(userRole === "OWNER" ||
@@ -1615,106 +1621,13 @@ export default function StaffPage({
                                     </details>
                                   )}
 
-                                  {appointment.status === "REQUESTED" && (
-                                    <div className="mt-5">
-                                      <button
-                                        onClick={() =>
-                                          updateAppointmentStatus(
-                                            appointment.id,
-                                            "BOOKED",
-                                          )
-                                        }
-                                        className="rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white"
-                                      >
-                                        Confirmar Cita
-                                      </button>
-                                    </div>
-                                  )}
-
-                                  {appointment.status === "BOOKED" && (
-                                    <div className="mt-5 flex flex-wrap gap-3">
-                                      {(appointment.bookingId === null ||
-                                        getBookingAppointmentCount(
-                                          appointment.bookingId,
-                                        ) === 1) && (
-                                        <button
-                                          onClick={() =>
-                                            updateAppointmentStatus(
-                                              appointment.id,
-                                              "CHECKED_IN",
-                                            )
-                                          }
-                                          className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
-                                        >
-                                          Cliente Llegó
-                                        </button>
-                                      )}
-
-                                      {canMarkNoShow(
-                                        appointment.date,
-                                        appointment.startTime,
-                                      ) && (
-                                        <button
-                                          onClick={() => {
-                                            const confirmed = window.confirm(
-                                              "¿Marcar esta cita como No Asistió?",
-                                            );
-
-                                            if (confirmed) {
-                                              updateAppointmentStatus(
-                                                appointment.id,
-                                                "NO_SHOW",
-                                              );
-                                            }
-                                          }}
-                                          className="rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black"
-                                        >
-                                          No Asistió
-                                        </button>
-                                      )}
-
-                                      <button
-                                        onClick={() => {
-                                          const confirmed = window.confirm(
-                                            "¿Seguro que deseas cancelar esta cita?",
-                                          );
-
-                                          if (confirmed) {
-                                            updateAppointmentStatus(
-                                              appointment.id,
-                                              "CANCELLED",
-                                            );
-                                          }
-                                        }}
-                                        className="rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-black"
-                                      >
-                                        Cancelar Cita
-                                      </button>
-                                    </div>
-                                  )}
-
-                                  {appointment.status === "CHECKED_IN" && (
-                                    <button
-                                      onClick={() =>
-                                        updateAppointmentStatus(
-                                          appointment.id,
-                                          "IN_PROGRESS",
-                                        )
-                                      }
-                                      className="mt-5 rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold text-white hover:bg-purple-700"
-                                    >
-                                      Iniciar Servicio
-                                    </button>
-                                  )}
-
-                                  {appointment.status === "IN_PROGRESS" && (
-                                    <Link
-                                      href={`/staff/checkout/${appointment.id}`}
-                                      className="mt-5 inline-block rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white hover:bg-green-700"
-                                    >
-                                      Finalizar Servicio
-                                    </Link>
-                                  )}
+                                  <AppointmentStatusActions
+                                    appointment={appointment}
+                                    bookingAppointmentCount={getBookingAppointmentCount(
+                                      appointment.bookingId,
+                                    )}
+                                    onUpdateStatus={updateAppointmentStatus}
+                                  />
                                 </div>
                               ))}
                             </div>
