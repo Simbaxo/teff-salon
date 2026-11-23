@@ -2,18 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { signOut } from "next-auth/react";
 import { getTeffToday, addTeffDays } from "@/lib/datetime";
 import type { QuickBookingCustomer } from "./QuickBookingCustomerPicker";
 import type { QuickBookingServiceSelection } from "./QuickBookingServices";
 import StaffBookingConfirmation, {
   type StaffBookingConfirmationDetails,
 } from "./StaffBookingConfirmation";
-import {
-  getStatusLabel,
-  getStatusClasses,
-  formatTime,
-} from "./staff-formatters";
+import { getStatusLabel, formatTime } from "./staff-formatters";
 import { CalendarOff, CalendarDays, History } from "lucide-react";
 import { getUniqueFinalizedSales } from "@/lib/appointments/get-unique-finalized-sales";
 import { classifyFinalizedSaleItems } from "@/lib/appointments/classify-finalized-sale-items";
@@ -21,9 +16,7 @@ import InternalHeader from "@/components/InternalHeader";
 import ScheduleManager from "./ScheduleManager";
 import QuickBookingModal from "./QuickBookingModal";
 import FinalizedSalesSection from "./FinalizedSalesSection";
-import AppointmentServicesSummary from "./AppointmentServicesSummary";
-import AppointmentStatusActions from "./AppointmentStatusActions";
-import AppointmentManagementControls from "./AppointmentManagementControls";
+import AppointmentCard from "./AppointmentCard";
 
 type Appointment = {
   id: number;
@@ -1339,121 +1332,33 @@ export default function StaffPage({
                             )) && (
                             <div className="space-y-3">
                               {group.appointments.map((appointment) => (
-                                <div
+                                <AppointmentCard
                                   key={appointment.id}
-                                  className={`rounded-xl p-5 shadow-sm ${
-                                    appointment.bookingId !== null &&
-                                    getBookingAppointmentCount(
-                                      appointment.bookingId,
-                                    ) > 1
-                                      ? "border-l-4 border-[#b76e79] bg-white"
-                                      : "bg-white"
-                                  }`}
-                                >
-                                  <div className="flex items-start justify-between">
-                                    <div>
-                                      <h3 className="text-lg font-semibold text-black">
-                                        <Link
-                                          href={`/staff/customers/${appointment.customer.id}`}
-                                          className="underline-offset-4 hover:underline"
-                                        >
-                                          {appointment.customer.name}
-                                        </Link>
-                                      </h3>
-
-                                      <p className="mt-1 text-sm text-neutral-700">
-                                        <span className="font-semibold text-black">
-                                          {formatTime(appointment.startTime)}
-                                        </span>
-                                        {" · "}
-                                        {appointment.appointmentServices
-                                          .map(({ service }) => service.nameEs)
-                                          .join(", ") || "Cita"}
-                                      </p>
-
-                                      <p className="text-sm text-neutral-500">
-                                        {appointment.customer.phone}
-                                      </p>
-                                      {appointment.bookingId !== null &&
-                                        getBookingAppointmentCount(
-                                          appointment.bookingId,
-                                        ) > 1 && (
-                                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                                            <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-900">
-                                              Servicio{" "}
-                                              {getBookingAppointmentPosition(
-                                                appointment.id,
-                                                appointment.bookingId,
-                                              )}{" "}
-                                              de{" "}
-                                              {getBookingAppointmentCount(
-                                                appointment.bookingId,
-                                              )}
-                                            </span>
-
-                                            <span className="text-xs font-semibold text-neutral-500">
-                                              Misma Reserva #
-                                              {appointment.bookingId}
-                                            </span>
-                                          </div>
-                                        )}
-                                    </div>
-
-                                    <span
-                                      className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(
-                                        appointment.status,
-                                      )}`}
-                                    >
-                                      {getStatusLabel(appointment.status)}
-                                    </span>
-                                  </div>
-
-                                  <div className="mt-4 text-sm text-neutral-700">
-                                    <p>
-                                      <strong>Duración:</strong>{" "}
-                                      {appointment.duration} min
-                                    </p>
-                                  </div>
-
-                                  {/* Appointment services and checkout summary */}
-                                  <AppointmentServicesSummary
-                                    status={appointment.status}
-                                    bookedServices={
-                                      appointment.appointmentServices
-                                    }
-                                    bookedAddons={appointment.appointmentAddons}
-                                    hasLinkedSale={
-                                      appointment.saleAppointments.length > 0
-                                    }
-                                    finalizedItems={getCompletedAppointmentItems(
-                                      appointment.id,
-                                    )}
-                                  />
-
-                                  <AppointmentManagementControls
-                                    userRole={userRole}
-                                    appointment={appointment}
-                                    employees={employees}
-                                    reassigningAppointmentId={
-                                      reassigningAppointmentId
-                                    }
-                                    reschedulingAppointmentId={
-                                      reschedulingAppointmentId
-                                    }
-                                    onReassignEmployee={reassignEmployee}
-                                    onRescheduleAppointment={
-                                      rescheduleAppointment
-                                    }
-                                  />
-
-                                  <AppointmentStatusActions
-                                    appointment={appointment}
-                                    bookingAppointmentCount={getBookingAppointmentCount(
-                                      appointment.bookingId,
-                                    )}
-                                    onUpdateStatus={updateAppointmentStatus}
-                                  />
-                                </div>
+                                  appointment={appointment}
+                                  userRole={userRole}
+                                  employees={employees}
+                                  bookingAppointmentCount={getBookingAppointmentCount(
+                                    appointment.bookingId,
+                                  )}
+                                  bookingAppointmentPosition={getBookingAppointmentPosition(
+                                    appointment.id,
+                                    appointment.bookingId,
+                                  )}
+                                  finalizedItems={getCompletedAppointmentItems(
+                                    appointment.id,
+                                  )}
+                                  reassigningAppointmentId={
+                                    reassigningAppointmentId
+                                  }
+                                  reschedulingAppointmentId={
+                                    reschedulingAppointmentId
+                                  }
+                                  onReassignEmployee={reassignEmployee}
+                                  onRescheduleAppointment={
+                                    rescheduleAppointment
+                                  }
+                                  onUpdateStatus={updateAppointmentStatus}
+                                />
                               ))}
                             </div>
                           )}
