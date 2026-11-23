@@ -320,7 +320,7 @@ export default function ScheduleManager({
               }}
               className={`min-h-11 rounded-xl px-4 py-2 text-sm font-semibold ${
                 mode === value
-                  ? "bg-[#B76E79] text-white"
+                  ? "bg-[#1F5A43] text-white"
                   : "border border-neutral-200 text-neutral-700"
               }`}
             >
@@ -411,7 +411,7 @@ export default function ScheduleManager({
         </div>
 
         {mode === "vacation" && (
-          <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">
+          <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
             Se bloquearán todos los días del rango, incluyendo domingos y
             festivos. Las citas existentes no se cancelarán automáticamente.
           </p>
@@ -439,7 +439,7 @@ export default function ScheduleManager({
           type="button"
           disabled={saving || loading}
           onClick={() => void createBlock()}
-          className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-[#B76E79] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#a55e69] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-[#1F5A43] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#174632] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
         >
           {saving ? "Guardando..." : "Bloquear horario"}
         </button>

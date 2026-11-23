@@ -20,7 +20,7 @@ function AdminLink({ href, label, pathname }: AdminLinkProps) {
       href={href}
       className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
         isActive
-          ? "bg-[#B76E79] text-white"
+          ? "bg-[#1F5A43] text-white"
           : "bg-white text-black hover:bg-neutral-100"
       }`}
     >

@@ -94,7 +94,7 @@ export default function AppointmentCard({
     <div
       className={`rounded-xl p-5 shadow-sm ${
         isMultiServiceBooking
-          ? "border-l-4 border-[#b76e79] bg-white"
+          ? "border-l-4 border-[#1F5A43] bg-white"
           : "bg-white"
       }`}
     >
@@ -125,7 +125,7 @@ export default function AppointmentCard({
 
           {isMultiServiceBooking && bookingAppointmentPosition !== null && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-900">
+              <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-900">
                 Servicio {bookingAppointmentPosition} de{" "}
                 {bookingAppointmentCount}
               </span>

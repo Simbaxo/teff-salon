@@ -366,7 +366,7 @@ export default async function ReceptionistPage() {
         />
 
         <section className="mt-7">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#B76E79]">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1F5A43]">
             TEFF Staff
           </p>
 

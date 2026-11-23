@@ -266,7 +266,7 @@ export default function RecurringExpenseManager({ onFinancialChange }: Props) {
           <button
             type="submit"
             disabled={saving || !categoryId}
-            className="rounded-lg bg-[#B76E79] px-5 py-3 font-semibold text-white disabled:opacity-50 sm:col-span-2"
+            className="rounded-lg bg-[#1F5A43] px-5 py-3 font-semibold text-white disabled:opacity-50 sm:col-span-2"
           >
             {saving ? "Guardando..." : "Crear gasto recurrente"}
           </button>

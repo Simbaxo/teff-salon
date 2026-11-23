@@ -1208,7 +1208,7 @@ export default function PayrollPageClient() {
                                 (current) => current + 1
                             )
                         }
-                        className="text-sm font-semibold text-[#B76E79] hover:underline"
+                        className="text-sm font-semibold text-[#1F5A43] hover:underline"
                     >
                         Actualizar
                     </button>
@@ -1335,7 +1335,7 @@ export default function PayrollPageClient() {
                             </div>
 
                             <div className="flex flex-wrap items-center gap-3">
-                                <span className="rounded-full bg-[#B76E79]/10 px-4 py-2 text-sm font-semibold text-[#B76E79]">
+                                <span className="rounded-full bg-[#1F5A43]/10 px-4 py-2 text-sm font-semibold text-[#1F5A43]">
                                     {preview.period.status === "DRAFT"
                                         ? "Borrador"
                                         : preview.period.status === "REVIEWED"
@@ -1349,7 +1349,7 @@ export default function PayrollPageClient() {
                                         type="button"
                                         onClick={() => void handlePreparePayroll()}
                                         disabled={preparingDrafts || reviewingPayroll || loading}
-                                        className="rounded-xl border border-[#B76E79] bg-white px-5 py-3 text-sm font-semibold text-[#B76E79] transition-colors hover:bg-[#B76E79]/5 disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="rounded-xl border border-[#1F5A43] bg-white px-5 py-3 text-sm font-semibold text-[#1F5A43] transition-colors hover:bg-[#1F5A43]/5 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         {preparingDrafts
                                             ? "Calculando..."
@@ -1363,7 +1363,7 @@ export default function PayrollPageClient() {
                                         type="button"
                                         onClick={() => void handleReviewPayroll()}
                                         disabled={reviewingPayroll || loading}
-                                        className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#A65D69] disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="rounded-xl bg-[#1F5A43] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#174632] disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         {reviewingPayroll
                                             ? "Validando nómina..."
@@ -1376,7 +1376,7 @@ export default function PayrollPageClient() {
                                         type="button"
                                         onClick={() => void handleCheckCloseWeek()}
                                         disabled={closingWeek || loading}
-                                        className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#A65D69] disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="rounded-xl bg-[#1F5A43] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#174632] disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         {closingWeek
                                             ? "Validando cierre..."
@@ -1415,7 +1415,7 @@ export default function PayrollPageClient() {
                                         aria-expanded={
                                             expandedSalesEmployeeId === employee.employeeId
                                         }
-                                        className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-3 text-left text-sm font-semibold text-[#B76E79] hover:bg-rose-50"
+                                        className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-3 text-left text-sm font-semibold text-[#1F5A43] hover:bg-green-50"
                                     >
                                         <span>Ver ventas de la semana</span>
                                         <span aria-hidden="true">
@@ -1458,7 +1458,7 @@ export default function PayrollPageClient() {
                                                                     <div className="flex items-center justify-between gap-2">
                                                                         <a
                                                                             href={`/sales?saleId=${sale.saleId}`}
-                                                                            className="font-semibold text-[#B76E79] underline-offset-2 hover:underline"
+                                                                            className="font-semibold text-[#1F5A43] underline-offset-2 hover:underline"
                                                                         >
                                                                             Venta #{sale.saleId}
                                                                         </a>
@@ -1603,7 +1603,7 @@ export default function PayrollPageClient() {
                                             Saldo Pendiente
                                         </span>
 
-                                        <span className="text-xl font-bold tabular-nums text-[#B76E79]">
+                                        <span className="text-xl font-bold tabular-nums text-[#1F5A43]">
                                             {formatCOP(employee.outstandingPay)}
                                         </span>
                                     </div>
@@ -1629,7 +1629,7 @@ export default function PayrollPageClient() {
                                                 setPaymentConfirmed(false);
                                                 setPaymentError("");
                                             }}
-                                            className="mt-3 w-full rounded-xl bg-[#B76E79] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#A65D69] disabled:cursor-not-allowed disabled:opacity-50"
+                                            className="mt-3 w-full rounded-xl bg-[#1F5A43] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#174632] disabled:cursor-not-allowed disabled:opacity-50"
                                         >
                                             Marcar como pagada
                                         </button>
@@ -1647,7 +1647,7 @@ export default function PayrollPageClient() {
                                                 setZeroBalanceConfirmed(false);
                                                 setZeroBalanceError("");
                                             }}
-                                            className="mt-3 w-full rounded-xl border border-[#B76E79] px-4 py-3 text-sm font-semibold text-[#B76E79] transition-colors hover:bg-rose-50"
+                                            className="mt-3 w-full rounded-xl border border-[#1F5A43] px-4 py-3 text-sm font-semibold text-[#1F5A43] transition-colors hover:bg-green-50"
                                         >
                                             Liquidar saldo cero
                                         </button>
@@ -1736,7 +1736,7 @@ export default function PayrollPageClient() {
                                             );
                                             setAdjustmentError("");
                                         }}
-                                        className="rounded-xl bg-[#B76E79] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="rounded-xl bg-[#1F5A43] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         {editingEmployeeId === employee.employeeId
                                             ? "Cancelar"
@@ -1924,7 +1924,7 @@ export default function PayrollPageClient() {
                                 type="button"
                                 onClick={() => void handleConfirmPreparePayroll()}
                                 disabled={preparingDrafts}
-                                className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                className="rounded-xl bg-[#1F5A43] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {preparingDrafts
                                     ? "Guardando..."
@@ -1992,7 +1992,7 @@ export default function PayrollPageClient() {
                                 type="button"
                                 onClick={() => void handleConfirmCloseWeek()}
                                 disabled={closingWeek}
-                                className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                className="rounded-xl bg-[#1F5A43] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {closingWeek
                                     ? "Cerrando..."
@@ -2058,7 +2058,7 @@ export default function PayrollPageClient() {
                                 type="button"
                                 onClick={() => void handleConfirmPayrollReview()}
                                 disabled={reviewingPayroll || !reviewReady}
-                                className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#A65D69] disabled:cursor-not-allowed disabled:opacity-50"
+                                className="rounded-xl bg-[#1F5A43] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#174632] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {reviewingPayroll
                                     ? "Confirmando..."
@@ -2108,7 +2108,7 @@ export default function PayrollPageClient() {
                                 onChange={(event) =>
                                     setPaymentConfirmed(event.target.checked)
                                 }
-                                className="mt-1 h-4 w-4 accent-[#B76E79]"
+                                className="mt-1 h-4 w-4 accent-[#1F5A43]"
                             />
 
                             <span>
@@ -2167,7 +2167,7 @@ export default function PayrollPageClient() {
                                 type="button"
                                 onClick={() => void handleConfirmPayment()}
                                 disabled={!paymentConfirmed || savingPayment}
-                                className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#A65D69] disabled:cursor-not-allowed disabled:opacity-50"
+                                className="rounded-xl bg-[#1F5A43] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#174632] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {savingPayment
                                     ? "Registrando..."
@@ -2223,7 +2223,7 @@ export default function PayrollPageClient() {
                                 onChange={(event) =>
                                     setZeroBalanceConfirmed(event.target.checked)
                                 }
-                                className="mt-1 h-4 w-4 accent-[#B76E79]"
+                                className="mt-1 h-4 w-4 accent-[#1F5A43]"
                             />
 
                             <span>
@@ -2259,7 +2259,7 @@ export default function PayrollPageClient() {
                                 type="button"
                                 onClick={() => void handleConfirmZeroBalance()}
                                 disabled={!zeroBalanceConfirmed || settlingZeroBalance}
-                                className="rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#A65D69] disabled:cursor-not-allowed disabled:opacity-50"
+                                className="rounded-xl bg-[#1F5A43] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#174632] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {settlingZeroBalance
                                     ? "Liquidando..."

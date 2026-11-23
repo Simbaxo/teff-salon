@@ -90,7 +90,7 @@ export default function QuickBookingDateTime({
               onTimeChange("10:00");
             }
           }}
-          className="h-5 w-5 accent-[#B76E79]"
+          className="h-5 w-5 accent-[#1F5A43]"
         />
         Hora personalizada
       </label>

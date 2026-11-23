@@ -299,7 +299,7 @@ export default function ExpenseManager({
           <button
             type="submit"
             disabled={savingCategory || newCategoryName.trim().length < 2}
-            className="rounded-lg bg-[#B76E79] px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-[#1F5A43] px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             {savingCategory ? "Guardando..." : "Crear categoría"}
           </button>
@@ -446,7 +446,7 @@ export default function ExpenseManager({
             <button
               type="submit"
               disabled={saving || !categoryId}
-              className="rounded-lg bg-[#B76E79] px-5 py-3 font-semibold text-white disabled:opacity-50"
+              className="rounded-lg bg-[#1F5A43] px-5 py-3 font-semibold text-white disabled:opacity-50"
             >
               {saving ? "Guardando..." : "Registrar gasto"}
             </button>

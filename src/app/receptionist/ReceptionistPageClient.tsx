@@ -832,7 +832,7 @@ export default function ReceptionistPageClient({
             onClick={() => setActiveTab(value)}
             className={`rounded-lg px-2 py-3 text-sm font-semibold transition-colors sm:text-base ${
               activeTab === value
-                ? "bg-[#B76E79] text-white"
+                ? "bg-[#1F5A43] text-white"
                 : "text-neutral-600 hover:bg-neutral-100"
             }`}
           >
@@ -971,12 +971,12 @@ export default function ReceptionistPageClient({
                   reviewingBookingId !== null ||
                   !unreadBookingCount
                 }
-                className="text-sm font-semibold text-[#B76E79] disabled:opacity-40"
+                className="text-sm font-semibold text-[#1F5A43] disabled:opacity-40"
               >
                 Limpiar todas
               </button>
 
-              <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700">
+              <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-800">
                 {unreadBookingCount ?? 0} nuevas
               </span>
             </div>
@@ -997,7 +997,7 @@ export default function ReceptionistPageClient({
                   .map((notification) => (
                     <div
                       key={notification.bookingId}
-                      className="rounded-lg border border-rose-200 bg-rose-50/40 p-3"
+                      className="rounded-lg border border-green-200 bg-green-50/40 p-3"
                     >
                       <p className="font-semibold text-black">
                         {notification.customerName}
@@ -1019,7 +1019,7 @@ export default function ReceptionistPageClient({
                           void reviewBookingNotification(notification)
                         }
                         disabled={reviewingBookingId !== null}
-                        className="mt-3 rounded-lg bg-[#B76E79] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#A45E69] disabled:cursor-not-allowed disabled:opacity-50"
+                        className="mt-3 rounded-lg bg-[#1F5A43] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#174632] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {reviewingBookingId === notification.bookingId
                           ? "Abriendo..."
@@ -1141,7 +1141,7 @@ export default function ReceptionistPageClient({
                       </p>
                     </div>
 
-                    <span className="shrink-0 text-sm font-semibold text-[#B76E79]">
+                    <span className="shrink-0 text-sm font-semibold text-[#1F5A43]">
                       Ver →
                     </span>
                   </button>
@@ -1192,7 +1192,7 @@ export default function ReceptionistPageClient({
                       : weeklyGoalProgress < 75
                         ? "bg-[#D9A441]"
                         : weeklyGoalProgress < 100
-                          ? "bg-[#B76E79]"
+                          ? "bg-[#1F5A43]"
                           : "bg-[#329D7B]"
                   }`}
                   style={{ width: `${weeklyGoalProgress}%` }}
@@ -1303,7 +1303,7 @@ export default function ReceptionistPageClient({
                       : monthlyGoalProgress < 75
                         ? "bg-[#D9A441]"
                         : monthlyGoalProgress < 100
-                          ? "bg-[#B76E79]"
+                          ? "bg-[#1F5A43]"
                           : "bg-[#329D7B]"
                   }`}
                   style={{ width: `${monthlyGoalProgress}%` }}

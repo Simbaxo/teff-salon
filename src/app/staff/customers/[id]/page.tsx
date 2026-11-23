@@ -377,7 +377,7 @@ export default async function CustomerProfilePage({
                                     {/* Finalized items actually charged at checkout */}
                                     {linkedSale && (
                                         <div className="border-b border-neutral-100 px-4 py-4 sm:px-5">
-                                            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#B76E79]">
+                                            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#1F5A43]">
                                                 Servicios cobrados
                                             </p>
 

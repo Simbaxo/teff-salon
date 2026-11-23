@@ -24,7 +24,7 @@ export default async function InventoryPage() {
                 />
 
                 <section className="mt-7 mb-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#B76E79]">TEFF Staff</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1F5A43]">TEFF Staff</p>
                   <h1 className="mt-1 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">Inventario</h1>
                   <p className="mt-2 text-sm text-neutral-600">Controla los insumos y productos de TEFF.</p>
                 </section>

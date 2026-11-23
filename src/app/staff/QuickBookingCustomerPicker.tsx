@@ -140,7 +140,7 @@ export default function QuickBookingCustomerPicker({ value, onChange }: Props) {
           onClick={() => switchMode("existing")}
           className={`min-h-11 rounded-xl px-4 py-2 text-sm font-semibold ${
             mode === "existing"
-              ? "bg-[#B76E79] text-white"
+              ? "bg-[#1F5A43] text-white"
               : "border border-neutral-300 bg-white text-black"
           }`}
         >
@@ -152,7 +152,7 @@ export default function QuickBookingCustomerPicker({ value, onChange }: Props) {
           onClick={() => switchMode("new")}
           className={`min-h-11 rounded-xl px-4 py-2 text-sm font-semibold ${
             mode === "new"
-              ? "bg-[#B76E79] text-white"
+              ? "bg-[#1F5A43] text-white"
               : "border border-neutral-300 bg-white text-black"
           }`}
         >
@@ -176,7 +176,7 @@ export default function QuickBookingCustomerPicker({ value, onChange }: Props) {
                   setQuery("");
                   setResults([]);
                 }}
-                className="mt-3 text-sm font-semibold text-[#B76E79]"
+                className="mt-3 text-sm font-semibold text-[#1F5A43]"
               >
                 Cambiar cliente
               </button>

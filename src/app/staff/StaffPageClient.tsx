@@ -908,7 +908,7 @@ export default function StaffPage({
         {/* Agenda page heading */}
         <section className="mt-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#B76E79]">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1F5A43]">
               TEFF Staff
             </p>
 
@@ -931,7 +931,7 @@ export default function StaffPage({
                 setQuickBookingError("");
                 setShowQuickBooking(true);
               }}
-              className="inline-flex min-h-12 items-center justify-center rounded-xl bg-[#B76E79] px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-[#a55e69] sm:self-center"
+              className="inline-flex min-h-12 items-center justify-center rounded-xl bg-[#1F5A43] px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-[#174632] sm:self-center"
             >
               + Nueva cita
             </button>
@@ -984,7 +984,7 @@ export default function StaffPage({
             <button
               type="button"
               onClick={() => setSelectedDate(getTeffToday())}
-              className="min-h-11 rounded-xl bg-rose-50 px-4 text-sm font-semibold text-[#9F5360] hover:bg-rose-100"
+              className="min-h-11 rounded-xl bg-green-50 px-4 text-sm font-semibold text-[#174632] hover:bg-green-100"
             >
               Hoy
             </button>
@@ -1017,7 +1017,7 @@ export default function StaffPage({
             <button
               type="button"
               onClick={() => setShowScheduleManager(true)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:border-[#B76E79] hover:bg-rose-50 hover:text-[#9F5360]"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:border-[#1F5A43] hover:bg-green-50 hover:text-[#174632]"
             >
               <CalendarOff size={18} strokeWidth={1.8} aria-hidden="true" />
               Gestionar horarios
@@ -1026,7 +1026,7 @@ export default function StaffPage({
 
           <Link
             href="/staff/historical"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:border-[#B76E79] hover:bg-rose-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:border-[#1F5A43] hover:bg-green-50"
           >
             <History size={18} strokeWidth={1.8} aria-hidden="true" />
             Registrar servicio anterior
@@ -1034,7 +1034,7 @@ export default function StaffPage({
 
           <Link
             href="/staff/upcoming"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:border-[#B76E79] hover:bg-rose-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 transition-colors hover:border-[#1F5A43] hover:bg-green-50"
           >
             <CalendarDays size={18} strokeWidth={1.8} aria-hidden="true" />
             Ver próximas citas
@@ -1092,7 +1092,7 @@ export default function StaffPage({
                 />
                 <path
                   d="M57 64a17 17 0 0 1 17-17h92a17 17 0 0 1 17 17v21H57V64Z"
-                  fill="#B76E79"
+                  fill="#1F5A43"
                 />
 
                 <rect
@@ -1131,7 +1131,7 @@ export default function StaffPage({
                   />
                 ))}
 
-                <circle cx="174" cy="139" r="30" fill="#B76E79" />
+                <circle cx="174" cy="139" r="30" fill="#1F5A43" />
                 <path
                   d="m161 139 9 9 19-20"
                   fill="none"
@@ -1144,7 +1144,7 @@ export default function StaffPage({
                 <path
                   d="m192 27 5-13 M208 41l11-9 M211 59l15-3"
                   fill="none"
-                  stroke="#B76E79"
+                  stroke="#1F5A43"
                   strokeWidth="4"
                   strokeLinecap="round"
                 />
@@ -1170,7 +1170,7 @@ export default function StaffPage({
                     setQuickBookingError("");
                     setShowQuickBooking(true);
                   }}
-                  className="mt-7 inline-flex min-h-12 items-center justify-center rounded-xl bg-[#B76E79] px-7 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#a55e69]"
+                  className="mt-7 inline-flex min-h-12 items-center justify-center rounded-xl bg-[#1F5A43] px-7 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#174632]"
                 >
                   + Nueva cita
                 </button>
@@ -1223,7 +1223,7 @@ export default function StaffPage({
                           {/* Compact summary for reservations with multiple services. */}
                           {group.bookingId !== null &&
                             group.appointments.length > 1 && (
-                              <div className="rounded-xl border-l-4 border-[#B76E79] bg-white p-5 shadow-sm">
+                              <div className="rounded-xl border-l-4 border-[#1F5A43] bg-white p-5 shadow-sm">
                                 {/* Reservation identity */}
                                 <div>
                                   <Link

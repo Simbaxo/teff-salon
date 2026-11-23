@@ -377,7 +377,7 @@ export default function QuickBookingServices({ value, onChange }: Props) {
         type="button"
         onClick={addService}
         disabled={!canAddAnother}
-        className="min-h-12 w-full rounded-xl border border-[#B76E79] bg-white px-4 py-3 text-sm font-semibold text-[#B76E79] hover:bg-neutral-50 disabled:opacity-50"
+        className="min-h-12 w-full rounded-xl border border-[#1F5A43] bg-white px-4 py-3 text-sm font-semibold text-[#1F5A43] hover:bg-neutral-50 disabled:opacity-50"
       >
         + Agregar servicio
       </button>
@@ -393,7 +393,7 @@ export default function QuickBookingServices({ value, onChange }: Props) {
 
           <div className="mt-2 flex justify-between">
             <span className="font-semibold">Total estimado</span>
-            <span className="font-bold text-[#B76E79]">
+            <span className="font-bold text-[#1F5A43]">
               {formatMoney(totalPrice)}
             </span>
           </div>

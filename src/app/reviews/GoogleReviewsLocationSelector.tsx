@@ -160,7 +160,7 @@ export default function GoogleReviewsLocationSelector() {
                 type="button"
                 onClick={() => void saveLocation()}
                 disabled={!selected || saving}
-                className="min-h-12 rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white hover:bg-[#a55e69] disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-12 rounded-xl bg-[#1F5A43] px-5 py-3 text-sm font-semibold text-white hover:bg-[#174632] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving ? "Guardando..." : "Guardar negocio"}
               </button>

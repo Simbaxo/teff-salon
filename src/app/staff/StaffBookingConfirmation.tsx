@@ -205,7 +205,7 @@ export default function StaffBookingConfirmation({
 
           <div className="space-y-5 px-6 py-6">
             <div className="text-center">
-              <p className="text-xs font-semibold uppercase tracking-widest text-[#B76E79]">
+              <p className="text-xs font-semibold uppercase tracking-widest text-[#1F5A43]">
                 Tu próxima cita
               </p>
 
@@ -220,7 +220,7 @@ export default function StaffBookingConfirmation({
 
             <div className="rounded-2xl bg-neutral-50 p-4">
               <div className="flex items-start gap-3">
-                <CalendarDays className="mt-0.5 h-5 w-5 shrink-0 text-[#B76E79]" />
+                <CalendarDays className="mt-0.5 h-5 w-5 shrink-0 text-[#1F5A43]" />
 
                 <div>
                   <p className="text-sm font-semibold capitalize">
@@ -238,7 +238,7 @@ export default function StaffBookingConfirmation({
 
             <div className="border-t border-neutral-200 pt-5">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
-                <Sparkles className="h-5 w-5 text-[#B76E79]" />
+                <Sparkles className="h-5 w-5 text-[#1F5A43]" />
                 Tus servicios
               </h3>
 
@@ -261,7 +261,7 @@ export default function StaffBookingConfirmation({
 
             <div className="border-t border-neutral-200 pt-5">
               <div className="flex items-start gap-3">
-                <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-[#B76E79]" />
+                <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-[#1F5A43]" />
 
                 <div>
                   <p className="text-sm font-semibold">TEFF Beauty Salon</p>
@@ -328,7 +328,7 @@ export default function StaffBookingConfirmation({
           <button
             type="button"
             onClick={onNewBooking}
-            className="min-h-12 rounded-xl bg-[#B76E79] px-3 py-3 text-sm font-semibold text-white"
+            className="min-h-12 rounded-xl bg-[#1F5A43] px-3 py-3 text-sm font-semibold text-white"
           >
             Nueva cita
           </button>

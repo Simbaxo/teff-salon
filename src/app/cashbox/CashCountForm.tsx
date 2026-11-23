@@ -553,7 +553,7 @@ export default function CashCountForm({
           <button
             type="submit"
             disabled={!validExpectedBalance}
-            className="rounded-lg bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-[#1F5A43] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Validar conteo
           </button>
@@ -561,7 +561,7 @@ export default function CashCountForm({
       </form>
 
       {showConfirmation && (
-        <div className="mt-6 rounded-xl border border-[#B76E79] bg-rose-50 p-5">
+        <div className="mt-6 rounded-xl border border-[#1F5A43] bg-green-50 p-5">
           <h3 className="text-lg font-semibold text-black">
             Confirmar conteo físico
           </h3>
@@ -638,7 +638,7 @@ export default function CashCountForm({
                 !showConfirmation
               }
               onClick={() => void submitCashCount()}
-              className="rounded-lg bg-[#B76E79] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-[#1F5A43] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? "Guardando conteo..." : "Confirmar y guardar conteo"}
             </button>

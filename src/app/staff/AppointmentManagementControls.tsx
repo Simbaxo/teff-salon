@@ -118,7 +118,7 @@ export default function AppointmentManagementControls({
         </select>
 
         <details className="mt-3 max-w-sm rounded-xl border border-neutral-200 bg-neutral-50 p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-[#B76E79]">
+          <summary className="cursor-pointer text-sm font-semibold text-[#1F5A43]">
             Hora personalizada
           </summary>
 
@@ -166,7 +166,7 @@ export default function AppointmentManagementControls({
                   input.value,
                 );
               }}
-              className="min-h-12 w-full rounded-xl bg-[#B76E79] px-4 py-3 text-sm font-semibold text-white hover:bg-[#a55e69] disabled:opacity-50"
+              className="min-h-12 w-full rounded-xl bg-[#1F5A43] px-4 py-3 text-sm font-semibold text-white hover:bg-[#174632] disabled:opacity-50"
             >
               Guardar hora personalizada
             </button>

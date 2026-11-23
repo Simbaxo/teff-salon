@@ -441,7 +441,7 @@ export default async function TechnicianReceptionPage({
                                                     {item.resolvedCustomer.status === "RESOLVED" ? (
                                                         <Link
                                                             href={`/staff/customers/${item.resolvedCustomer.customerId}`}
-                                                            className="mt-1 inline-block text-xs font-medium text-[#B76E79] hover:underline"
+                                                            className="mt-1 inline-block text-xs font-medium text-[#1F5A43] hover:underline"
                                                         >
                                                             {item.resolvedCustomer.customerName}
                                                         </Link>

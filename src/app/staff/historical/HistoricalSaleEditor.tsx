@@ -1195,7 +1195,7 @@ export default function HistoricalSaleEditor() {
             </span>
           </div>
 
-          <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4">
+          <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4">
             <p className="font-semibold text-black">
               💅 Promo Manos y Pies Semi — $100.000
             </p>
@@ -1210,7 +1210,7 @@ export default function HistoricalSaleEditor() {
                 type="button"
                 disabled={!canApplyGelCombo}
                 onClick={applyGelCombo}
-                className="mt-3 rounded-lg bg-[#B76E79] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="mt-3 rounded-lg bg-[#1F5A43] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Aplicar promoción
               </button>
@@ -1218,7 +1218,7 @@ export default function HistoricalSaleEditor() {
               <button
                 type="button"
                 onClick={removeGelCombo}
-                className="mt-3 rounded-lg border border-[#B76E79] bg-white px-4 py-2 text-sm font-semibold text-[#B76E79]"
+                className="mt-3 rounded-lg border border-[#1F5A43] bg-white px-4 py-2 text-sm font-semibold text-[#1F5A43]"
               >
                 Quitar promoción
               </button>

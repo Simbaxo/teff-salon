@@ -505,14 +505,14 @@ export default function CashMovementForm({
           <button
             type="submit"
             disabled={isSaving || hasPendingTransaction}
-            className="rounded-lg bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white hover:opacity-90"
+            className="rounded-lg bg-[#1F5A43] px-5 py-3 text-sm font-semibold text-white hover:opacity-90"
           >
             Validar movimiento
           </button>
         </fieldset>
       </form>
       {showConfirmation && (
-        <div className="mt-6 rounded-xl border border-[#B76E79] bg-rose-50 p-5">
+        <div className="mt-6 rounded-xl border border-[#1F5A43] bg-green-50 p-5">
           <h3 className="text-lg font-semibold text-black">
             Confirmar movimiento
           </h3>
@@ -569,7 +569,7 @@ export default function CashMovementForm({
               type="button"
               disabled={isSaving || hasPendingTransaction || !recoveryChecked}
               onClick={() => void submitMovement()}
-              className="rounded-lg bg-[#B76E79] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-[#1F5A43] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? "Registrando..." : "Confirmar y registrar"}
             </button>

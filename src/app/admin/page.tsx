@@ -638,7 +638,7 @@ export default async function AdminPage() {
                 />
 
                 <section className="mt-7 mb-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#B76E79]">TEFF Staff</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1F5A43]">TEFF Staff</p>
                   <h1 className="mt-1 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">Panel del Propietario</h1>
                   <p className="mt-2 text-sm text-neutral-600">Resumen financiero básico de TEFF Beauty Salon.</p>
                 </section>
@@ -659,7 +659,7 @@ export default async function AdminPage() {
                             </p>
                         </div>
 
-                        <span className="rounded-full bg-[#B76E79]/10 px-3 py-1 text-sm font-semibold text-[#B76E79]">
+                        <span className="rounded-full bg-[#1F5A43]/10 px-3 py-1 text-sm font-semibold text-[#1F5A43]">
                             {formatDate(today)}
                         </span>
                     </div>

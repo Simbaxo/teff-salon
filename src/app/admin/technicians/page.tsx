@@ -463,7 +463,7 @@ export default async function TechniciansPage({
                                 }
                                 className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
                                     active
-                                        ? "bg-[#B76E79] text-white"
+                                        ? "bg-[#1F5A43] text-white"
                                         : "bg-white text-black hover:bg-neutral-100"
                                 }`}
                             >
@@ -525,7 +525,7 @@ export default async function TechniciansPage({
                         <div className="flex items-end">
                             <button
                                 type="submit"
-                                className="w-full rounded-lg bg-[#B76E79] px-4 py-2 font-semibold text-white"
+                                className="w-full rounded-lg bg-[#1F5A43] px-4 py-2 font-semibold text-white"
                             >
                                 Aplicar
                             </button>
@@ -599,7 +599,7 @@ export default async function TechniciansPage({
 
                             {/* Expandable transaction history */}
                             <details className="group mt-5 border-t border-neutral-200 pt-4">
-                                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-[#B76E79]">
+                                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-[#1F5A43]">
                                     <span className="group-open:hidden">
                                         Ver Actividad ({technician.activity.length})
                                     </span>
@@ -639,7 +639,7 @@ export default async function TechniciansPage({
 
                                                     <a
                                                         href={`/sales?saleId=${item.saleId}`}
-                                                        className="text-sm font-semibold text-[#B76E79] hover:underline"
+                                                        className="text-sm font-semibold text-[#1F5A43] hover:underline"
                                                     >
                                                         Venta #{item.saleId}
                                                     </a>

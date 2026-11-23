@@ -811,7 +811,7 @@ export default function SalesPageClient({
                             Verifica las ventas y la producción por técnica.
                         </p>
                     </div>
-                    <span className="text-xl font-semibold text-[#B76E79]">
+                    <span className="text-xl font-semibold text-[#1F5A43]">
                         {showWeeklyAudit ? "−" : "+"}
                     </span>
                 </button>
@@ -948,7 +948,7 @@ export default function SalesPageClient({
                                                         <p className="font-bold text-black">
                                                             {formatCOP(production)}
                                                         </p>
-                                                        <span className="text-sm text-[#B76E79]">
+                                                        <span className="text-sm text-[#1F5A43]">
                                                             {expandedAuditEmployeeId === employeeId
                                                                 ? "Ocultar"
                                                                 : "Ver ventas"}
@@ -972,7 +972,7 @@ export default function SalesPageClient({
                                                                 >
                                                                     <a
                                                                         href={`/sales?saleId=${sale.saleId}`}
-                                                                        className="font-semibold text-[#B76E79] hover:underline"
+                                                                        className="font-semibold text-[#1F5A43] hover:underline"
                                                                     >
                                                                         Venta #{sale.saleId}
                                                                     </a>
@@ -1101,7 +1101,7 @@ export default function SalesPageClient({
                                                         >
                                                             <a
                                                                 href={`/sales?saleId=${sale.saleId}`}
-                                                                className="font-semibold text-[#B76E79] hover:underline"
+                                                                className="font-semibold text-[#1F5A43] hover:underline"
                                                             >
                                                                 Venta #{sale.saleId}
                                                             </a>

@@ -69,7 +69,7 @@ export default function ReviewTranslation({
   return (
     <div className="mt-3 space-y-2">
       {showingTranslation && (
-        <p className="text-xs font-semibold text-[#B76E79]">
+        <p className="text-xs font-semibold text-[#1F5A43]">
           Traducción al español
         </p>
       )}
@@ -82,7 +82,7 @@ export default function ReviewTranslation({
         <button
           type="button"
           onClick={() => setShowOriginal((value) => !value)}
-          className="min-h-10 rounded-lg px-2 py-2 text-sm font-semibold text-[#9F5360] hover:bg-rose-50"
+          className="min-h-10 rounded-lg px-2 py-2 text-sm font-semibold text-[#174632] hover:bg-green-50"
         >
           {showOriginal ? "Ver traducción" : "Ver original"}
         </button>
@@ -91,7 +91,7 @@ export default function ReviewTranslation({
           type="button"
           onClick={handleTranslate}
           disabled={loading}
-          className="min-h-10 rounded-lg border border-[#B76E79] px-3 py-2 text-sm font-semibold text-[#9F5360] hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60"
+          className="min-h-10 rounded-lg border border-[#1F5A43] px-3 py-2 text-sm font-semibold text-[#174632] hover:bg-green-50 disabled:cursor-wait disabled:opacity-60"
         >
           {loading ? "Traduciendo..." : "Traducir al español"}
         </button>

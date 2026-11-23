@@ -162,7 +162,7 @@ export default function ServicePhotoPanel({
           <form onSubmit={uploadPhoto}>
             <fieldset disabled={busy} className="space-y-3 disabled:opacity-60">
               <div>
-                <label className="relative flex min-h-12 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-[#b76e79] bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-900 focus-within:ring-2 focus-within:ring-rose-800 focus-within:ring-offset-2">
+                <label className="relative flex min-h-12 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-[#1F5A43] bg-green-50 px-4 py-3 text-sm font-semibold text-green-900 focus-within:ring-2 focus-within:ring-green-800 focus-within:ring-offset-2">
                   <input
                     type="file"
                     name="image"

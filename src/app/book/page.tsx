@@ -806,7 +806,7 @@ export default function BookPage() {
 
               <div
                 aria-hidden="true"
-                className="mt-5 h-px w-16 bg-[#B76E79]/50"
+                className="mt-5 h-px w-16 bg-[#1F5A43]/50"
               />
             </div>
 
@@ -877,7 +877,7 @@ export default function BookPage() {
               <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-neutral-600 sm:text-base">
                 {allServicesBooked ? (
                   <>
-                    <span className="block text-xl font-semibold text-[#B76E79]">
+                    <span className="block text-xl font-semibold text-[#1F5A43]">
                       {customerName.trim().split(/\s+/)[0]}{" "}
                       <span aria-hidden="true">💗</span>
                     </span>
@@ -995,7 +995,7 @@ export default function BookPage() {
                         {/* Service name with decorative icon */}
                         <div className="flex min-w-0 items-start gap-3">
                           <svg
-                            className="mt-0.5 h-5 w-5 shrink-0 text-[#B76E79]"
+                            className="mt-0.5 h-5 w-5 shrink-0 text-[#1F5A43]"
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
@@ -1094,7 +1094,7 @@ export default function BookPage() {
             <div className="mt-8">
               {/* Location heading */}
               <div className="mb-5">
-                <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#B76E79]">
+                <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#1F5A43]">
                   {language === "es" ? "Ubicación" : "Location"}
                 </p>
 
@@ -1247,7 +1247,7 @@ export default function BookPage() {
             }
           >
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs font-semibold text-[#B76E79]">
+              <p className="text-xs font-semibold text-[#1F5A43]">
                 {language === "es"
                   ? `Paso ${bookingProgressStep} de 3`
                   : `Step ${bookingProgressStep} of 3`}
@@ -1276,7 +1276,7 @@ export default function BookPage() {
                   <div
                     className={`h-1.5 rounded-full ${
                       bookingProgressStep >= step.id
-                        ? "bg-[#B76E79]"
+                        ? "bg-[#1F5A43]"
                         : "bg-neutral-200"
                     }`}
                   />
@@ -1321,8 +1321,8 @@ export default function BookPage() {
                           aria-pressed={isSelected}
                           className={`group relative aspect-[1.15/1] overflow-hidden rounded-2xl border-2 text-left transition-all duration-200 sm:aspect-[1.6/1] ${
                             isSelected
-                              ? "border-[#B76E79] ring-2 ring-[#B76E79]/30"
-                              : "border-transparent hover:border-[#B76E79]/50"
+                              ? "border-[#1F5A43] ring-2 ring-[#1F5A43]/30"
+                              : "border-transparent hover:border-[#1F5A43]/50"
                           }`}
                         >
                           {/* Category photo */}
@@ -1394,7 +1394,7 @@ export default function BookPage() {
                                 aria-pressed={isSelected}
                                 className={`w-full overflow-hidden rounded-2xl border text-left transition-colors ${
                                   isSelected
-                                    ? "border-[#B76E79] bg-[#F9F0F1]"
+                                    ? "border-[#1F5A43] bg-[#EDF6F0]"
                                     : "border-neutral-200 bg-white hover:border-neutral-300"
                                 }`}
                               >
@@ -1453,7 +1453,7 @@ export default function BookPage() {
                                     aria-hidden="true"
                                     className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg ${
                                       isSelected
-                                        ? "bg-[#B76E79] text-white"
+                                        ? "bg-[#1F5A43] text-white"
                                         : "bg-neutral-100 text-neutral-700"
                                     }`}
                                   >
@@ -1475,7 +1475,7 @@ export default function BookPage() {
                   {/* Header */}
                   <div className="flex items-start justify-between gap-3 border-b border-neutral-100 px-5 py-5 sm:px-6">
                     <div className="min-w-0">
-                      <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#B76E79]">
+                      <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#1F5A43]">
                         TEFF BEAUTY SALON
                       </p>
 
@@ -1484,7 +1484,7 @@ export default function BookPage() {
                       </h2>
                     </div>
 
-                    <span className="shrink-0 rounded-full bg-[#F9F0F1] px-3 py-1.5 text-xs font-semibold text-[#9F5663]">
+                    <span className="shrink-0 rounded-full bg-[#EDF6F0] px-3 py-1.5 text-xs font-semibold text-[#174632]">
                       {selectedServices.length}{" "}
                       {language === "es"
                         ? selectedServices.length === 1
@@ -1507,7 +1507,7 @@ export default function BookPage() {
                           <div className="flex min-w-0 items-start gap-3">
                             <span
                               aria-hidden="true"
-                              className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#F9F0F1] text-xs font-bold text-[#B76E79]"
+                              className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#EDF6F0] text-xs font-bold text-[#1F5A43]"
                             >
                               ✓
                             </span>
@@ -1554,7 +1554,7 @@ export default function BookPage() {
                         setAddonsConfirmed(false);
                         setScheduleStarted(false);
                       }}
-                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-800 transition-colors hover:border-[#B76E79] hover:bg-[#F9F0F1]"
+                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-800 transition-colors hover:border-[#1F5A43] hover:bg-[#EDF6F0]"
                     >
                       <span aria-hidden="true">✎</span>
                       {language === "es" ? "Editar servicios" : "Edit services"}
@@ -1597,7 +1597,7 @@ export default function BookPage() {
                             key={addon.id}
                             className={`overflow-hidden rounded-2xl border p-4 transition-colors sm:p-5 ${
                               isSelected
-                                ? "border-[#B76E79] bg-[#F9F0F1]"
+                                ? "border-[#1F5A43] bg-[#EDF6F0]"
                                 : "border-neutral-200 bg-white"
                             }`}
                           >
@@ -1624,7 +1624,7 @@ export default function BookPage() {
                                   aria-hidden="true"
                                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base ${
                                     isSelected
-                                      ? "bg-[#B76E79] text-white"
+                                      ? "bg-[#1F5A43] text-white"
                                       : "bg-neutral-100 text-neutral-500"
                                   }`}
                                 >
@@ -1639,7 +1639,7 @@ export default function BookPage() {
                               <div className="mt-1 flex items-center gap-1.5 text-sm text-neutral-500">
                                 <svg
                                   aria-hidden="true"
-                                  className="h-4 w-4 shrink-0 text-[#B76E79]"
+                                  className="h-4 w-4 shrink-0 text-[#1F5A43]"
                                   viewBox="0 0 24 24"
                                   fill="none"
                                   stroke="currentColor"
@@ -1676,8 +1676,8 @@ export default function BookPage() {
                                             selection.addonId === addon.id &&
                                             selection.serviceId === service.id,
                                         )
-                                          ? "border-[#B76E79] bg-[#B76E79] text-white"
-                                          : "border-neutral-200 bg-white text-neutral-700 hover:border-[#B76E79]"
+                                          ? "border-[#1F5A43] bg-[#1F5A43] text-white"
+                                          : "border-neutral-200 bg-white text-neutral-700 hover:border-[#1F5A43]"
                                       }`}
                                     >
                                       {language === "es"
@@ -1730,7 +1730,7 @@ export default function BookPage() {
                         setScheduleStarted(false);
                         setAddonsConfirmed(false);
                       }}
-                      className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:border-[#B76E79] hover:bg-[#F9F0F1]"
+                      className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:border-[#1F5A43] hover:bg-[#EDF6F0]"
                     >
                       <span aria-hidden="true">←</span>
                       {language === "es" ? "Volver" : "Back"}
@@ -1790,8 +1790,8 @@ export default function BookPage() {
                                     selectedEmployeesByService[service.id] ===
                                     "any",
                                 )
-                                  ? "border-[#B76E79] bg-[#F9F0F1]"
-                                  : "border-neutral-200 bg-white hover:border-[#B76E79]"
+                                  ? "border-[#1F5A43] bg-[#EDF6F0]"
+                                  : "border-neutral-200 bg-white hover:border-[#1F5A43]"
                               }`}
                             >
                               <div className="flex items-center justify-between gap-3">
@@ -1808,7 +1808,7 @@ export default function BookPage() {
                                 ) && (
                                   <span
                                     aria-hidden="true"
-                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#B76E79] text-sm font-bold text-white"
+                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1F5A43] text-sm font-bold text-white"
                                   >
                                     ✓
                                   </span>
@@ -1829,8 +1829,8 @@ export default function BookPage() {
                                       selectedEmployeesByService[service.id] ===
                                       employee.id,
                                   )
-                                    ? "border-[#B76E79] bg-[#F9F0F1]"
-                                    : "border-neutral-200 bg-white hover:border-[#B76E79]"
+                                    ? "border-[#1F5A43] bg-[#EDF6F0]"
+                                    : "border-neutral-200 bg-white hover:border-[#1F5A43]"
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-3">
@@ -1845,7 +1845,7 @@ export default function BookPage() {
                                   ) && (
                                     <span
                                       aria-hidden="true"
-                                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#B76E79] text-sm font-bold text-white"
+                                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1F5A43] text-sm font-bold text-white"
                                     >
                                       ✓
                                     </span>
@@ -1903,8 +1903,8 @@ export default function BookPage() {
                                   }}
                                   className={`w-full rounded-xl border p-4 text-left transition-colors ${
                                     selectedForService === "any"
-                                      ? "border-[#B76E79] bg-[#F9F0F1]"
-                                      : "border-neutral-200 bg-white hover:border-[#B76E79]"
+                                      ? "border-[#1F5A43] bg-[#EDF6F0]"
+                                      : "border-neutral-200 bg-white hover:border-[#1F5A43]"
                                   }`}
                                 >
                                   <div className="flex items-center justify-between gap-3">
@@ -1917,7 +1917,7 @@ export default function BookPage() {
                                     {selectedForService === "any" && (
                                       <span
                                         aria-hidden="true"
-                                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#B76E79] text-sm font-bold text-white"
+                                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1F5A43] text-sm font-bold text-white"
                                       >
                                         ✓
                                       </span>
@@ -1940,8 +1940,8 @@ export default function BookPage() {
                                     }}
                                     className={`w-full rounded-xl border p-4 text-left transition-colors ${
                                       selectedForService === employee.id
-                                        ? "border-[#B76E79] bg-[#F9F0F1]"
-                                        : "border-neutral-200 bg-white hover:border-[#B76E79]"
+                                        ? "border-[#1F5A43] bg-[#EDF6F0]"
+                                        : "border-neutral-200 bg-white hover:border-[#1F5A43]"
                                     }`}
                                   >
                                     <div className="flex items-center justify-between gap-3">
@@ -1952,7 +1952,7 @@ export default function BookPage() {
                                       {selectedForService === employee.id && (
                                         <span
                                           aria-hidden="true"
-                                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#B76E79] text-sm font-bold text-white"
+                                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1F5A43] text-sm font-bold text-white"
                                         >
                                           ✓
                                         </span>
@@ -1987,7 +1987,7 @@ export default function BookPage() {
                           ? "Fecha de la cita"
                           : "Appointment date"
                       }
-                      className="mt-3 block w-full min-w-0 max-w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-base font-medium text-black shadow-sm outline-none transition-colors focus:border-[#B76E79] focus:ring-2 focus:ring-[#B76E79]/20"
+                      className="mt-3 block w-full min-w-0 max-w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-base font-medium text-black shadow-sm outline-none transition-colors focus:border-[#1F5A43] focus:ring-2 focus:ring-[#1F5A43]/20"
                     />
                   </div>
                 )}
@@ -2014,8 +2014,8 @@ export default function BookPage() {
                             aria-pressed={isSelected}
                             className={`flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${
                               isSelected
-                                ? "border-[#B76E79] bg-[#F9F0F1] text-[#9F5663] ring-1 ring-[#B76E79]/20"
-                                : "border-neutral-200 bg-white text-neutral-700 hover:border-[#B76E79]"
+                                ? "border-[#1F5A43] bg-[#EDF6F0] text-[#174632] ring-1 ring-[#1F5A43]/20"
+                                : "border-neutral-200 bg-white text-neutral-700 hover:border-[#1F5A43]"
                             }`}
                           >
                             {formatTime(time)}
@@ -2023,7 +2023,7 @@ export default function BookPage() {
                             {isSelected && (
                               <span
                                 aria-hidden="true"
-                                className="text-[#B76E79]"
+                                className="text-[#1F5A43]"
                               >
                                 ✓
                               </span>
@@ -2040,7 +2040,7 @@ export default function BookPage() {
                 <div className="mt-8 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
                   {/* Customer information header */}
                   <div className="border-b border-neutral-100 px-5 py-5 sm:px-6">
-                    <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#B76E79]">
+                    <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#1F5A43]">
                       TEFF BEAUTY SALON
                     </p>
 
@@ -2077,7 +2077,7 @@ export default function BookPage() {
                             ? "Escribe tu nombre"
                             : "Enter your name"
                         }
-                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3.5 text-base text-black outline-none transition-colors placeholder:text-neutral-400 focus:border-[#B76E79] focus:ring-2 focus:ring-[#B76E79]/20"
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3.5 text-base text-black outline-none transition-colors placeholder:text-neutral-400 focus:border-[#1F5A43] focus:ring-2 focus:ring-[#1F5A43]/20"
                       />
                     </div>
 
@@ -2098,7 +2098,7 @@ export default function BookPage() {
                           onChange={(event) =>
                             setCountryCode(event.target.value)
                           }
-                          className="w-[116px] shrink-0 rounded-xl border border-neutral-200 bg-white px-2 py-3.5 text-sm text-black outline-none focus:border-[#B76E79] focus:ring-2 focus:ring-[#B76E79]/20 sm:w-[180px]"
+                          className="w-[116px] shrink-0 rounded-xl border border-neutral-200 bg-white px-2 py-3.5 text-sm text-black outline-none focus:border-[#1F5A43] focus:ring-2 focus:ring-[#1F5A43]/20 sm:w-[180px]"
                           aria-label={
                             language === "es"
                               ? "Código de País"
@@ -2171,7 +2171,7 @@ export default function BookPage() {
                               ? "Teléfono / WhatsApp"
                               : "Phone / WhatsApp"
                           }
-                          className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-3.5 text-base text-black outline-none placeholder:text-neutral-400 focus:border-[#B76E79] focus:ring-2 focus:ring-[#B76E79]/20"
+                          className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-3.5 text-base text-black outline-none placeholder:text-neutral-400 focus:border-[#1F5A43] focus:ring-2 focus:ring-[#1F5A43]/20"
                         />
                       </div>
                     </div>
@@ -2185,7 +2185,7 @@ export default function BookPage() {
                           ? "Correo electrónico (opcional)"
                           : "Email (optional)"
                       }
-                      className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3.5 text-base text-black outline-none transition-colors placeholder:text-neutral-400 focus:border-[#B76E79] focus:ring-2 focus:ring-[#B76E79]/20"
+                      className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3.5 text-base text-black outline-none transition-colors placeholder:text-neutral-400 focus:border-[#1F5A43] focus:ring-2 focus:ring-[#1F5A43]/20"
                     />
 
                     <textarea
@@ -2196,7 +2196,7 @@ export default function BookPage() {
                           ? "Notas para el salon (opcional)"
                           : "Notes for the salon (optional)"
                       }
-                      className="min-h-28 w-full resize-y rounded-xl border border-neutral-200 bg-white px-4 py-3.5 text-base text-black outline-none transition-colors placeholder:text-neutral-400 focus:border-[#B76E79] focus:ring-2 focus:ring-[#B76E79]/20"
+                      className="min-h-28 w-full resize-y rounded-xl border border-neutral-200 bg-white px-4 py-3.5 text-base text-black outline-none transition-colors placeholder:text-neutral-400 focus:border-[#1F5A43] focus:ring-2 focus:ring-[#1F5A43]/20"
                     />
                   </div>
                 </div>
@@ -2236,7 +2236,7 @@ export default function BookPage() {
                   aria-modal="false"
                   aria-labelledby="skip-phone-title"
                   aria-describedby="skip-phone-description"
-                  className="mt-4 rounded-2xl border border-[#B76E79]/40 bg-white p-5 shadow-sm"
+                  className="mt-4 rounded-2xl border border-[#1F5A43]/40 bg-white p-5 shadow-sm"
                 >
                   <h3
                     id="skip-phone-title"
@@ -2296,7 +2296,7 @@ export default function BookPage() {
             <div className="mt-8 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
               {/* Review header */}
               <div className="border-b border-neutral-100 px-5 py-5 sm:px-6">
-                <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#B76E79]">
+                <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#1F5A43]">
                   TEFF BEAUTY SALON
                 </p>
 
@@ -2342,7 +2342,7 @@ export default function BookPage() {
                         <div className="flex min-w-0 items-start gap-2">
                           <span
                             aria-hidden="true"
-                            className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#F9F0F1] text-xs font-bold text-[#B76E79]"
+                            className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#EDF6F0] text-xs font-bold text-[#1F5A43]"
                           >
                             ✓
                           </span>
@@ -2382,7 +2382,7 @@ export default function BookPage() {
                             <div className="flex min-w-0 items-start gap-2">
                               <span
                                 aria-hidden="true"
-                                className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#F9F0F1] text-xs font-bold text-[#B76E79]"
+                                className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#EDF6F0] text-xs font-bold text-[#1F5A43]"
                               >
                                 ✓
                               </span>
@@ -2491,7 +2491,7 @@ export default function BookPage() {
                   <div className="mt-4 flex items-center gap-2 text-sm text-neutral-600">
                     <svg
                       aria-hidden="true"
-                      className="h-4 w-4 shrink-0 text-[#B76E79]"
+                      className="h-4 w-4 shrink-0 text-[#1F5A43]"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -2521,7 +2521,7 @@ export default function BookPage() {
                     pendingStageScrollRef.current = true;
                     setIsReviewing(false);
                   }}
-                  className="min-h-12 flex-1 rounded-xl border border-neutral-200 bg-white px-4 py-3 font-semibold text-neutral-800 transition-colors hover:border-[#B76E79] hover:bg-[#F9F0F1]"
+                  className="min-h-12 flex-1 rounded-xl border border-neutral-200 bg-white px-4 py-3 font-semibold text-neutral-800 transition-colors hover:border-[#1F5A43] hover:bg-[#EDF6F0]"
                 >
                   {language === "es" ? "Editar" : "Edit"}
                 </button>
@@ -2560,7 +2560,7 @@ export default function BookPage() {
               <div className="border-b border-neutral-100 px-5 py-5 sm:px-6">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#B76E79]">
+                    <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#1F5A43]">
                       TEFF BEAUTY SALON
                     </p>
 
@@ -2569,7 +2569,7 @@ export default function BookPage() {
                     </h2>
                   </div>
 
-                  <span className="shrink-0 rounded-full bg-[#F9F0F1] px-3 py-1.5 text-xs font-semibold text-[#9F5663]">
+                  <span className="shrink-0 rounded-full bg-[#EDF6F0] px-3 py-1.5 text-xs font-semibold text-[#174632]">
                     {selectedServices.length}{" "}
                     {language === "es"
                       ? selectedServices.length === 1
@@ -2593,7 +2593,7 @@ export default function BookPage() {
                       <div className="flex min-w-0 items-start gap-3">
                         <span
                           aria-hidden="true"
-                          className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#F9F0F1] text-xs font-bold text-[#B76E79]"
+                          className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#EDF6F0] text-xs font-bold text-[#1F5A43]"
                         >
                           ✓
                         </span>
@@ -2627,7 +2627,7 @@ export default function BookPage() {
                   <div className="mt-4 flex items-center gap-2 text-sm text-neutral-600">
                     <svg
                       aria-hidden="true"
-                      className="h-4 w-4 shrink-0 text-[#B76E79]"
+                      className="h-4 w-4 shrink-0 text-[#1F5A43]"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -2712,7 +2712,7 @@ export default function BookPage() {
           href="https://www.instagram.com/teffbeautysalon/"
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 text-sm font-medium text-neutral-700 transition-colors hover:text-[#B76E79]"
+          className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 text-sm font-medium text-neutral-700 transition-colors hover:text-[#1F5A43]"
         >
           <svg
             aria-hidden="true"

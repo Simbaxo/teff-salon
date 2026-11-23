@@ -67,8 +67,8 @@ export default function InternalNav({ userRole }: InternalNavProps) {
       "whitespace-nowrap rounded-xl px-3 py-2",
       "text-sm font-medium transition-colors",
       isActivePath(pathname, href)
-        ? "bg-[#B76E79] text-white"
-        : "text-neutral-700 hover:bg-rose-50",
+        ? "bg-[#1F5A43] text-white"
+        : "text-neutral-700 hover:bg-green-50",
     ].join(" ");
   }
 
@@ -161,8 +161,8 @@ export default function InternalNav({ userRole }: InternalNavProps) {
                 "rounded-xl px-3 py-2 text-sm font-medium",
                 "marker:content-none [&::-webkit-details-marker]:hidden",
                 moreItems.some((item) => isActivePath(pathname, item.href))
-                  ? "bg-[#B76E79] text-white"
-                  : "text-neutral-700 hover:bg-rose-50",
+                  ? "bg-[#1F5A43] text-white"
+                  : "text-neutral-700 hover:bg-green-50",
               ].join(" ")}
             >
               Más

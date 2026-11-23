@@ -141,7 +141,7 @@ export default function QuickBookingModal({
                   !time
                 }
                 onClick={onConfirm}
-                className="min-h-12 rounded-xl bg-[#B76E79] px-6 py-3 font-semibold text-white hover:bg-[#a55e69] disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-12 rounded-xl bg-[#1F5A43] px-6 py-3 font-semibold text-white hover:bg-[#174632] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving ? "Guardando reserva..." : "Confirmar reserva"}
               </button>

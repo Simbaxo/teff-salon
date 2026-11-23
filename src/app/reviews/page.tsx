@@ -61,7 +61,7 @@ export default async function GoogleReviewsPage() {
         <InternalHeader userRole={role} userName={session.user.name} />
 
         <section className="mt-7 mb-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#B76E79]">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1F5A43]">
             TEFF Staff
           </p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">
@@ -82,7 +82,7 @@ export default async function GoogleReviewsPage() {
             >
               <button
                 type="submit"
-                className="min-h-12 rounded-xl bg-[#B76E79] px-5 py-3 text-sm font-semibold text-white hover:bg-[#a55e69]"
+                className="min-h-12 rounded-xl bg-[#1F5A43] px-5 py-3 text-sm font-semibold text-white hover:bg-[#174632]"
               >
                 Conectar Google Business Profile
               </button>
@@ -191,7 +191,7 @@ export default async function GoogleReviewsPage() {
                 )}
               >
                 <div
-                  className="h-full rounded-full bg-[#B76E79]"
+                  className="h-full rounded-full bg-[#1F5A43]"
                   style={{ width: `${stats.monthly.progress}%` }}
                 />
               </div>
@@ -225,7 +225,7 @@ export default async function GoogleReviewsPage() {
 
                     <div className="h-3 flex-1 overflow-hidden rounded-full bg-neutral-100">
                       <div
-                        className="h-full rounded-full bg-[#B76E79]"
+                        className="h-full rounded-full bg-[#1F5A43]"
                         style={{
                           width: `${
                             stats.monthly.count > 0
@@ -259,7 +259,7 @@ export default async function GoogleReviewsPage() {
                         <p className="font-semibold">
                           {review.reviewerName || "Cliente anónimo"}
                         </p>
-                        <span className="text-sm font-semibold text-[#B76E79]">
+                        <span className="text-sm font-semibold text-[#1F5A43]">
                           {review.starRating} ★
                         </span>
                       </div>
