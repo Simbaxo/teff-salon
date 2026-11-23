@@ -5,6 +5,7 @@ import { getGoogleReviewsDashboardStats } from "@/lib/google-reviews/stats";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import GoogleReviewsLocationSelector from "./GoogleReviewsLocationSelector";
+import ReviewTranslation from "./ReviewTranslation";
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat("es-CO", {
@@ -57,15 +58,18 @@ export default async function GoogleReviewsPage() {
   return (
     <main className="min-h-screen bg-neutral-100 px-4 py-8 text-black sm:px-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <InternalHeader
-          userRole={role}
-          userName={session.user.name}
-        />
+        <InternalHeader userRole={role} userName={session.user.name} />
 
         <section className="mt-7 mb-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#B76E79]">TEFF Staff</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">Reseñas de Google</h1>
-          <p className="mt-2 text-sm text-neutral-600">Reputación y seguimiento de reseñas de TEFF Beauty Salon.</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#B76E79]">
+            TEFF Staff
+          </p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">
+            Reseñas de Google
+          </h1>
+          <p className="mt-2 text-sm text-neutral-600">
+            Reputación y seguimiento de reseñas de TEFF Beauty Salon.
+          </p>
         </section>
         <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold">Estado de conexión</h2>
@@ -264,9 +268,11 @@ export default async function GoogleReviewsPage() {
                         {formatDate(review.publishedAt)}
                       </p>
 
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-neutral-700">
-                        {review.comment || "Reseña sin comentario."}
-                      </p>
+                      <ReviewTranslation
+                        reviewId={review.id}
+                        comment={review.comment}
+                        initialTranslation={review.translation}
+                      />
                     </article>
                   ))}
                 </div>

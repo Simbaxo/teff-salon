@@ -1057,6 +1057,22 @@ model GoogleReview {
   starRating   Int
   comment      String?
 
+  // Optional Spanish translation for reception staff.
+  // The original Google comment is always preserved.
+  commentEs String?
+
+  // SHA-256 fingerprint of the original comment when translated.
+  // Used to invalidate translations if Google edits a review.
+  translationSourceHash String?
+
+  // Timestamp of the most recent successful translation.
+  translatedAt DateTime?
+
+  // Prevent multiple workers from translating the same review.
+  // An expired lease can be recovered after a server failure.
+  translationLeaseToken String?
+  translationLeaseUntil DateTime?
+
   // Google's original publication and update timestamps.
   publishedAt     DateTime
   googleUpdatedAt DateTime?
@@ -1112,5 +1128,18 @@ model GoogleReviewsConnection {
   encryptedRefreshToken String
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Tracks MyMemory anonymous translation usage.
+// Shared across all Vercel instances to enforce a free-only budget.
+model GoogleReviewTranslationQuota {
+  // UTC calendar date in YYYY-MM-DD format.
+  day String @id
+
+  // UTF-8 bytes reserved for translation requests.
+  // Counting bytes instead of characters is conservative.
+  usedBytes Int @default(0)
+
   updatedAt DateTime @updatedAt
 }

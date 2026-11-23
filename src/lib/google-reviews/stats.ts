@@ -5,6 +5,7 @@ import {
   getTeffDayOfWeek,
   addTeffDays,
 } from "@/lib/datetime";
+import { getCachedSpanishTranslation } from "./translation-cache";
 
 const MONTHLY_REVIEW_GOAL = 30;
 const MINIMUM_MONTHLY_RATING = 4.8;
@@ -75,13 +76,20 @@ export async function getGoogleReviewsDashboardStats() {
 
       prisma.googleReview.findMany({
         where: { isActive: true },
-        orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
-        take: 10,
+        // Show recently edited reviews as well as newly published ones.
+        orderBy: [
+          { googleUpdatedAt: "desc" },
+          { publishedAt: "desc" },
+          { id: "desc" },
+        ],
+        take: 30,
         select: {
           id: true,
           reviewerName: true,
           starRating: true,
           comment: true,
+          commentEs: true,
+          translationSourceHash: true,
           publishedAt: true,
         },
       }),
@@ -119,7 +127,14 @@ export async function getGoogleReviewsDashboardStats() {
     },
 
     weekly,
-    recentReviews,
+    recentReviews: recentReviews.map((review) => ({
+      id: review.id,
+      reviewerName: review.reviewerName,
+      starRating: review.starRating,
+      comment: review.comment,
+      publishedAt: review.publishedAt,
+      translation: getCachedSpanishTranslation(review),
+    })),
 
     overall: {
       averageRating: syncState?.averageRating ?? null,
