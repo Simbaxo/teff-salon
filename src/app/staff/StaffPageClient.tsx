@@ -515,6 +515,16 @@ export default function StaffPage({
     };
   });
 
+  // Finalized checkout items safely attributed to one appointment.
+  // Never infer ownership of ambiguous or legacy sale items.
+  function getCompletedAppointmentItems(appointmentId: number) {
+    return classifiedFinalizedSales.flatMap((sale) =>
+      sale.assignedItems
+        .filter((entry) => entry.appointmentId === appointmentId)
+        .map((entry) => entry.item),
+    );
+  }
+
   // Count how many appointment blocks belong to the same customer booking
   function getBookingAppointmentCount(bookingId: number | null) {
     if (bookingId === null) {
@@ -1644,6 +1654,67 @@ export default function StaffPage({
                                       {appointment.duration} min
                                     </p>
                                   </div>
+
+                                  {/* Actual services and add-ons recorded at checkout */}
+                                  {appointment.status === "COMPLETED" &&
+                                    appointment.saleAppointments.length > 0 &&
+                                    (() => {
+                                      const finalizedItems =
+                                        getCompletedAppointmentItems(
+                                          appointment.id,
+                                        );
+
+                                      if (finalizedItems.length === 0) {
+                                        return (
+                                          <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                                            No hay servicios cobrados con
+                                            atribución individual verificada
+                                            para esta cita. Consulta Ventas
+                                            Finalizadas del Día.
+                                          </p>
+                                        );
+                                      }
+
+                                      return (
+                                        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                                          <h4 className="text-sm font-semibold text-emerald-900">
+                                            Servicios realizados y cobrados
+                                          </h4>
+
+                                          <div className="mt-3 space-y-2">
+                                            {finalizedItems.map((item) => (
+                                              <div
+                                                key={item.id}
+                                                className="flex items-start justify-between gap-3 text-sm"
+                                              >
+                                                <div className="min-w-0">
+                                                  <p className="font-medium text-neutral-900">
+                                                    {item.itemType === "ADDON"
+                                                      ? "+ "
+                                                      : ""}
+                                                    {item.itemName}
+                                                  </p>
+
+                                                  {item.itemType ===
+                                                    "ADDON" && (
+                                                    <p className="text-xs text-neutral-600">
+                                                      Adicional
+                                                    </p>
+                                                  )}
+                                                </div>
+
+                                                <span className="shrink-0 font-semibold text-neutral-900">
+                                                  $
+                                                  {item.unitPrice.toLocaleString(
+                                                    "es-CO",
+                                                  )}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
 
                                   <div className="mt-4">
                                     <p className="text-sm font-semibold text-black">

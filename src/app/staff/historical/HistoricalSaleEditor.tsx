@@ -8,10 +8,16 @@ import {
   GEL_MANICURE_ID,
   GEL_PEDICURE_ID,
 } from "@/lib/promotions/gel-mani-pedi";
+import {
+  getStaffServiceCategory,
+  sortStaffServices,
+  STAFF_SERVICE_CATEGORIES,
+} from "@/lib/services/staff-category-style";
 
 type Service = {
   id: number;
   nameEs: string;
+  category: string;
   price: number;
   estimatedDuration: number;
 };
@@ -230,7 +236,7 @@ export default function HistoricalSaleEditor() {
           serviceAddonsResponse.json(),
         ]);
 
-        setServices(servicesData);
+        setServices(sortStaffServices(servicesData as Service[]));
         setEmployees(employeesData);
         setEmployeeServices(employeeServicesData);
         setAddons(addonsData);
@@ -920,11 +926,29 @@ export default function HistoricalSaleEditor() {
                 ),
               );
 
+              const selectedService = services.find(
+                (service) => service.id === selection.serviceId,
+              );
+
+              const selectedCategory = selectedService
+                ? getStaffServiceCategory(selectedService.category)
+                : undefined;
+
               return (
                 <div
                   key={index}
-                  className="rounded-xl border border-neutral-200 p-4"
+                  className={`rounded-xl border p-4 ${
+                    selectedCategory?.cardColor ?? "border-neutral-200 bg-white"
+                  }`}
                 >
+                  {selectedCategory && (
+                    <span
+                      className={`mb-4 inline-flex rounded-lg px-3 py-1.5 text-xs font-semibold ${selectedCategory.badgeColor}`}
+                    >
+                      {selectedCategory.emoji} {selectedCategory.label}
+                    </span>
+                  )}
+
                   <div className="grid gap-4 md:grid-cols-3">
                     <div>
                       <label className="block text-sm font-semibold text-black">

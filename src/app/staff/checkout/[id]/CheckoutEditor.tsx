@@ -8,6 +8,11 @@ import {
   GEL_MANICURE_ID,
   GEL_PEDICURE_ID,
 } from "@/lib/promotions/gel-mani-pedi";
+import {
+  getStaffServiceCategory,
+  sortStaffServices,
+  STAFF_SERVICE_CATEGORIES,
+} from "@/lib/services/staff-category-style";
 
 // Service data received from the original appointment.
 type BookedCheckoutService = {
@@ -28,6 +33,7 @@ type CheckoutService = BookedCheckoutService & {
 type AvailableService = {
   id: number;
   nameEs: string;
+  category: string;
   price: number;
   estimatedDuration: number;
 };
@@ -292,7 +298,9 @@ export default function CheckoutEditor({
       const addonsData = await addonsResponse.json();
       const relationsData = await relationsResponse.json();
 
-      setAvailableServices(servicesData);
+      setAvailableServices(
+        sortStaffServices(servicesData as AvailableService[]),
+      );
       setAvailableAddons(addonsData);
       setServiceAddonRelations(relationsData);
     }
@@ -306,6 +314,13 @@ export default function CheckoutEditor({
     if (event.currentTarget.value === "0") {
       event.currentTarget.select();
     }
+  }
+
+  // Get the category styling for a service already selected at checkout.
+  function getSelectedServiceCategory(serviceId: number) {
+    const service = availableServices.find((item) => item.id === serviceId);
+
+    return service ? getStaffServiceCategory(service.category) : undefined;
   }
 
   // Change the technician credited for one checkout service.
@@ -800,104 +815,118 @@ export default function CheckoutEditor({
             </p>
 
             <div className="mt-3 space-y-2">
-              {selectedServices.map((item) => (
-                <div
-                  key={item.service.id}
-                  ref={(element) => {
-                    selectedServiceRefs.current[item.service.id] = element;
-                  }}
-                  className={`flex flex-col gap-3 rounded-lg border p-4 transition-colors ${
-                    recentlyAddedServiceId === item.service.id
-                      ? "border-[#B76E79] bg-rose-50"
-                      : "border-transparent bg-white"
-                  }`}
-                >
-                  <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-                    <span className="col-span-full min-w-0 break-words text-sm font-semibold text-neutral-800">
-                      {item.service.nameEs}
-                    </span>
+              {selectedServices.map((item) => {
+                const category = getSelectedServiceCategory(item.service.id);
 
-                    {attributedCheckoutEnabled && (
-                      <label className="flex min-w-0 flex-col gap-1">
-                        <span className="text-xs text-neutral-500">
-                          Técnica responsable
-                        </span>
-
-                        <select
-                          value={item.employeeId}
-                          onChange={(event) =>
-                            updateServiceTechnician(
-                              item.service.id,
-                              Number(event.target.value),
-                            )
-                          }
-                          className="w-full min-w-0 max-w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-black"
-                          aria-label={`Técnica responsable de ${item.service.nameEs}`}
-                        >
-                          {(() => {
-                            // Only show active technicians qualified for this service.
-                            const eligibleTechnicians =
-                              qualifiedTechnicians.filter((technician) =>
-                                technician.employeeServices.some(
-                                  (qualification) =>
-                                    qualification.serviceId === item.service.id,
-                                ),
-                              );
-
-                            const selectedIsEligible = eligibleTechnicians.some(
-                              (technician) => technician.id === item.employeeId,
-                            );
-
-                            return (
-                              <>
-                                {/* Never silently reassign an ineligible technician. */}
-                                {!selectedIsEligible && (
-                                  <option value={item.employeeId} disabled>
-                                    Técnica actual no habilitada — seleccionar
-                                    otra
-                                  </option>
-                                )}
-
-                                {eligibleTechnicians.map((technician) => (
-                                  <option
-                                    key={technician.id}
-                                    value={technician.id}
-                                  >
-                                    {technician.name}
-                                  </option>
-                                ))}
-                              </>
-                            );
-                          })()}
-                        </select>
-                      </label>
+                return (
+                  <div
+                    key={item.service.id}
+                    ref={(element) => {
+                      selectedServiceRefs.current[item.service.id] = element;
+                    }}
+                    className={`flex flex-col gap-3 rounded-lg border p-4 transition-colors ${
+                      recentlyAddedServiceId === item.service.id
+                        ? "border-[#B76E79] bg-rose-100"
+                        : (category?.cardColor ?? "border-neutral-200 bg-white")
+                    }`}
+                  >
+                    {category && (
+                      <span
+                        className={`self-start rounded-lg px-3 py-1.5 text-xs font-semibold ${category.badgeColor}`}
+                      >
+                        {category.emoji} {category.label}
+                      </span>
                     )}
+                    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+                      <span className="col-span-full min-w-0 break-words text-sm font-semibold text-neutral-800">
+                        {item.service.nameEs}
+                      </span>
 
-                    <label className="flex min-w-0 flex-col gap-1">
-                      <span className="text-xs text-neutral-500">$</span>
+                      {attributedCheckoutEnabled && (
+                        <label className="flex min-w-0 flex-col gap-1">
+                          <span className="text-xs text-neutral-500">
+                            Técnica responsable
+                          </span>
 
-                      <MoneyInput
-                        value={item.bookedPrice}
-                        onChange={(amount) =>
-                          updateServicePrice(item.service.id, amount)
-                        }
-                        min={0}
-                        step={1000}
-                        aria-label={`Precio de ${item.service.nameEs}`}
-                        className="w-full min-w-0 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-right text-sm font-semibold text-black"
-                      />
-                    </label>
+                          <select
+                            value={item.employeeId}
+                            onChange={(event) =>
+                              updateServiceTechnician(
+                                item.service.id,
+                                Number(event.target.value),
+                              )
+                            }
+                            className="w-full min-w-0 max-w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-black"
+                            aria-label={`Técnica responsable de ${item.service.nameEs}`}
+                          >
+                            {(() => {
+                              // Only show active technicians qualified for this service.
+                              const eligibleTechnicians =
+                                qualifiedTechnicians.filter((technician) =>
+                                  technician.employeeServices.some(
+                                    (qualification) =>
+                                      qualification.serviceId ===
+                                      item.service.id,
+                                  ),
+                                );
 
-                    <button
-                      type="button"
-                      onClick={() => removeService(item.service.id)}
-                      className="text-xs font-semibold text-red-600"
-                    >
-                      Quitar
-                    </button>
+                              const selectedIsEligible =
+                                eligibleTechnicians.some(
+                                  (technician) =>
+                                    technician.id === item.employeeId,
+                                );
+
+                              return (
+                                <>
+                                  {/* Never silently reassign an ineligible technician. */}
+                                  {!selectedIsEligible && (
+                                    <option value={item.employeeId} disabled>
+                                      Técnica actual no habilitada — seleccionar
+                                      otra
+                                    </option>
+                                  )}
+
+                                  {eligibleTechnicians.map((technician) => (
+                                    <option
+                                      key={technician.id}
+                                      value={technician.id}
+                                    >
+                                      {technician.name}
+                                    </option>
+                                  ))}
+                                </>
+                              );
+                            })()}
+                          </select>
+                        </label>
+                      )}
+
+                      <label className="flex min-w-0 flex-col gap-1">
+                        <span className="text-xs text-neutral-500">$</span>
+
+                        <MoneyInput
+                          value={item.bookedPrice}
+                          onChange={(amount) =>
+                            updateServicePrice(item.service.id, amount)
+                          }
+                          min={0}
+                          step={1000}
+                          aria-label={`Precio de ${item.service.nameEs}`}
+                          className="w-full min-w-0 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-right text-sm font-semibold text-black"
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => removeService(item.service.id)}
+                        className="text-xs font-semibold text-red-600"
+                      >
+                        Quitar
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -1053,19 +1082,33 @@ export default function CheckoutEditor({
                   (item) => item.service.id === service.id,
                 );
 
+                const category = getStaffServiceCategory(service.category);
+
                 return (
                   <button
                     key={service.id}
                     type="button"
                     onClick={() => addService(service)}
                     disabled={alreadySelected}
-                    className="flex w-full items-center justify-between rounded-lg border border-neutral-200 bg-white px-3 py-2 text-left disabled:opacity-40"
+                    className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                      category?.cardColor ?? "border-neutral-200 bg-white"
+                    }`}
                   >
-                    <span className="text-sm text-neutral-700">
-                      {service.nameEs}
+                    <span className="min-w-0 space-y-1">
+                      {category && (
+                        <span
+                          className={`inline-flex rounded-md px-2 py-1 text-xs font-semibold ${category.badgeColor}`}
+                        >
+                          {category.emoji} {category.label}
+                        </span>
+                      )}
+
+                      <span className="block text-sm font-semibold text-neutral-800">
+                        {service.nameEs}
+                      </span>
                     </span>
 
-                    <span className="text-sm font-semibold text-black">
+                    <span className="shrink-0 text-sm font-semibold text-black">
                       ${service.price.toLocaleString("es-CO")}
                     </span>
                   </button>
