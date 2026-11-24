@@ -162,21 +162,21 @@ export default function ServicePhotoPanel({
           <form onSubmit={uploadPhoto}>
             <fieldset disabled={busy} className="space-y-3 disabled:opacity-60">
               <div>
-                <label className="relative flex min-h-12 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-[#1F5A43] bg-green-50 px-4 py-3 text-sm font-semibold text-green-900 focus-within:ring-2 focus-within:ring-green-800 focus-within:ring-offset-2">
-                  <input
-                    type="file"
-                    name="image"
-                    accept="image/*"
-                    required
-                    onChange={(event) =>
-                      setSelectedFileName(
-                        event.currentTarget.files?.[0]?.name ?? "",
-                      )
-                    }
-                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                  />
-                  {selectedFileName ? "Cambiar foto" : "Seleccionar foto"}
+                <label className="mb-2 block text-sm font-semibold text-green-900">
+                  Seleccionar foto
                 </label>
+                <input
+                  type="file"
+                  name="image"
+                  accept="image/*"
+                  required
+                  onChange={(event) =>
+                    setSelectedFileName(
+                      event.currentTarget.files?.[0]?.name ?? "",
+                    )
+                  }
+                  className="block min-h-12 w-full rounded-xl border-2 border-dashed border-[#1F5A43] bg-green-50 p-3 text-sm text-green-900 file:mr-3 file:rounded-lg file:border-0 file:bg-[#1F5A43] file:px-3 file:py-2 file:font-semibold file:text-white"
+                />
                 <p
                   aria-live="polite"
                   className="mt-2 break-all text-sm text-neutral-700"

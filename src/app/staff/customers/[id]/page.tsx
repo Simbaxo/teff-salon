@@ -5,6 +5,9 @@ import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
 import { calculateLifetimeSpend } from "@/lib/customers/calculate-lifetime-spend";
 import { groupCustomerVisits } from "@/lib/customers/group-customer-visits";
+import { normalizePhoneNumber } from "@/lib/phone";
+import { MessageCircleMore } from "lucide-react";
+import ServicePhotoPanel from "@/app/staff/customers/ServicePhotoPanel";
 
 // Convert database statuses into Spanish labels for staff
 function getStatusLabel(status: string) {
@@ -67,6 +70,15 @@ export default async function CustomerProfilePage({
 
                     appointmentServices: {
                         include: {
+                            photos: {
+                                select: {
+                                    id: true,
+                                    note: true,
+                                },
+                                orderBy: {
+                                    slot: "asc",
+                                },
+                            },
                             service: {
                                 select: {
                                     id: true,
@@ -144,6 +156,8 @@ export default async function CustomerProfilePage({
         redirect("/staff");
     }
 
+    const whatsappPhone = normalizePhoneNumber(customer.phone ?? "")?.replace(/\D/g, "") ?? null;
+
     // Calculate customer summary metrics from appointment and sale history
     const completedAppointments = customer.appointments.filter(
         (appointment) => appointment.status === "COMPLETED"
@@ -204,6 +218,20 @@ export default async function CustomerProfilePage({
 
                         {customer.email && <p>{customer.email}</p>}
                     </div>
+
+                    {whatsappPhone && (
+                        <a
+                            href={`https://wa.me/${whatsappPhone}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-4 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#1F5A43] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#174632]"
+                        >
+                            <MessageCircleMore className="h-5 w-5" aria-hidden="true" />
+                            <span>Enviar WhatsApp</span>
+                        </a>
+                    )}
+
+                    {/* End customer contact actions */}
                 </div>
 
                 {/* Customer History Summary */}
@@ -482,6 +510,46 @@ export default async function CustomerProfilePage({
                                             ))}
                                         </div>
                                     </details>
+
+                                    {/* Photos belong to the original completed appointment services. */}
+                                    {group.appointments.some(
+                                        (appointment) =>
+                                            appointment.status === "COMPLETED" &&
+                                            appointment.appointmentServices.length > 0
+                                    ) && (
+                                        <div className="border-t border-neutral-100 px-4 py-4 sm:px-5">
+                                            <h3 className="mb-3 text-sm font-semibold text-[#1F5A43]">
+                                                Fotos de servicios
+                                            </h3>
+
+                                            <div className="space-y-4">
+                                                {group.appointments
+                                                    .filter(
+                                                        (appointment) =>
+                                                            appointment.status === "COMPLETED"
+                                                    )
+                                                    .flatMap((appointment) =>
+                                                        appointment.appointmentServices.map(
+                                                            (item) => (
+                                                                <div
+                                                                    key={`${appointment.id}-${item.serviceId}`}
+                                                                >
+                                                                    <p className="text-sm font-medium text-neutral-800">
+                                                                        {item.service.nameEs}
+                                                                    </p>
+
+                                                                    <ServicePhotoPanel
+                                                                        appointmentId={appointment.id}
+                                                                        serviceId={item.serviceId}
+                                                                        photos={item.photos}
+                                                                    />
+                                                                </div>
+                                                            )
+                                                        )
+                                                    )}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Display the finalized sale amount only once. */}
                                     {linkedSale ? (
