@@ -1,8 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
-import { processGoogleCalendarSyncJob } from "@/lib/google-calendar/process-job";
+import { processGoogleCalendarSyncBatch } from "@/lib/google-calendar/process-batch";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 60;
+
+const MAX_JOBS_PER_RUN = 20;
+const MAX_RUN_TIME_MS = 25_000;
 
 function isAuthorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -30,9 +34,18 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await processGoogleCalendarSyncJob();
-    return Response.json({ result }, { headers });
-  } catch {
+    const summary = await processGoogleCalendarSyncBatch({
+      maxJobs: MAX_JOBS_PER_RUN,
+      maxRunTimeMs: MAX_RUN_TIME_MS,
+    });
+
+    return Response.json(summary, { headers });
+  } catch (error) {
+    console.error(
+      "Google Calendar scheduled synchronization failed:",
+      error instanceof Error ? error.name : "Unknown error",
+    );
+
     return Response.json(
       { error: "Google Calendar worker failed." },
       { status: 500, headers },

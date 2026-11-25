@@ -3,6 +3,7 @@ import { sendPushNotification } from "@/lib/push";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { checkSlotAvailability } from "@/lib/booking/check-slot-availability";
 import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
+import { triggerGoogleCalendarSync } from "@/lib/google-calendar/trigger-sync";
 import { queueWhatsAppNotification } from "@/lib/whatsapp/queue";
 import {
   getWhatsAppReminderTime,
@@ -794,6 +795,15 @@ export async function POST(request: Request) {
 
     if (!result) {
       throw new Error("Unable to complete booking transaction");
+    }
+
+    // Trigger Google Calendar synchronization only after
+    // the booking transaction has successfully committed.
+    if (
+      process.env.TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED === "true" &&
+      result.appointments.some((appointment) => appointment.status === "BOOKED")
+    ) {
+      triggerGoogleCalendarSync();
     }
 
     // Notify registered TEFF staff devices after the booking transaction

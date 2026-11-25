@@ -5,6 +5,7 @@ import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 import { assertAppointmentNotSold } from "@/lib/appointments/reassignment-safety";
 import { getReassignmentErrorResponse } from "@/lib/appointments/reassignment-errors";
 import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
+import { triggerGoogleCalendarSync } from "@/lib/google-calendar/trigger-sync";
 
 export async function PATCH(
   request: Request,
@@ -501,6 +502,15 @@ export async function PATCH(
 
     if (!result) {
       throw new Error("Unable to complete technician reassignment");
+    }
+
+    // Trigger Google Calendar synchronization only after
+    // the technician reassignment transaction has committed.
+    if (
+      process.env.TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED === "true" &&
+      ["BOOKED", "CHECKED_IN", "IN_PROGRESS"].includes(result.status)
+    ) {
+      triggerGoogleCalendarSync();
     }
 
     return Response.json(result);

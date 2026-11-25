@@ -5,6 +5,7 @@ import { getTeffCurrentMinutes } from "@/lib/datetime";
 import { normalizePhoneNumber } from "@/lib/phone";
 import { isOutsideStaffScheduleHours } from "@/lib/appointments/staff-scheduling";
 import { Prisma } from "@/generated/prisma/client";
+import { triggerGoogleCalendarSync } from "@/lib/google-calendar/trigger-sync";
 import {
   createQuickBooking,
   getQuickBookingRequestHash,
@@ -379,6 +380,15 @@ export async function POST(request: Request) {
         overrideOverlap: body.overrideOverlap === true,
         overrideOutsideHours: body.overrideOutsideHours === true,
       });
+
+      // Trigger Google Calendar synchronization after a successful
+      // transaction, without reprocessing duplicate booking requests.
+      if (
+        !result.duplicate &&
+        process.env.TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED === "true"
+      ) {
+        triggerGoogleCalendarSync();
+      }
 
       return Response.json(
         {

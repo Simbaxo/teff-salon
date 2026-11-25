@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
 import { lockPayrollWeek } from "@/lib/payroll/period-lock";
 import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
+import { triggerGoogleCalendarSync } from "@/lib/google-calendar/trigger-sync";
 import { queueWhatsAppNotification } from "@/lib/whatsapp/queue";
 import {
   getWhatsAppReminderTime,
@@ -462,6 +463,15 @@ export async function PATCH(
 
     if (!result) {
       throw new Error("Unable to complete appointment reschedule");
+    }
+
+    // Trigger Google Calendar synchronization only after
+    // the rescheduling transaction has successfully committed.
+    if (
+      result.status === "BOOKED" &&
+      process.env.TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED === "true"
+    ) {
+      triggerGoogleCalendarSync();
     }
 
     return Response.json(result);

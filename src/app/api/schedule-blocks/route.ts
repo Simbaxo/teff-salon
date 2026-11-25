@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
 import { prisma } from "@/lib/prisma";
 import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
+import { triggerGoogleCalendarSync } from "@/lib/google-calendar/trigger-sync";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -219,6 +220,12 @@ export async function POST(request: Request) {
 
       return createdBlock;
     });
+
+    // Trigger Google Calendar synchronization only after
+    // the schedule block creation transaction has committed.
+    if (process.env.TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED === "true") {
+      triggerGoogleCalendarSync();
+    }
 
     return Response.json(block, { status: 201 });
   } catch (error) {

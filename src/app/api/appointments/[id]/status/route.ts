@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
 import { hasTeffAppointmentStarted } from "@/lib/datetime";
 import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
+import { triggerGoogleCalendarSync } from "@/lib/google-calendar/trigger-sync";
 import { queueWhatsAppNotification } from "@/lib/whatsapp/queue";
 import {
   getWhatsAppReminderTime,
@@ -216,6 +217,16 @@ export async function PATCH(
         },
         { status: 409 },
       );
+    }
+
+    // Trigger Google Calendar synchronization only after
+    // a successful approval or cancellation transaction.
+    if (
+      process.env.TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED === "true" &&
+      ((existingAppointment.status === "REQUESTED" && status === "BOOKED") ||
+        status === "CANCELLED")
+    ) {
+      triggerGoogleCalendarSync();
     }
 
     const { customer: _customer, ...appointment } = result;

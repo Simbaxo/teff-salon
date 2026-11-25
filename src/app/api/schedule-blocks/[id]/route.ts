@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
 import { prisma } from "@/lib/prisma";
 import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
+import { triggerGoogleCalendarSync } from "@/lib/google-calendar/trigger-sync";
 
 type RouteContext = {
   params: Promise<{
@@ -53,6 +54,12 @@ export async function DELETE(_request: Request, context: RouteContext) {
         await queueGoogleCalendarSync(tx, "SCHEDULE_BLOCK", blockId);
       }
     });
+
+    // Trigger Google Calendar synchronization only after
+    // the schedule block deletion transaction has committed.
+    if (process.env.TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED === "true") {
+      triggerGoogleCalendarSync();
+    }
 
     return Response.json({
       success: true,

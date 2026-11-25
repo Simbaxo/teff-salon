@@ -56,6 +56,16 @@ const env = {
   // Prevent notifications to real staff devices.
   TEFF_BOOKING_TEST_DISABLE_PUSH: "true",
 
+  // Prevent external calendar synchronization during booking tests.
+  TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED: "false",
+  TEFF_GOOGLE_CALENDAR_SYNC_ENABLED: "false",
+
+  // Prevent WhatsApp notifications during booking tests.
+  TEFF_WHATSAPP_QUEUE_ENABLED: "false",
+
+  // Prevent scheduled Google Reviews synchronization.
+  TEFF_GOOGLE_REVIEWS_SYNC_ENABLED: "false",
+
   PORT: port,
 };
 

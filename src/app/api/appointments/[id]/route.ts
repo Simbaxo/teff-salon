@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { canManageStaff } from "@/lib/auth-roles";
 import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
+import { triggerGoogleCalendarSync } from "@/lib/google-calendar/trigger-sync";
 
 export async function GET(
   request: Request,
@@ -159,6 +160,12 @@ export async function DELETE(
         }
       }
     });
+
+    // Trigger Google Calendar synchronization only after
+    // the appointment deletion transaction has committed.
+    if (process.env.TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED === "true") {
+      triggerGoogleCalendarSync();
+    }
 
     return Response.json({
       success: true,

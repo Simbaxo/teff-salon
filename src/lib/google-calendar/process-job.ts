@@ -3,26 +3,49 @@ import { refreshGoogleCalendarAccessToken } from "./access-token";
 import { claimGoogleCalendarSyncJob } from "./claim-job";
 import { syncGoogleCalendarEvent } from "./sync-event";
 
-export async function processGoogleCalendarSyncJob() {
+type JobDependencies = {
+  refreshAccessToken: typeof refreshGoogleCalendarAccessToken;
+  syncEvent: typeof syncGoogleCalendarEvent;
+};
+
+export async function processGoogleCalendarSyncJob(
+  dependencies?: JobDependencies,
+) {
+  const refreshAccessToken =
+    dependencies?.refreshAccessToken ?? refreshGoogleCalendarAccessToken;
+
+  const syncEvent = dependencies?.syncEvent ?? syncGoogleCalendarEvent;
+
   const connection = await prisma.googleCalendarConnection.findUnique({
     where: { id: 1 },
-    select: { calendarId: true, encryptedRefreshToken: true },
+    select: {
+      calendarId: true,
+      encryptedRefreshToken: true,
+    },
   });
 
   if (!connection) return "disconnected";
 
   const job = await claimGoogleCalendarSyncJob();
+
   if (!job) return "idle";
 
-  const lease = { id: job.id, lockedUntil: job.lockedUntil };
-  const claimedRevision = { ...lease, revision: job.revision };
+  const lease = {
+    id: job.id,
+    lockedUntil: job.lockedUntil,
+  };
+
+  const claimedRevision = {
+    ...lease,
+    revision: job.revision,
+  };
 
   try {
-    const accessToken = await refreshGoogleCalendarAccessToken(
+    const accessToken = await refreshAccessToken(
       connection.encryptedRefreshToken,
     );
 
-    await syncGoogleCalendarEvent(
+    await syncEvent(
       connection.calendarId,
       accessToken,
       job.target,
@@ -41,13 +64,16 @@ export async function processGoogleCalendarSyncJob() {
       },
     });
 
-    if (result.count === 1) return "retry_scheduled";
+    if (result.count === 1) {
+      return "retry_scheduled";
+    }
 
     // Release this lease if a newer revision arrived during the attempt.
     await prisma.googleCalendarSyncJob.updateMany({
       where: lease,
       data: { lockedUntil: null },
     });
+
     return "superseded";
   }
 
@@ -55,12 +81,15 @@ export async function processGoogleCalendarSyncJob() {
     where: claimedRevision,
   });
 
-  if (result.count === 1) return "synced";
+  if (result.count === 1) {
+    return "synced";
+  }
 
   // Keep the newer revision available for the next run.
   await prisma.googleCalendarSyncJob.updateMany({
     where: lease,
     data: { lockedUntil: null },
   });
+
   return "superseded";
 }

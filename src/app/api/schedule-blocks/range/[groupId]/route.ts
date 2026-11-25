@@ -3,6 +3,7 @@ import { canManageStaff } from "@/lib/auth-roles";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { queueGoogleCalendarSync } from "@/lib/google-calendar/queue";
+import { triggerGoogleCalendarSync } from "@/lib/google-calendar/trigger-sync";
 
 export const runtime = "nodejs";
 
@@ -130,6 +131,12 @@ export async function DELETE(_request: Request, context: RouteContext) {
           },
           { status: 409 },
         );
+      }
+
+      // Trigger Google Calendar synchronization only after
+      // the schedule block group deletion transaction has committed.
+      if (process.env.TEFF_GOOGLE_CALENDAR_QUEUE_ENABLED === "true") {
+        triggerGoogleCalendarSync();
       }
 
       return Response.json({
